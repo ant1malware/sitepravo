@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build --mode netlify && node -e \"const fs=require('fs');try{fs.copyFileSync('../docs/index.html','../docs/404.html')}catch(e){}try{fs.copyFileSync('dist/index.html','dist/404.html')}catch(e){}\"",
-    "build:gh": "tsc -b && vite build --mode gh && node -e \"const fs=require('fs');try{fs.copyFileSync('../docs/index.html','../docs/404.html')}catch(e){}\"",
+    "build": "tsc -b && vite build --mode netlify && node -e \"const fs=require('fs');try{fs.copyFileSync('docs/index.html','docs/404.html')}catch(e){}try{fs.copyFileSync('dist/index.html','dist/404.html')}catch(e){}\"",
+    "build:gh": "tsc -b && vite build --mode gh && node -e \"const fs=require('fs');try{fs.copyFileSync('docs/index.html','docs/404.html')}catch(e){}\"",
     "preview": "vite preview --port 4173 --strictPort",
     "scrape:laws": "node scripts/scrape-laws.mjs"
   },
