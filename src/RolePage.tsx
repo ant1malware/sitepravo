@@ -7,6 +7,7 @@ import RelatedBlock from './RelatedBlock';
 import VoteWidget from './VoteWidget';
 import { isRecentlyUpdated } from './versioning';
 import { isFavorite, toggleFavorite } from './favorites';
+import ImageUploader from './ImageUploader';
 
 const Card: React.FC<{ title: React.ReactNode; children: React.ReactNode; footer?: React.ReactNode }> = ({ title, children, footer }) => (
   <div className="card shadow-softLg glass">
@@ -74,7 +75,10 @@ export default function RolePage() {
         <Card title="Обязанности" footer={<div>Источник: <Source href={role.source} /></div>}>
           <ul className="ml-4 list-disc">
             {role.duties.map((d, i) => (
-              <li key={i}>{d}</li>
+              <li key={i} className="flex items-center gap-2">
+                <span className="flex-1">{d}</span>
+                <ImageUploader />
+              </li>
             ))}
           </ul>
           <RelatedBlock itemId={`role:${role.id}`} itemType="role" />

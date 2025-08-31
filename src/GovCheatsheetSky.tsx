@@ -31,6 +31,7 @@ import { iconForRoleName } from "./roleIcons";
 import RelatedBlock from "./RelatedBlock";
 import VoteWidget from "./VoteWidget";
 import { isRecentlyUpdated } from "./versioning";
+import ImageUploader from "./ImageUploader";
 
 /* ================= FlexSearch (CDN) ================= */
 declare global {
@@ -747,7 +748,12 @@ export default function GovCheatsheetSky() {
                         footer={<div>Источник: <Source href={(r as any).sourcePromotion || r.source || "#"} /></div>}
                       >
                         {promo.length ? (
-                          <PromoChecklist roleId={r.id} dept={deptTab} items={promo} />
+                          <>
+                            <PromoChecklist roleId={r.id} dept={deptTab} items={promo} />
+                            <div className="mt-3 flex justify-end">
+                              <ImageUploader label="Подать заявление" />
+                            </div>
+                          </>
                         ) : (
                           <p>Критерии повышения для этой роли пока не добавлены.</p>
                         )}
