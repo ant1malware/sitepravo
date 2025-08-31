@@ -16,6 +16,8 @@ import {
   Lightbulb,
   AlertCircle,
   Send,
+  ImagePlus,
+  ClipboardCopy,
 } from "lucide-react";
 
 import { rolesData } from "./roles";
@@ -212,19 +214,35 @@ const PromoChecklist: React.FC<{ roleId: string; dept: string; items: string[] }
   }
 
   return (
-    <ol className="ml-4 list-decimal">
-      {items.map((p, i) => (
-        <li key={i} className="flex items-start gap-2">
-          <input
-            type="checkbox"
-            className="mt-0.5 h-4 w-4 accent-indigo-600 dark:accent-indigo-400"
-            checked={checked.has(i)}
-            onChange={() => toggle(i)}
-          />
-          <span className={checked.has(i) ? "opacity-60 line-through" : undefined}>{p}</span>
-        </li>
-      ))}
-    </ol>
+    <div>
+      <div className="mb-2 flex gap-2">
+        <button
+          className="btn btn-icon p-1 rounded-full"
+          title="Загрузить скриншоты"
+        >
+          <ImagePlus className="h-4 w-4" />
+        </button>
+        <button
+          className="btn btn-icon p-1 rounded-full"
+          title="Скопировать ссылки"
+        >
+          <ClipboardCopy className="h-4 w-4" />
+        </button>
+      </div>
+      <ol className="ml-4 list-decimal">
+        {items.map((p, i) => (
+          <li key={i} className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 accent-indigo-600 dark:accent-indigo-400"
+              checked={checked.has(i)}
+              onChange={() => toggle(i)}
+            />
+            <span className={checked.has(i) ? "opacity-60 line-through" : undefined}>{p}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 };
 
