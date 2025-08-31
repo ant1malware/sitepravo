@@ -29,12 +29,15 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    font-feature-settings: "cv03", "cv04", "cv11";
+    font-variation-settings: "opsz" 32;
   }
   body {
     background: radial-gradient(1200px 600px at 20% -10%, var(--bg-2), transparent 60%),
       radial-gradient(1200px 600px at 100% 0%, var(--bg-2), transparent 60%),
       linear-gradient(180deg, var(--bg-1), var(--bg-2));
-    transition: background-color 200ms ease, color 200ms ease, background 300ms ease;
+    transition: background-color 200ms ease, color 200ms ease, background 300ms ease,
+      font-variation-settings 200ms ease, font-feature-settings 200ms ease;
   }
   a { @apply underline decoration-dotted hover:no-underline; }
 }
