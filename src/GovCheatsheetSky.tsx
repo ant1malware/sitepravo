@@ -103,6 +103,17 @@ const Badge = ({ children }: { children: React.ReactNode }) => (
   </span>
 );
 
+const Modal: React.FC<{ children: React.ReactNode; onClose: () => void }> = ({ children, onClose }) => (
+  <div
+    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+    onClick={onClose}
+  >
+    <div className="card w-72 p-4" onClick={(e) => e.stopPropagation()}>
+      {children}
+    </div>
+  </div>
+);
+
 // Simple accordion for VU docs
 const VUAccordion: React.FC = () => {
   const [open, setOpen] = useState<Set<string>>(() => new Set(vuDocs.length ? [vuDocs[0].id] : []));
@@ -199,16 +210,24 @@ const PromoChecklist: React.FC<{ roleId: string; dept: string; items: string[] }
       return new Set();
     }
   });
-  const [links, setLinks] = useState<Record<number, string>>(() => {
+  const [links, setLinks] = useState<Record<number, string[]>>(() => {
     try {
-      return JSON.parse(localStorage.getItem(linkKey) || "{}");
+      const raw = localStorage.getItem(linkKey);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw) as Record<string, string | string[]>;
+      const norm: Record<number, string[]> = {};
+      for (const [k, v] of Object.entries(parsed)) {
+        norm[Number(k)] = Array.isArray(v) ? v : [v];
+      }
+      return norm;
     } catch {
       return {};
     }
   });
   const [uploadIdx, setUploadIdx] = useState<number | null>(null);
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     try { localStorage.setItem(storageKey, JSON.stringify([...checked])); } catch {}
@@ -226,94 +245,120 @@ const PromoChecklist: React.FC<{ roleId: string; dept: string; items: string[] }
   }
 
   async function confirmUpload() {
-    if (uploadIdx === null || !pendingFile) return;
+    if (uploadIdx === null || pendingFiles.length === 0) return;
     const apiKey = import.meta.env.VITE_IMGBB_KEY;
     if (!apiKey) {
-      alert("VITE_IMGBB_KEY не задан");
+      setNotice("VITE_IMGBB_KEY не задан");
       return;
     }
     try {
       setUploading(true);
-      const form = new FormData();
-      form.append("image", pendingFile);
-      const res = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
-        method: "POST",
-        body: form,
-      });
-      const data = await res.json();
-      const url = data?.data?.url as string | undefined;
-      if (url) {
-        setLinks((prev) => ({ ...prev, [uploadIdx]: url }));
+      const urls: string[] = [];
+      for (const file of pendingFiles) {
+        const form = new FormData();
+        form.append("image", file);
+        const res = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
+          method: "POST",
+          body: form,
+        });
+        const data = await res.json();
+        const url = data?.data?.url as string | undefined;
+        if (url) urls.push(url);
       }
+      setLinks((prev) => ({ ...prev, [uploadIdx]: urls }));
       setUploadIdx(null);
-      setPendingFile(null);
+      setPendingFiles([]);
     } catch {
-      alert("Ошибка загрузки");
+      setNotice("Ошибка загрузки");
     } finally {
       setUploading(false);
     }
   }
 
   return (
-    <ol className="ml-4 list-decimal">
-      {items.map((p, i) => (
-        <li key={i} className="flex flex-col gap-1">
-          <div className="flex items-start gap-2">
-            <input
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 accent-indigo-600 dark:accent-indigo-400"
-              checked={checked.has(i)}
-              onChange={() => toggle(i)}
-            />
-            <span className={checked.has(i) ? "opacity-60 line-through" : undefined}>{p}</span>
-            <div className="ml-auto flex items-center gap-1 text-xs">
-              {links[i] && (
+    <>
+      <ol className="ml-4 list-decimal">
+        {items.map((p, i) => (
+          <li key={i} className="flex flex-col gap-1">
+            <div className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-indigo-600 dark:accent-indigo-400"
+                checked={checked.has(i)}
+                onChange={() => toggle(i)}
+              />
+              <span className={checked.has(i) ? "opacity-60 line-through" : undefined}>{p}</span>
+              <div className="ml-auto flex items-center gap-1 text-xs">
+                {links[i]?.length ? (
+                  <button
+                    className="btn px-2 py-0.5"
+                    onClick={() => navigator.clipboard.writeText(links[i].join("\n"))}
+                  >
+                    Скопировать ({links[i].length})
+                  </button>
+                ) : null}
                 <button
                   className="btn px-2 py-0.5"
-                  onClick={() => navigator.clipboard.writeText(links[i])}
+                  onClick={() => {
+                    setUploadIdx(i);
+                    setPendingFiles([]);
+                  }}
                 >
-                  Скопировать
+                  Загрузить
                 </button>
-              )}
-              <button
-                className="btn px-2 py-0.5"
-                onClick={() => {
-                  setUploadIdx(i);
-                  setPendingFile(null);
-                }}
-              >
-                Загрузить
-              </button>
+              </div>
             </div>
-          </div>
-          {uploadIdx === i && (
-            <div className="ml-6 flex items-center gap-2 text-xs">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setPendingFile(e.target.files?.[0] || null)}
-              />
-              <button
-                className="btn px-2 py-0.5"
-                disabled={!pendingFile || uploading}
-                onClick={confirmUpload}
-              >
-                Подтвердить
-              </button>
-              <button
-                className="btn px-2 py-0.5"
-                onClick={() => {
-                  setUploadIdx(null);
-                  setPendingFile(null);
-                }}
-              >
-                Отмена
-              </button>
+          </li>
+        ))}
+      </ol>
+      {uploadIdx !== null && (
+        <Modal
+          onClose={() => {
+            setUploadIdx(null);
+            setPendingFiles([]);
+          }}
+        >
+          <div className="mb-2 font-semibold">Загрузить скриншоты</div>
+          <input
+            type="file"
+            multiple
+            accept="image/*"
+            onChange={(e) => setPendingFiles(Array.from(e.target.files || []))}
+          />
+          {pendingFiles.length > 0 && (
+            <div className="mt-2 text-xs text-zinc-500">
+              Выбрано {pendingFiles.length} файлов
             </div>
           )}
-        </li>
-      ))}
-    </ol>
+          <div className="mt-3 flex gap-2">
+            <button
+              className="btn flex-1"
+              disabled={!pendingFiles.length || uploading}
+              onClick={confirmUpload}
+            >
+              Подтвердить
+            </button>
+            <button
+              className="btn flex-1"
+              onClick={() => {
+                setUploadIdx(null);
+                setPendingFiles([]);
+              }}
+            >
+              Отмена
+            </button>
+          </div>
+        </Modal>
+      )}
+      {notice && (
+        <Modal onClose={() => setNotice(null)}>
+          <div className="mb-3">{notice}</div>
+          <button className="btn w-full" onClick={() => setNotice(null)}>
+            Закрыть
+          </button>
+        </Modal>
+      )}
+    </>
   );
 };
 
