@@ -40,20 +40,20 @@
 }
 
 @layer components {
-  .card {
-    @apply rounded-2xl border p-4 shadow-soft backdrop-blur text-zinc-900 dark:text-zinc-100;
-    background: var(--card);
-    border-color: var(--card-border);
-  }
+    .card {
+      @apply rounded-2xl border p-4 shadow-soft backdrop-blur text-zinc-900 dark:text-zinc-100 transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-softLg active:translate-y-0;
+      background: var(--card);
+      border-color: var(--card-border);
+    }
   .shadow-soft { box-shadow: 0 6px 18px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.04); }
   .shadow-softLg { box-shadow: 0 12px 32px rgba(0,0,0,0.12), 0 4px 10px rgba(0,0,0,0.06); }
   .glass { backdrop-filter: saturate(120%) blur(10px); }
-  .btn {
-    @apply inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-sm transition no-underline
-      hover:bg-zinc-100 active:scale-[0.98] dark:hover:bg-zinc-800 focus:outline-none focus-visible:ring-2
-      text-zinc-900 dark:text-zinc-100;
-    --tw-ring-color: var(--ring);
-  }
+    .btn {
+      @apply inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-sm transition duration-200 ease-out no-underline
+        hover:bg-zinc-100 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] dark:hover:bg-zinc-800 focus:outline-none focus-visible:ring-2
+        text-zinc-900 dark:text-zinc-100;
+      --tw-ring-color: var(--ring);
+    }
   .btn-primary { @apply text-white border-transparent; background: linear-gradient(180deg,#6366F1,#4F46E5); }
   .input {
     @apply rounded-xl border px-3 py-1.5 text-sm focus:outline-none focus:ring w-full;
