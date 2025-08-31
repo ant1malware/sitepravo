@@ -1,11 +1,14 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import ThemeToggle from './ThemeToggle';
+import { getStoredAccentColor, setAccentColor } from './theme';
 
 export default function SettingsPage() {
   const [telemetryDisabled, setTelemetryDisabled] = React.useState<boolean>(() => {
     try { return localStorage.getItem('telemetry_disabled') === '1'; } catch { return false; }
   });
+
+  const [accent, setAccent] = React.useState<string>(() => getStoredAccentColor() ?? '#6366F1');
 
   function onTelemetryToggle() {
     const next = !telemetryDisabled;
@@ -14,6 +17,12 @@ export default function SettingsPage() {
       if (next) localStorage.setItem('telemetry_disabled', '1');
       else localStorage.removeItem('telemetry_disabled');
     } catch {}
+  }
+
+  function onAccentChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value;
+    setAccent(value);
+    setAccentColor(value);
   }
 
   return (
@@ -43,6 +52,13 @@ export default function SettingsPage() {
             <h2 className="mb-2 text-base font-semibold">Тема</h2>
             <div className="text-sm">Переключите тему интерфейса:</div>
             <div className="mt-2"><ThemeToggle /></div>
+            <div className="mt-4 text-sm">Акцентный цвет:</div>
+            <input
+              type="color"
+              className="mt-2 h-8 w-12 cursor-pointer rounded border p-0"
+              value={accent}
+              onChange={onAccentChange}
+            />
           </section>
         </div>
       </main>
