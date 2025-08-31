@@ -1,7 +1,12 @@
 import React from 'react';
 import { Copy, ImagePlus, Loader2 } from 'lucide-react';
 
-export default function ImageUploader() {
+interface Props {
+  label?: string;
+  className?: string;
+}
+
+export default function ImageUploader({ label, className }: Props) {
   const [open, setOpen] = React.useState(false);
   const [file, setFile] = React.useState<File | null>(null);
   const [preview, setPreview] = React.useState<string | null>(null);
@@ -49,8 +54,13 @@ export default function ImageUploader() {
 
   return (
     <div className="relative">
-      <button type="button" className="text-zinc-500 hover:text-zinc-700" onClick={() => setOpen(o => !o)} aria-label="Загрузить изображение">
-        <ImagePlus className="h-4 w-4" />
+      <button
+        type="button"
+        className={label ? `btn ${className ?? ''}` : `text-zinc-500 hover:text-zinc-700 ${className ?? ''}`}
+        onClick={() => setOpen(o => !o)}
+        aria-label="Загрузить изображение"
+      >
+        {label ? label : <ImagePlus className="h-4 w-4" />}
       </button>
       {open && (
         <div className="absolute right-0 z-10 mt-1 w-60 rounded-lg border bg-white p-3 text-xs shadow-xl dark:border-zinc-700 dark:bg-zinc-800">
