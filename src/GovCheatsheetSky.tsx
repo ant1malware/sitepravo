@@ -772,9 +772,12 @@ export default function GovCheatsheetSky() {
                   </div>
                 }
               >
-                <div className="flex flex-col gap-2">
+                <div className="grid gap-2">
                   {lines.map((t, i) => (
-                    <div key={i} className="flex items-center justify-between gap-2 rounded-xl border px-3 py-2">
+                    <div
+                      key={i}
+                      className="grid grid-cols-[1fr_auto] items-center gap-2 rounded-xl border px-3 py-2"
+                    >
                       <div className="text-sm">{t}</div>
                       <CopyBtn text={t} />
                     </div>
