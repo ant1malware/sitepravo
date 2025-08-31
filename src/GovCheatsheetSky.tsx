@@ -189,6 +189,7 @@ const FeedbackButton: React.FC = () => {
 // Simple checklist that persists per role + dept
 const PromoChecklist: React.FC<{ roleId: string; dept: string; items: string[] }> = ({ roleId, dept, items }) => {
   const storageKey = useMemo(() => `promo:${roleId}:${encodeURIComponent(dept)}`, [roleId, dept]);
+  const linksKey = useMemo(() => `${storageKey}:links`, [storageKey]);
   const [checked, setChecked] = useState<Set<number>>(() => {
     try {
       const raw = localStorage.getItem(storageKey);
@@ -198,30 +199,69 @@ const PromoChecklist: React.FC<{ roleId: string; dept: string; items: string[] }
       return new Set();
     }
   });
+  const [links, setLinks] = useState<Record<number, string[]>>(() => {
+    try {
+      const raw = localStorage.getItem(linksKey);
+      return raw ? (JSON.parse(raw) as Record<number, string[]>) : {};
+    } catch {
+      return {} as Record<number, string[]>;
+    }
+  });
 
   useEffect(() => {
-    try { localStorage.setItem(storageKey, JSON.stringify([...checked])); } catch {}
+    try {
+      localStorage.setItem(storageKey, JSON.stringify([...checked]));
+    } catch {}
   }, [checked, storageKey]);
 
-  function toggle(i: number) {
-    setChecked(prev => {
-      const next = new Set(prev);
-      if (next.has(i)) next.delete(i); else next.add(i);
+  useEffect(() => {
+    try {
+      localStorage.setItem(linksKey, JSON.stringify(links));
+    } catch {}
+  }, [links, linksKey]);
+
+  function confirmUpload(i: number) {
+    const url = window.prompt("Вставьте ссылку на изображение");
+    if (!url) return;
+    setLinks(prev => {
+      const next = { ...prev };
+      next[i] = [...(next[i] || []), url];
       return next;
     });
+  }
+
+  function toggle(i: number) {
+    const already = checked.has(i);
+    setChecked(prev => {
+      const next = new Set(prev);
+      if (already) next.delete(i); else next.add(i);
+      return next;
+    });
+    if (!already) confirmUpload(i);
   }
 
   return (
     <ol className="ml-4 list-decimal">
       {items.map((p, i) => (
-        <li key={i} className="flex items-start gap-2">
-          <input
-            type="checkbox"
-            className="mt-0.5 h-4 w-4 accent-indigo-600 dark:accent-indigo-400"
-            checked={checked.has(i)}
-            onChange={() => toggle(i)}
-          />
-          <span className={checked.has(i) ? "opacity-60 line-through" : undefined}>{p}</span>
+        <li key={i} className="flex flex-col gap-1">
+          <div className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 accent-indigo-600 dark:accent-indigo-400"
+              checked={checked.has(i)}
+              onChange={() => toggle(i)}
+            />
+            <span className={checked.has(i) ? "opacity-60 line-through" : undefined}>{p}</span>
+          </div>
+          {links[i]?.length ? (
+            <div className="flex gap-1 mt-1">
+              {links[i].map((url, idx) => (
+                <a key={idx} href={url} target="_blank">
+                  <img src={url} className="h-12 w-12 rounded border" />
+                </a>
+              ))}
+            </div>
+          ) : null}
         </li>
       ))}
     </ol>
