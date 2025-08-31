@@ -7,6 +7,7 @@ import RelatedBlock from './RelatedBlock';
 import VoteWidget from './VoteWidget';
 import { isRecentlyUpdated } from './versioning';
 import { isFavorite, toggleFavorite } from './favorites';
+import ContextText from './ContextText';
 
 const Card: React.FC<{ title: React.ReactNode; children: React.ReactNode; footer?: React.ReactNode }> = ({ title, children, footer }) => (
   <div className="card shadow-softLg glass">
@@ -45,17 +46,20 @@ export default function RolePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-zinc-50 to-zinc-100 text-zinc-900 dark:from-zinc-900 dark:to-zinc-950 dark:text-zinc-100">
+    <div className="min-h-screen bg-gradient-to-b from-zinc-50 via-zinc-100 to-zinc-200 text-zinc-900 dark:from-zinc-900 dark:via-zinc-800 dark:to-zinc-950 dark:text-zinc-100">
       <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3">
           <Link to="/" className="flex items-center gap-1 text-sm hover:underline">
             <ArrowLeft className="h-4 w-4" /> Назад
           </Link>
-          <div className="flex items-center gap-2">
-            {iconForRoleName(role.role)}
-            <h1 className="text-lg font-bold leading-tight">{role.role}</h1>
-            <Badge><span className="opacity-70">Зарплата:</span> {role.salary}</Badge>
-            {(() => { const v = isRecentlyUpdated(`role:${role.id}`); return v.recent ? <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] text-yellow-800" title={`Обновлено ${v.date}`}>обновлено</span> : null; })()}
+          <div className="flex flex-col items-center">
+            <div className="flex items-center gap-2">
+              {iconForRoleName(role.role)}
+              <h1 className="text-lg font-bold leading-tight">{role.role}</h1>
+              <Badge><span className="opacity-70">Зарплата:</span> {role.salary}</Badge>
+              {(() => { const v = isRecentlyUpdated(`role:${role.id}`); return v.recent ? <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] text-yellow-800" title={`Обновлено ${v.date}`}>обновлено</span> : null; })()}
+            </div>
+            <ContextText />
           </div>
         </div>
       </header>

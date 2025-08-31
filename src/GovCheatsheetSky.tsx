@@ -31,6 +31,23 @@ import { iconForRoleName } from "./roleIcons";
 import RelatedBlock from "./RelatedBlock";
 import VoteWidget from "./VoteWidget";
 import { isRecentlyUpdated } from "./versioning";
+import ContextText from "./ContextText";
+
+const APPLY_FORUM: Record<string, string> = {
+  guard: "https://forum.amazing-online.com/forums/mladshij-sostav/create-thread",
+  lawyer: "https://forum.amazing-online.com/forums/mladshij-sostav/create-thread",
+  inspector: "https://forum.amazing-online.com/forums/otchetnaya-deyatelnost-inspektorov/create-thread",
+  advisor: "https://forum.amazing-online.com/forums/otchetnaya-deyatelnost-inspektorov/create-thread",
+};
+
+function buildApplyUrl(roleId: string, roleName: string) {
+  const base = APPLY_FORUM[roleId];
+  if (!base) return null;
+  const url = new URL(base);
+  url.searchParams.set("title", `Заявление на ${roleName}`);
+  url.searchParams.set("message", `Ник: \nРоль: ${roleName}\nПричина: `);
+  return url.toString();
+}
 
 /* ================= FlexSearch (CDN) ================= */
 declare global {
@@ -600,7 +617,7 @@ export default function GovCheatsheetSky() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-zinc-50 to-zinc-100 text-zinc-900 dark:from-zinc-900 dark:to-zinc-950 dark:text-zinc-100">
+    <div className="min-h-screen bg-gradient-to-b from-zinc-50 via-zinc-100 to-zinc-200 text-zinc-900 dark:from-zinc-900 dark:via-zinc-800 dark:to-zinc-950 dark:text-zinc-100">
       <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-3">
@@ -608,6 +625,7 @@ export default function GovCheatsheetSky() {
             <div>
               <div className="text-lg font-bold leading-tight">Правительство — Памятка (SKY)</div>
               <div className="text-xs text-zinc-500">Локальные тексты • быстрый поиск • мобильный UI</div>
+              <ContextText />
             </div>
           </div>
 
@@ -751,6 +769,14 @@ export default function GovCheatsheetSky() {
                         ) : (
                           <p>Критерии повышения для этой роли пока не добавлены.</p>
                         )}
+                        {(() => {
+                          const apply = buildApplyUrl(r.id, r.role);
+                          return apply ? (
+                            <div className="mt-4 text-right">
+                              <a href={apply} target="_blank" className="btn btn-primary">Подать заявление</a>
+                            </div>
+                          ) : null;
+                        })()}
                       </Card>
                     );
                   })}

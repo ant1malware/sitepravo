@@ -31,6 +31,7 @@
     text-rendering: optimizeLegibility;
   }
   body {
+    @apply font-sans;
     background: radial-gradient(1200px 600px at 20% -10%, var(--bg-2), transparent 60%),
       radial-gradient(1200px 600px at 100% 0%, var(--bg-2), transparent 60%),
       linear-gradient(180deg, var(--bg-1), var(--bg-2));
@@ -41,7 +42,7 @@
 
 @layer components {
   .card {
-    @apply rounded-2xl border p-4 shadow-soft backdrop-blur text-zinc-900 dark:text-zinc-100;
+    @apply rounded-2xl border p-4 shadow-soft backdrop-blur text-zinc-900 dark:text-zinc-100 transition-transform hover:shadow-softLg hover:-translate-y-0.5;
     background: var(--card);
     border-color: var(--card-border);
   }

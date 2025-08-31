@@ -10,6 +10,7 @@ import {
 } from './favorites';
 import { rolesData } from './roles';
 import { lawsData } from './laws';
+import ContextText from './ContextText';
 
 export default function FavoritesPage() {
   // явный тип, чтобы не словить TS7006 в map()
@@ -63,11 +64,14 @@ export default function FavoritesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-zinc-50 to-zinc-100 text-zinc-900 dark:from-zinc-900 dark:to-zinc-950 dark:text-zinc-100">
+    <div className="min-h-screen bg-gradient-to-b from-zinc-50 via-zinc-100 to-zinc-200 text-zinc-900 dark:from-zinc-900 dark:via-zinc-800 dark:to-zinc-950 dark:text-zinc-100">
       <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
           <Link to="/" className="text-sm underline decoration-dotted hover:no-underline">На главную</Link>
-          <h1 className="text-lg font-bold">Избранное</h1>
+          <div className="flex flex-col items-center">
+            <h1 className="text-lg font-bold">Избранное</h1>
+            <ContextText />
+          </div>
           <span />
         </div>
       </header>

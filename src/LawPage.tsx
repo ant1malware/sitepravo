@@ -4,6 +4,7 @@ import { lawsData } from "./laws";
 import { ArrowLeft, BookOpen, Search, ListTree } from "lucide-react";
 import { isFavorite, toggleFavoriteMeta } from "./favorites";
 import FavStar from "./FavStar";
+import ContextText from "./ContextText";
 
 declare global { interface Window { marked: any; DOMPurify: any; } }
 
@@ -108,15 +109,18 @@ export default function LawPage() {
   const pad = (lvl: number) => (lvl === 2 ? "pl-0" : lvl === 3 ? "pl-3" : "pl-6");
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-zinc-50 to-zinc-100 text-zinc-900 dark:from-zinc-900 dark:to-zinc-950 dark:text-zinc-100">
+    <div className="min-h-screen bg-gradient-to-b from-zinc-50 via-zinc-100 to-zinc-200 text-zinc-900 dark:from-zinc-900 dark:via-zinc-800 dark:to-zinc-950 dark:text-zinc-100">
       <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <Link to="/" className="flex items-center gap-1 text-sm hover:underline">
             <ArrowLeft className="h-4 w-4" /> Назад
           </Link>
-          <div className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5" />
-            <h1 className="text-lg font-bold leading-tight">{law.title}</h1>
+          <div className="flex flex-col items-center">
+            <div className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5" />
+              <h1 className="text-lg font-bold leading-tight">{law.title}</h1>
+            </div>
+            <ContextText />
           </div>
           <div className="flex items-center gap-2">
             <FavStar kind="law" id={law.slug} title={law.title} url={`/laws/${law.slug}`} />
