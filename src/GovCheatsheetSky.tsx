@@ -189,6 +189,7 @@ const FeedbackButton: React.FC = () => {
 // Simple checklist that persists per role + dept
 const PromoChecklist: React.FC<{ roleId: string; dept: string; items: string[] }> = ({ roleId, dept, items }) => {
   const storageKey = useMemo(() => `promo:${roleId}:${encodeURIComponent(dept)}`, [roleId, dept]);
+  const linkKey = useMemo(() => `promoLinks:${roleId}:${encodeURIComponent(dept)}`, [roleId, dept]);
   const [checked, setChecked] = useState<Set<number>>(() => {
     try {
       const raw = localStorage.getItem(storageKey);
@@ -198,10 +199,23 @@ const PromoChecklist: React.FC<{ roleId: string; dept: string; items: string[] }
       return new Set();
     }
   });
+  const [links, setLinks] = useState<Record<number, string>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(linkKey) || "{}");
+    } catch {
+      return {};
+    }
+  });
+  const [uploadIdx, setUploadIdx] = useState<number | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     try { localStorage.setItem(storageKey, JSON.stringify([...checked])); } catch {}
   }, [checked, storageKey]);
+  useEffect(() => {
+    try { localStorage.setItem(linkKey, JSON.stringify(links)); } catch {}
+  }, [links, linkKey]);
 
   function toggle(i: number) {
     setChecked(prev => {
@@ -211,17 +225,92 @@ const PromoChecklist: React.FC<{ roleId: string; dept: string; items: string[] }
     });
   }
 
+  async function confirmUpload() {
+    if (uploadIdx === null || !pendingFile) return;
+    const apiKey = import.meta.env.VITE_IMGBB_KEY;
+    if (!apiKey) {
+      alert("VITE_IMGBB_KEY не задан");
+      return;
+    }
+    try {
+      setUploading(true);
+      const form = new FormData();
+      form.append("image", pendingFile);
+      const res = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
+        method: "POST",
+        body: form,
+      });
+      const data = await res.json();
+      const url = data?.data?.url as string | undefined;
+      if (url) {
+        setLinks((prev) => ({ ...prev, [uploadIdx]: url }));
+      }
+      setUploadIdx(null);
+      setPendingFile(null);
+    } catch {
+      alert("Ошибка загрузки");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <ol className="ml-4 list-decimal">
       {items.map((p, i) => (
-        <li key={i} className="flex items-start gap-2">
-          <input
-            type="checkbox"
-            className="mt-0.5 h-4 w-4 accent-indigo-600 dark:accent-indigo-400"
-            checked={checked.has(i)}
-            onChange={() => toggle(i)}
-          />
-          <span className={checked.has(i) ? "opacity-60 line-through" : undefined}>{p}</span>
+        <li key={i} className="flex flex-col gap-1">
+          <div className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 accent-indigo-600 dark:accent-indigo-400"
+              checked={checked.has(i)}
+              onChange={() => toggle(i)}
+            />
+            <span className={checked.has(i) ? "opacity-60 line-through" : undefined}>{p}</span>
+            <div className="ml-auto flex items-center gap-1 text-xs">
+              {links[i] && (
+                <button
+                  className="btn px-2 py-0.5"
+                  onClick={() => navigator.clipboard.writeText(links[i])}
+                >
+                  Скопировать
+                </button>
+              )}
+              <button
+                className="btn px-2 py-0.5"
+                onClick={() => {
+                  setUploadIdx(i);
+                  setPendingFile(null);
+                }}
+              >
+                Загрузить
+              </button>
+            </div>
+          </div>
+          {uploadIdx === i && (
+            <div className="ml-6 flex items-center gap-2 text-xs">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setPendingFile(e.target.files?.[0] || null)}
+              />
+              <button
+                className="btn px-2 py-0.5"
+                disabled={!pendingFile || uploading}
+                onClick={confirmUpload}
+              >
+                Подтвердить
+              </button>
+              <button
+                className="btn px-2 py-0.5"
+                onClick={() => {
+                  setUploadIdx(null);
+                  setPendingFile(null);
+                }}
+              >
+                Отмена
+              </button>
+            </div>
+          )}
         </li>
       ))}
     </ol>
@@ -599,6 +688,36 @@ export default function GovCheatsheetSky() {
     [chip]
   );
 
+  function submitPromotionApplication() {
+    const targetUrl =
+      "https://forum.amazing-online.com/threads/otchetnaja-dejatelnost-mladshego-sostava-pravitelstvennogo-apparata.1065688/page-9#post-8121045";
+    const lines: string[] = [];
+    rolesData
+      .filter((r) => {
+        if (deptTab === "Все") return true;
+        const d = (r as any).dept;
+        return Array.isArray(d) ? d.includes(deptTab) : d === deptTab;
+      })
+      .forEach((r) => {
+        const promo: string[] =
+          (r as any).promotionByDept && deptTab !== "Все"
+            ? (r as any).promotionByDept?.[deptTab] ?? []
+            : (r as any).promotion ?? [];
+        const key = `promo:${r.id}:${encodeURIComponent(deptTab)}`;
+        let arr: number[] = [];
+        try {
+          arr = JSON.parse(localStorage.getItem(key) || "[]");
+        } catch {}
+        lines.push(`${r.role}: ${arr.length}/${promo.length}`);
+      });
+
+    const message = `Заявление на повышение:\n${lines.join("\n")}`;
+    try {
+      navigator.clipboard.writeText(message);
+    } catch {}
+    window.open(`${targetUrl}?message=${encodeURIComponent(message)}`, "_blank");
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-zinc-50 to-zinc-100 text-zinc-900 dark:from-zinc-900 dark:to-zinc-950 dark:text-zinc-100">
       <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70">
@@ -721,40 +840,47 @@ export default function GovCheatsheetSky() {
 
             {/* Вкладка "Повышение" */}
             {rolesTab === "promotion" && (
-              <section className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {rolesData
-                  .filter((r) => {
-                    if (deptTab === "Все") return true;
-                    const d = (r as any).dept;
-                    return Array.isArray(d) ? d.includes(deptTab) : d === deptTab;
-                  })
-                  .map((r) => {
-                    const promo: string[] =
-                      (r as any).promotionByDept && deptTab !== "Все"
-                        ? (r as any).promotionByDept?.[deptTab] ?? []
-                        : (r as any).promotion ?? [];
+              <>
+                <div className="mb-4 flex justify-end">
+                  <button className="btn btn-primary" onClick={submitPromotionApplication}>
+                    Подать заявление
+                  </button>
+                </div>
+                <section className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {rolesData
+                    .filter((r) => {
+                      if (deptTab === "Все") return true;
+                      const d = (r as any).dept;
+                      return Array.isArray(d) ? d.includes(deptTab) : d === deptTab;
+                    })
+                    .map((r) => {
+                      const promo: string[] =
+                        (r as any).promotionByDept && deptTab !== "Все"
+                          ? (r as any).promotionByDept?.[deptTab] ?? []
+                          : (r as any).promotion ?? [];
 
-                    return (
-                      <Card
-                        key={r.id}
-                        title={
-                          <div className="flex items-center gap-2">
-                            {iconForRoleName(r.role)}
-                            <span>{r.role}</span>
-                            <Badge><span className="opacity-70">Зарплата:</span> {r.salary}</Badge>
-                          </div>
-                        }
-                        footer={<div>Источник: <Source href={(r as any).sourcePromotion || r.source || "#"} /></div>}
-                      >
-                        {promo.length ? (
-                          <PromoChecklist roleId={r.id} dept={deptTab} items={promo} />
-                        ) : (
-                          <p>Критерии повышения для этой роли пока не добавлены.</p>
-                        )}
-                      </Card>
-                    );
-                  })}
-              </section>
+                      return (
+                        <Card
+                          key={r.id}
+                          title={
+                            <div className="flex items-center gap-2">
+                              {iconForRoleName(r.role)}
+                              <span>{r.role}</span>
+                              <Badge><span className="opacity-70">Зарплата:</span> {r.salary}</Badge>
+                            </div>
+                          }
+                          footer={<div>Источник: <Source href={(r as any).sourcePromotion || r.source || "#"} /></div>}
+                        >
+                          {promo.length ? (
+                            <PromoChecklist roleId={r.id} dept={deptTab} items={promo} />
+                          ) : (
+                            <p>Критерии повышения для этой роли пока не добавлены.</p>
+                          )}
+                        </Card>
+                      );
+                    })}
+                </section>
+              </>
             )}
           </>
         )}
