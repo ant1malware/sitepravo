@@ -4,8 +4,12 @@ const STORAGE_KEY = 'theme';
 const ACCENT_KEY = 'accent-color';
 
 export function getStoredTheme(): Theme | null {
-  const v = localStorage.getItem(STORAGE_KEY);
-  return v === 'light' || v === 'dark' ? v : null;
+  try {
+    const v = localStorage.getItem(STORAGE_KEY);
+    return v === 'light' || v === 'dark' ? v : null;
+  } catch {
+    return null;
+  }
 }
 
 export function systemPrefersDark(): boolean {
@@ -16,7 +20,7 @@ export function applyTheme(t: Theme) {
   const root = document.documentElement;
   if (t === 'dark') root.classList.add('dark');
   else root.classList.remove('dark');
-  localStorage.setItem(STORAGE_KEY, t);
+  try { localStorage.setItem(STORAGE_KEY, t); } catch {}
   // Sync meta theme-color for nicer mobile address bar
   const color = t === 'dark' ? '#0a0a0a' : '#fafafa';
   let meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
