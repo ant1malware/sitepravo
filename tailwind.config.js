@@ -14,8 +14,8 @@ export default {
       },
       colors: {
         accent: {
-          DEFAULT: '#6366F1', // indigo-500
-          600: '#4F46E5'
+          DEFAULT: 'var(--accent)',
+          600: 'var(--accent-600)'
         }
       }
     },

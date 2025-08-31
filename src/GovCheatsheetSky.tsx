@@ -217,7 +217,8 @@ const PromoChecklist: React.FC<{ roleId: string; dept: string; items: string[] }
         <li key={i} className="flex items-start gap-2">
           <input
             type="checkbox"
-            className="mt-0.5 h-4 w-4 accent-indigo-600 dark:accent-indigo-400"
+            className="mt-0.5 h-4 w-4"
+            style={{ accentColor: 'var(--accent)' }}
             checked={checked.has(i)}
             onChange={() => toggle(i)}
           />
