@@ -103,6 +103,17 @@ const Badge = ({ children }: { children: React.ReactNode }) => (
   </span>
 );
 
+const Modal: React.FC<{ children: React.ReactNode; onClose: () => void }> = ({ children, onClose }) => (
+  <div
+    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+    onClick={onClose}
+  >
+    <div className="card w-72 p-4" onClick={(e) => e.stopPropagation()}>
+      {children}
+    </div>
+  </div>
+);
+
 // Simple accordion for VU docs
 const VUAccordion: React.FC = () => {
   const [open, setOpen] = useState<Set<string>>(() => new Set(vuDocs.length ? [vuDocs[0].id] : []));
@@ -189,6 +200,7 @@ const FeedbackButton: React.FC = () => {
 // Simple checklist that persists per role + dept
 const PromoChecklist: React.FC<{ roleId: string; dept: string; items: string[] }> = ({ roleId, dept, items }) => {
   const storageKey = useMemo(() => `promo:${roleId}:${encodeURIComponent(dept)}`, [roleId, dept]);
+  const linkKey = useMemo(() => `promoLinks:${roleId}:${encodeURIComponent(dept)}`, [roleId, dept]);
   const [checked, setChecked] = useState<Set<number>>(() => {
     try {
       const raw = localStorage.getItem(storageKey);
@@ -198,10 +210,31 @@ const PromoChecklist: React.FC<{ roleId: string; dept: string; items: string[] }
       return new Set();
     }
   });
+  const [links, setLinks] = useState<Record<number, string[]>>(() => {
+    try {
+      const raw = localStorage.getItem(linkKey);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw) as Record<string, string | string[]>;
+      const norm: Record<number, string[]> = {};
+      for (const [k, v] of Object.entries(parsed)) {
+        norm[Number(k)] = Array.isArray(v) ? v : [v];
+      }
+      return norm;
+    } catch {
+      return {};
+    }
+  });
+  const [uploadIdx, setUploadIdx] = useState<number | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     try { localStorage.setItem(storageKey, JSON.stringify([...checked])); } catch {}
   }, [checked, storageKey]);
+  useEffect(() => {
+    try { localStorage.setItem(linkKey, JSON.stringify(links)); } catch {}
+  }, [links, linkKey]);
 
   function toggle(i: number) {
     setChecked(prev => {
@@ -211,20 +244,121 @@ const PromoChecklist: React.FC<{ roleId: string; dept: string; items: string[] }
     });
   }
 
+  async function confirmUpload() {
+    if (uploadIdx === null || pendingFiles.length === 0) return;
+    const apiKey = import.meta.env.VITE_IMGBB_KEY;
+    if (!apiKey) {
+      setNotice("VITE_IMGBB_KEY не задан");
+      return;
+    }
+    try {
+      setUploading(true);
+      const urls: string[] = [];
+      for (const file of pendingFiles) {
+        const form = new FormData();
+        form.append("image", file);
+        const res = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
+          method: "POST",
+          body: form,
+        });
+        const data = await res.json();
+        const url = data?.data?.url as string | undefined;
+        if (url) urls.push(url);
+      }
+      setLinks((prev) => ({ ...prev, [uploadIdx]: urls }));
+      setUploadIdx(null);
+      setPendingFiles([]);
+    } catch {
+      setNotice("Ошибка загрузки");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
-    <ol className="ml-4 list-decimal">
-      {items.map((p, i) => (
-        <li key={i} className="flex items-start gap-2">
+    <>
+      <ol className="ml-4 list-decimal">
+        {items.map((p, i) => (
+          <li key={i} className="flex flex-col gap-1">
+            <div className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-indigo-600 dark:accent-indigo-400"
+                checked={checked.has(i)}
+                onChange={() => toggle(i)}
+              />
+              <span className={checked.has(i) ? "opacity-60 line-through" : undefined}>{p}</span>
+              <div className="ml-auto flex items-center gap-1 text-xs">
+                {links[i]?.length ? (
+                  <button
+                    className="btn px-2 py-0.5"
+                    onClick={() => navigator.clipboard.writeText(links[i].join("\n"))}
+                  >
+                    Скопировать ({links[i].length})
+                  </button>
+                ) : null}
+                <button
+                  className="btn px-2 py-0.5"
+                  onClick={() => {
+                    setUploadIdx(i);
+                    setPendingFiles([]);
+                  }}
+                >
+                  Загрузить
+                </button>
+              </div>
+            </div>
+          </li>
+        ))}
+      </ol>
+      {uploadIdx !== null && (
+        <Modal
+          onClose={() => {
+            setUploadIdx(null);
+            setPendingFiles([]);
+          }}
+        >
+          <div className="mb-2 font-semibold">Загрузить скриншоты</div>
           <input
-            type="checkbox"
-            className="mt-0.5 h-4 w-4 accent-indigo-600 dark:accent-indigo-400"
-            checked={checked.has(i)}
-            onChange={() => toggle(i)}
+            type="file"
+            multiple
+            accept="image/*"
+            onChange={(e) => setPendingFiles(Array.from(e.target.files || []))}
           />
-          <span className={checked.has(i) ? "opacity-60 line-through" : undefined}>{p}</span>
-        </li>
-      ))}
-    </ol>
+          {pendingFiles.length > 0 && (
+            <div className="mt-2 text-xs text-zinc-500">
+              Выбрано {pendingFiles.length} файлов
+            </div>
+          )}
+          <div className="mt-3 flex gap-2">
+            <button
+              className="btn flex-1"
+              disabled={!pendingFiles.length || uploading}
+              onClick={confirmUpload}
+            >
+              Подтвердить
+            </button>
+            <button
+              className="btn flex-1"
+              onClick={() => {
+                setUploadIdx(null);
+                setPendingFiles([]);
+              }}
+            >
+              Отмена
+            </button>
+          </div>
+        </Modal>
+      )}
+      {notice && (
+        <Modal onClose={() => setNotice(null)}>
+          <div className="mb-3">{notice}</div>
+          <button className="btn w-full" onClick={() => setNotice(null)}>
+            Закрыть
+          </button>
+        </Modal>
+      )}
+    </>
   );
 };
 
@@ -599,6 +733,36 @@ export default function GovCheatsheetSky() {
     [chip]
   );
 
+  function submitPromotionApplication() {
+    const targetUrl =
+      "https://forum.amazing-online.com/threads/otchetnaja-dejatelnost-mladshego-sostava-pravitelstvennogo-apparata.1065688/page-9#post-8121045";
+    const lines: string[] = [];
+    rolesData
+      .filter((r) => {
+        if (deptTab === "Все") return true;
+        const d = (r as any).dept;
+        return Array.isArray(d) ? d.includes(deptTab) : d === deptTab;
+      })
+      .forEach((r) => {
+        const promo: string[] =
+          (r as any).promotionByDept && deptTab !== "Все"
+            ? (r as any).promotionByDept?.[deptTab] ?? []
+            : (r as any).promotion ?? [];
+        const key = `promo:${r.id}:${encodeURIComponent(deptTab)}`;
+        let arr: number[] = [];
+        try {
+          arr = JSON.parse(localStorage.getItem(key) || "[]");
+        } catch {}
+        lines.push(`${r.role}: ${arr.length}/${promo.length}`);
+      });
+
+    const message = `Заявление на повышение:\n${lines.join("\n")}`;
+    try {
+      navigator.clipboard.writeText(message);
+    } catch {}
+    window.open(`${targetUrl}?message=${encodeURIComponent(message)}`, "_blank");
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-zinc-50 to-zinc-100 text-zinc-900 dark:from-zinc-900 dark:to-zinc-950 dark:text-zinc-100">
       <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70">
@@ -721,40 +885,47 @@ export default function GovCheatsheetSky() {
 
             {/* Вкладка "Повышение" */}
             {rolesTab === "promotion" && (
-              <section className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {rolesData
-                  .filter((r) => {
-                    if (deptTab === "Все") return true;
-                    const d = (r as any).dept;
-                    return Array.isArray(d) ? d.includes(deptTab) : d === deptTab;
-                  })
-                  .map((r) => {
-                    const promo: string[] =
-                      (r as any).promotionByDept && deptTab !== "Все"
-                        ? (r as any).promotionByDept?.[deptTab] ?? []
-                        : (r as any).promotion ?? [];
+              <>
+                <div className="mb-4 flex justify-end">
+                  <button className="btn btn-primary" onClick={submitPromotionApplication}>
+                    Подать заявление
+                  </button>
+                </div>
+                <section className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {rolesData
+                    .filter((r) => {
+                      if (deptTab === "Все") return true;
+                      const d = (r as any).dept;
+                      return Array.isArray(d) ? d.includes(deptTab) : d === deptTab;
+                    })
+                    .map((r) => {
+                      const promo: string[] =
+                        (r as any).promotionByDept && deptTab !== "Все"
+                          ? (r as any).promotionByDept?.[deptTab] ?? []
+                          : (r as any).promotion ?? [];
 
-                    return (
-                      <Card
-                        key={r.id}
-                        title={
-                          <div className="flex items-center gap-2">
-                            {iconForRoleName(r.role)}
-                            <span>{r.role}</span>
-                            <Badge><span className="opacity-70">Зарплата:</span> {r.salary}</Badge>
-                          </div>
-                        }
-                        footer={<div>Источник: <Source href={(r as any).sourcePromotion || r.source || "#"} /></div>}
-                      >
-                        {promo.length ? (
-                          <PromoChecklist roleId={r.id} dept={deptTab} items={promo} />
-                        ) : (
-                          <p>Критерии повышения для этой роли пока не добавлены.</p>
-                        )}
-                      </Card>
-                    );
-                  })}
-              </section>
+                      return (
+                        <Card
+                          key={r.id}
+                          title={
+                            <div className="flex items-center gap-2">
+                              {iconForRoleName(r.role)}
+                              <span>{r.role}</span>
+                              <Badge><span className="opacity-70">Зарплата:</span> {r.salary}</Badge>
+                            </div>
+                          }
+                          footer={<div>Источник: <Source href={(r as any).sourcePromotion || r.source || "#"} /></div>}
+                        >
+                          {promo.length ? (
+                            <PromoChecklist roleId={r.id} dept={deptTab} items={promo} />
+                          ) : (
+                            <p>Критерии повышения для этой роли пока не добавлены.</p>
+                          )}
+                        </Card>
+                      );
+                    })}
+                </section>
+              </>
             )}
           </>
         )}
