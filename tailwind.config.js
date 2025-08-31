@@ -4,6 +4,9 @@ export default {
   content: ["./index.html", "./src/**/*.{ts,tsx,js,jsx}"],
   theme: {
     extend: {
+      screens: {
+        '2xl': '1536px',
+      },
       boxShadow: {
         soft: '0 10px 30px -12px rgba(0,0,0,0.25)',
         softLg: '0 20px 60px -24px rgba(0,0,0,0.35)'

@@ -78,21 +78,21 @@ export default function FavoritesPage() {
             Пока пусто. Добавляйте роли и законы в закладки.
           </div>
         ) : (
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {rows.map((r, i) => {
               const f = favs[i]; // индексы синхронизированы с map() выше
               if (!f) return null;
               return (
                 <div
                   key={`${f.kind}:${f.id}`}
-                  className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900"
+                  className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900"
                 >
-                  <Link to={r.url} className="min-w-0">
+                  <Link to={r.url} className="min-w-0 flex flex-col space-y-0.5">
                     <div className="truncate text-sm font-semibold">{r.title}</div>
                     <div className="text-xs text-zinc-500">{r.kindLabel}</div>
                   </Link>
 
-                  <div className="ml-3 flex items-center gap-2">
+                  <div className="ml-3 flex items-center space-x-2">
                     <FavStar
                       kind={f.kind}
                       id={f.id}
