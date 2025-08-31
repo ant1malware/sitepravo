@@ -25,12 +25,8 @@ export default function DiffPage() {
         </div>
       )}
       <style>{`
-        ins{background:#DCFCE7; text-decoration:none;}
-        del{background:#FEE2E2; text-decoration:line-through;}
-        @media (prefers-color-scheme: dark){
-          ins{background:rgba(34,197,94,0.25);} /* emerald-500 @ 25% */
-          del{background:rgba(239,68,68,0.25);} /* red-500 @ 25% */
-        }
+        ins{background:rgb(var(--success) / 0.2); text-decoration:none;}
+        del{background:rgb(var(--danger) / 0.2); text-decoration:line-through;}
       `}</style>
     </div>
   );

@@ -16,7 +16,10 @@ export default {
         accent: {
           DEFAULT: '#6366F1', // indigo-500
           600: '#4F46E5'
-        }
+        },
+        success: 'rgb(var(--success) / <alpha-value>)',
+        warning: 'rgb(var(--warning) / <alpha-value>)',
+        danger: 'rgb(var(--danger) / <alpha-value>)'
       }
     },
   },
