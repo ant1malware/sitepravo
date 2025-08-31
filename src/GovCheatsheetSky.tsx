@@ -16,6 +16,7 @@ import {
   Lightbulb,
   AlertCircle,
   Send,
+  X,
 } from "lucide-react";
 
 import { rolesData } from "./roles";
@@ -182,6 +183,41 @@ const FeedbackButton: React.FC = () => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+const Modal: React.FC<{ open: boolean; onClose: () => void; children: React.ReactNode }> = ({ open, onClose, children }) => {
+  const [show, setShow] = useState(open);
+  const [anim, setAnim] = useState("animate-fadeIn");
+
+  useEffect(() => {
+    if (open) {
+      setShow(true);
+      setAnim("animate-fadeIn");
+    } else {
+      setAnim("animate-fadeOut");
+      const t = setTimeout(() => setShow(false), 200);
+      return () => clearTimeout(t);
+    }
+  }, [open]);
+
+  if (!show) return null;
+
+  return (
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 ${anim}`}
+      onClick={onClose}
+    >
+      <div
+        className={`relative transition-transform ${open ? "scale-100" : "scale-95"}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute right-2 top-2">
+          <X className="h-4 w-4" />
+        </button>
+        {children}
+      </div>
     </div>
   );
 };
