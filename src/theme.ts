@@ -66,6 +66,7 @@ function shade(color: string, percent: number): string {
 }
 
 export function setAccentColor(color: string) {
+  if (!/^#[0-9a-fA-F]{6}$/.test(color)) return;
   const root = document.documentElement;
   root.style.setProperty('--accent', color);
   root.style.setProperty('--accent-600', shade(color, -0.15));
@@ -74,5 +75,5 @@ export function setAccentColor(color: string) {
 
 export function initAccentColor() {
   const stored = getStoredAccentColor();
-  if (stored) setAccentColor(stored);
+  if (stored && /^#[0-9a-fA-F]{6}$/.test(stored)) setAccentColor(stored);
 }
