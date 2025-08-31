@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { rolesData } from './roles';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+import Button from './ui/Button';
 
 export default function PrintSheet() {
   const [params] = useSearchParams();
@@ -16,8 +17,8 @@ export default function PrintSheet() {
       <div className="mb-4 flex items-center justify-between print:hidden">
         <h1 className="text-xl font-bold">Памятка на смену</h1>
         <div className="flex items-center gap-2">
-          <button className="btn" onClick={()=>window.print()}>Печать / PDF</button>
-          <Link to="/" className="btn">Назад</Link>
+          <Button onClick={()=>window.print()}>Печать / PDF</Button>
+          <Button to="/">Назад</Button>
         </div>
       </div>
 

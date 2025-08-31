@@ -7,15 +7,17 @@ import RelatedBlock from './RelatedBlock';
 import VoteWidget from './VoteWidget';
 import { isRecentlyUpdated } from './versioning';
 import { isFavorite, toggleFavorite } from './favorites';
+import CardBase from './ui/Card';
+import Button from './ui/Button';
 
 const Card: React.FC<{ title: React.ReactNode; children: React.ReactNode; footer?: React.ReactNode }> = ({ title, children, footer }) => (
-  <div className="card shadow-softLg glass">
+  <CardBase className="shadow-softLg glass">
     <div className="mb-2 flex items-center justify-between">
       <h3 className="text-base font-semibold leading-tight">{title}</h3>
     </div>
     <div className="prose prose-zinc max-w-none text-sm leading-relaxed dark:prose-invert">{children}</div>
     {footer && <div className="mt-3 border-t border-zinc-200 pt-3 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">{footer}</div>}
-  </div>
+  </CardBase>
 );
 
 const Source = ({ href, label }: { href: string; label?: string }) => (
@@ -61,15 +63,14 @@ export default function RolePage() {
       </header>
       <main className="mx-auto max-w-3xl px-4 py-6">
         <div className="mb-3 flex items-center gap-2">
-          <a className="btn" href={`/print?role=${role.id}`}><Printer className="h-4 w-4" /> Export: PDF</a>
-          <button
-            className="btn"
+          <Button href={`/print?role=${role.id}`}><Printer className="h-4 w-4" /> Export: PDF</Button>
+          <Button
             onClick={() => { const nowFav = toggleFavorite('role', role.id); setFav(nowFav); try{ (document.activeElement as HTMLElement)?.blur?.(); }catch{}; }}
             aria-label={fav ? 'Удалить из избранного' : 'Добавить в избранное'}
             title={fav ? 'В избранном' : 'В закладки'}
           >
             {fav ? 'В избранном' : 'В закладки'}
-          </button>
+          </Button>
         </div>
         <Card title="Обязанности" footer={<div>Источник: <Source href={role.source} /></div>}>
           <ul className="ml-4 list-disc">

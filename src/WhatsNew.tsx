@@ -2,6 +2,8 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { getWhatsNew } from './versioning';
 import { History, ArrowRight, CalendarDays, Tag } from 'lucide-react';
+import Card from './ui/Card';
+import Button from './ui/Button';
 
 export default function WhatsNew() {
   const items = getWhatsNew();
@@ -11,14 +13,15 @@ export default function WhatsNew() {
         <h1 className="flex items-center gap-2 text-xl font-bold">
           <History className="h-5 w-5" /> Что нового
         </h1>
-        <Link to="/" className="btn">На главную</Link>
+        <Button to="/">На главную</Button>
       </div>
 
   <div className="grid gap-4">
         {items.map((it) => (
-          <article
+          <Card
+            as="article"
             key={`${it.id}-${it.version}`}
-            className="card transition hover:shadow-softLg"
+            className="transition hover:shadow-softLg"
           >
             <header className="mb-1 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -26,9 +29,9 @@ export default function WhatsNew() {
                   <Tag className="h-3.5 w-3.5" /> {it.id}
                 </span>
               </div>
-              <Link to={`/diff/${encodeURIComponent(it.id)}`} className="btn">
+              <Button to={`/diff/${encodeURIComponent(it.id)}`}>
                 Сравнить версии <ArrowRight className="h-4 w-4" />
-              </Link>
+              </Button>
             </header>
 
             <p className="text-sm leading-relaxed text-zinc-800 dark:text-zinc-200">
@@ -50,13 +53,13 @@ export default function WhatsNew() {
                 <CalendarDays className="h-3.5 w-3.5" /> {it.date}
               </span>
             </footer>
-          </article>
+          </Card>
         ))}
 
         {!items.length && (
-          <div className="card text-sm text-zinc-600 dark:text-zinc-300">
+          <Card className="text-sm text-zinc-600 dark:text-zinc-300">
             Пока нет обновлений.
-          </div>
+          </Card>
         )}
       </div>
     </div>

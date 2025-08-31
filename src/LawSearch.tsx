@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Search } from 'lucide-react';
+import Input from './ui/Input';
 import { lawsData } from './laws';
 import { slugify, escapeHtml, escRe, termsFrom, normalizeQuery } from './utils/strings';
 
@@ -127,7 +128,7 @@ export default function LawSearch() {
       <div className="mb-2 text-xs text-zinc-600">Примеры: <code>ук 105</code>, <code>коап 12.8</code>, <code>дорожные знаки</code></div>
       <div className="flex items-center gap-2">
         <Search className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
-        <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Поиск по всем законам (статьи, названия, аббревиатуры)…" className="w-full rounded-xl border border-zinc-200 px-3 py-1.5 text-sm focus:outline-none focus:ring dark:border-zinc-700 dark:bg-zinc-900/50" />
+        <Input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Поиск по всем законам (статьи, названия, аббревиатуры)…" className="border-zinc-200 dark:border-zinc-700 dark:bg-zinc-900/50" />
       </div>
       {!!results.length && (
         <div className="mt-3 grid gap-2">
