@@ -13,6 +13,7 @@ import { useLocation } from "react-router-dom";
 import { track } from "./track";
 import SettingsPage from "./SettingsPage";
 import FavoritesPage from "./FavoritesPage";
+import Playground from "./ui/Playground";
 
 // Tracks page views on route change
 function RouteTracker() {
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="/vu/:id" element={<VuPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/favorites" element={<FavoritesPage />} />
+        <Route path="/ui" element={<Playground />} />
       </Routes>
     </BrowserRouter>
   );

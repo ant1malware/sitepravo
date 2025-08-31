@@ -1,6 +1,7 @@
 import React from 'react';
 import { ThumbsUp, ThumbsDown } from 'lucide-react';
 import { markVisible, setStatsListener, removeStatsListener, vote, type Totals } from './vote';
+import Button from './ui/Button';
 
 export default function VoteWidget({ cardId }: { cardId: string }) {
   const [totals, setTotals] = React.useState<Totals>({ up: 0, down: 0 });
@@ -27,12 +28,12 @@ export default function VoteWidget({ cardId }: { cardId: string }) {
 
   return (
     <div className="mt-2 flex items-center gap-2 text-xs">
-      <button className="btn" onClick={()=>on(1)} disabled={disabled}>
+      <Button onClick={()=>on(1)} disabled={disabled}>
         <ThumbsUp className="h-4 w-4" /> {totals.up}
-      </button>
-      <button className="btn" onClick={()=>on(-1)} disabled={disabled}>
+      </Button>
+      <Button onClick={()=>on(-1)} disabled={disabled}>
         <ThumbsDown className="h-4 w-4" /> {totals.down}
-      </button>
+      </Button>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import ThemeToggle from './ThemeToggle';
+import Card from './ui/Card';
 
 export default function SettingsPage() {
   const [telemetryDisabled, setTelemetryDisabled] = React.useState<boolean>(() => {
@@ -28,7 +29,7 @@ export default function SettingsPage() {
 
       <main className="mx-auto max-w-3xl px-4 py-6">
         <div className="grid gap-4">
-          <section className="card">
+          <Card as="section">
             <h2 className="mb-2 text-base font-semibold">Приватность</h2>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" className="h-4 w-4" checked={telemetryDisabled} onChange={onTelemetryToggle} />
@@ -37,13 +38,13 @@ export default function SettingsPage() {
             <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
               Учитываем Do-Not-Track браузера. Данные не содержат PII и отправляются на ваш бекенд.
             </p>
-          </section>
+          </Card>
 
-          <section className="card">
+          <Card as="section">
             <h2 className="mb-2 text-base font-semibold">Тема</h2>
             <div className="text-sm">Переключите тему интерфейса:</div>
             <div className="mt-2"><ThemeToggle /></div>
-          </section>
+          </Card>
         </div>
       </main>
     </div>

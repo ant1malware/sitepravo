@@ -2,6 +2,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import FavStar from './FavStar';
+import Card from './ui/Card';
+import Button from './ui/Button';
 import {
   listFavorites,
   removeFavorite,
@@ -74,9 +76,9 @@ export default function FavoritesPage() {
 
       <main className="mx-auto max-w-3xl px-4 py-6">
         {!rows.length ? (
-          <div className="card text-sm text-zinc-600 dark:text-zinc-300">
+          <Card className="text-sm text-zinc-600 dark:text-zinc-300">
             Пока пусто. Добавляйте роли и законы в закладки.
-          </div>
+          </Card>
         ) : (
           <div className="grid gap-2">
             {rows.map((r, i) => {
@@ -100,13 +102,12 @@ export default function FavoritesPage() {
                       url={r.url}
                       size="sm"
                     />
-                    <button
-                      className="btn"
+                    <Button
                       onClick={() => onRemove(f.kind, f.id)}
                       title="Удалить"
                     >
                       Удалить
-                    </button>
+                    </Button>
                   </div>
                 </div>
               );

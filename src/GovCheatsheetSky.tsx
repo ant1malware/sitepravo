@@ -31,6 +31,8 @@ import { iconForRoleName } from "./roleIcons";
 import RelatedBlock from "./RelatedBlock";
 import VoteWidget from "./VoteWidget";
 import { isRecentlyUpdated } from "./versioning";
+import CardBase from "./ui/Card";
+import Button from "./ui/Button";
 
 /* ================= FlexSearch (CDN) ================= */
 declare global {
@@ -74,7 +76,7 @@ const Card: React.FC<{
   children: React.ReactNode;
   footer?: React.ReactNode;
 }> = ({ title, children, footer }) => (
-  <div className="card shadow-softLg glass">
+  <CardBase className="shadow-softLg glass">
     <div className="mb-2 flex items-center justify-between">
       <h3 className="text-base font-semibold leading-tight">{title}</h3>
     </div>
@@ -84,7 +86,7 @@ const Card: React.FC<{
     {footer && (
       <div className="mt-3 border-t border-zinc-200 pt-3 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">{footer}</div>
     )}
-  </div>
+  </CardBase>
 );
 
 const Source = ({ href, label }: { href: string; label?: string }) => (
@@ -118,7 +120,7 @@ const VUAccordion: React.FC = () => {
                 <Shield className="h-4 w-4" />
                 <span>{doc.title}</span>
               </div>
-              <button className="btn" onClick={() => toggle(doc.id)}>{open.has(doc.id) ? 'Свернуть' : 'Открыть'}</button>
+              <Button onClick={() => toggle(doc.id)}>{open.has(doc.id) ? 'Свернуть' : 'Открыть'}</Button>
             </div>
           }
           footer={
@@ -151,12 +153,12 @@ const FeedbackButton: React.FC = () => {
   }, []);
   return (
     <div className="relative">
-      <button id="fb-btn" className="btn" onClick={() => setOpen(v=>!v)}>
+      <Button id="fb-btn" onClick={() => setOpen(v=>!v)}>
         <MessageSquare className="h-4 w-4" />
         <span className="hidden sm:inline">Фидбек</span>
-      </button>
+      </Button>
       {open && (
-        <div id="fb-pop" className="absolute right-0 z-30 mt-2 w-72 card p-3 text-sm bg-white dark:bg-zinc-900 shadow-softLg">
+        <CardBase id="fb-pop" className="absolute right-0 z-30 mt-2 w-72 p-3 text-sm bg-white dark:bg-zinc-900 shadow-softLg">
           <div className="mb-2 flex items-center gap-2 font-semibold">
             <AlertCircle className="h-4 w-4" />
             Поделитесь обратной связью
@@ -166,21 +168,21 @@ const FeedbackButton: React.FC = () => {
             <li className="flex items-center gap-2"><Lightbulb className="h-3.5 w-3.5" /> Идея по улучшению</li>
             <li className="flex items-center gap-2"><FileText className="h-3.5 w-3.5" /> Ошибка/опечатка в тексте</li>
           </ul>
-          <a
-            className="btn w-full justify-center no-underline"
+          <Button
             href="https://t.me/pasha_bolshoi"
+            className="w-full justify-center no-underline"
             target="_blank"
             rel="noreferrer"
           >
             <Send className="h-4 w-4" /> Написать в Telegram
-          </a>
+          </Button>
           <div className="mt-2 flex items-center justify-between text-xs">
             <label className="flex items-center gap-2">
               <input type="checkbox" defaultChecked={localStorage.getItem('telemetry_disabled')==='1'} onChange={(e)=>localStorage.setItem('telemetry_disabled', e.currentTarget.checked?'1':'0')} />
               Отключить анонимную телеметрию
             </label>
           </div>
-        </div>
+        </CardBase>
       )}
     </div>
   );
@@ -627,8 +629,8 @@ export default function GovCheatsheetSky() {
             ))}
           </nav>
           <div className="flex items-center gap-2 md:ml-auto">
-            <Link to="/whats-new" className="btn">Что нового</Link>
-            <Link to="/favorites" className="btn"><span className="inline-block h-4 w-4">★</span> Избранное</Link>
+            <Button to="/whats-new">Что нового</Button>
+            <Button to="/favorites"><span className="inline-block h-4 w-4">★</span> Избранное</Button>
             <FeedbackButton />
             <ThemeToggle />
           </div>

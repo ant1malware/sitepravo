@@ -1,5 +1,7 @@
 import React from 'react';
 import { Search, BookOpen, Users, Shield, X, Settings, Star } from 'lucide-react';
+import Button from './ui/Button';
+import Input from './ui/Input';
 import { rolesData } from './roles';
 import { lawsData } from './laws';
 import { vuDocs } from './vu';
@@ -84,15 +86,15 @@ export default function CommandPalette() {
           <div className="w-full max-w-2xl rounded-2xl border border-zinc-200 bg-white p-3 text-zinc-900 shadow-softLg dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
             <div className="mb-2 flex items-center gap-2">
               <Search className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
-              <input
+              <Input
                 autoFocus
                 value={q}
                 onChange={(e) => { setQ(e.target.value); setIdx(0); }}
                 onKeyDown={onKeyList}
                 placeholder="Роли, законы, уставы..."
-                className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring text-zinc-900 placeholder-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-500"
+                className="border-zinc-200 py-2 text-zinc-900 placeholder-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-500"
               />
-              <button className="btn text-zinc-600 dark:text-zinc-300" onClick={() => setOpen(false)} aria-label="Закрыть поиск"><X className="h-4 w-4" /></button>
+              <Button className="text-zinc-600 dark:text-zinc-300" onClick={() => setOpen(false)} aria-label="Закрыть поиск"><X className="h-4 w-4" /></Button>
             </div>
             <div className="mb-2 flex items-center gap-2">
               {([
