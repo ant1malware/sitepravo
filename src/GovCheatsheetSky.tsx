@@ -691,7 +691,7 @@ export default function GovCheatsheetSky() {
                             {iconForRoleName(r.role)}
                             <span>{r.role}</span>
                             <Badge><span className="opacity-70">Зарплата:</span> {r.salary}</Badge>
-                            {(() => { const v = isRecentlyUpdated(`role:${r.id}`); return v.recent ? <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] text-yellow-800" title={`Обновлено ${v.date}`}>обновлено</span> : null; })()}
+                            {(() => { const v = isRecentlyUpdated(`role:${r.id}`); return v.recent ? <span className="rounded-full bg-warning/20 px-2 py-0.5 text-[10px] text-warning" title={`Обновлено ${v.date}`}>обновлено</span> : null; })()}
                           </div>
                         }
                         footer={<div>Источник: <Source href={r.source || "#"} /></div>}

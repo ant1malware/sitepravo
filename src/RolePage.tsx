@@ -55,7 +55,7 @@ export default function RolePage() {
             {iconForRoleName(role.role)}
             <h1 className="text-lg font-bold leading-tight">{role.role}</h1>
             <Badge><span className="opacity-70">Зарплата:</span> {role.salary}</Badge>
-            {(() => { const v = isRecentlyUpdated(`role:${role.id}`); return v.recent ? <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] text-yellow-800" title={`Обновлено ${v.date}`}>обновлено</span> : null; })()}
+            {(() => { const v = isRecentlyUpdated(`role:${role.id}`); return v.recent ? <span className="rounded-full bg-warning/20 px-2 py-0.5 text-[10px] text-warning" title={`Обновлено ${v.date}`}>обновлено</span> : null; })()}
           </div>
         </div>
       </header>
