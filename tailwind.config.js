@@ -1,9 +1,14 @@
+import defaultTheme from 'tailwindcss/defaultTheme'
+
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: 'class',
   content: ["./index.html", "./src/**/*.{ts,tsx,js,jsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["Inter", "system-ui", ...defaultTheme.fontFamily.sans],
+      },
       boxShadow: {
         soft: '0 10px 30px -12px rgba(0,0,0,0.25)',
         softLg: '0 20px 60px -24px rgba(0,0,0,0.35)'
