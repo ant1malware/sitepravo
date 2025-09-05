@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 // Modes:
-// - gh: base '/sitepravo/', outDir 'docs' (GitHub Pages)
+// - gh: base '/pravo/', outDir 'docs' (GitHub Pages)
 // - netlify (default): base '/', outDir 'dist'
 export default defineConfig(({ mode }) => {
   const isGh = mode === 'gh';
