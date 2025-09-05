@@ -15,7 +15,7 @@ export default function VuPage() {
   const parsed = useMemo(()=>parseVu(doc.text || ''), [doc?.text]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-zinc-50 via-zinc-100 to-zinc-200 text-zinc-900 dark:from-zinc-900 dark:via-zinc-800 dark:to-zinc-950 dark:text-zinc-100">
+    <div className="min-h-screen text-zinc-900 dark:text-zinc-100">
       <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <Link to="/" className="flex items-center gap-1 text-sm hover:underline">

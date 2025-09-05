@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build --mode netlify && node -e \"const fs=require('fs');try{fs.copyFileSync('../docs/index.html','../docs/404.html')}catch(e){}try{fs.copyFileSync('dist/index.html','dist/404.html')}catch(e){}\"",
-    "build:gh": "tsc -b && vite build --mode gh && node -e \"const fs=require('fs');try{fs.copyFileSync('../docs/index.html','../docs/404.html')}catch(e){}\"",
+    "build": "tsc -b && vite build --mode netlify && node -e \"const fs=require('fs');try{fs.copyFileSync('dist/index.html','dist/404.html')}catch(e){}\"",
+    "build:gh": "tsc -b && vite build --mode gh && node -e \"const fs=require('fs');try{fs.copyFileSync('docs/index.html','docs/404.html')}catch(e){}\"",
     "preview": "vite preview --port 4173 --strictPort",
     "scrape:laws": "node scripts/scrape-laws.mjs"
   },
@@ -23,13 +23,13 @@
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.16",
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
+    "@types/react": "^18.3.24",
+    "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^5.0.1",
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5.5.4",
+    "typescript": "^5.9.2",
     "vite": "^5.4.2"
   }
 }
