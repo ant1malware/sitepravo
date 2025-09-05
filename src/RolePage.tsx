@@ -6,7 +6,8 @@ import { rolesData } from './roles';
 import RelatedBlock from './RelatedBlock';
 import VoteWidget from './VoteWidget';
 import { isRecentlyUpdated } from './versioning';
-import { isFavorite, toggleFavorite } from './favorites';
+import FavStar from './FavStar';
+import ContextText from './ContextText';
 
 const Card: React.FC<{ title: React.ReactNode; children: React.ReactNode; footer?: React.ReactNode }> = ({ title, children, footer }) => (
   <div className="card shadow-softLg glass">
@@ -31,45 +32,40 @@ const Badge = ({ children }: { children: React.ReactNode }) => (
 export default function RolePage() {
   const { id } = useParams();
   const role = rolesData.find(r => r.id === id);
-  const [fav, setFav] = React.useState<boolean>(() => role ? isFavorite('role', role.id) : false);
 
   if (!role) {
     return (
       <div className="p-4">
         Роль не найдена.{' '}
         <Link to="/" className="text-blue-600 underline">
-          На главную
+          Назад
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-zinc-50 to-zinc-100 text-zinc-900 dark:from-zinc-900 dark:to-zinc-950 dark:text-zinc-100">
+    <div className="min-h-screen text-zinc-900 dark:text-zinc-100">
       <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3">
           <Link to="/" className="flex items-center gap-1 text-sm hover:underline">
             <ArrowLeft className="h-4 w-4" /> Назад
           </Link>
-          <div className="flex items-center gap-2">
-            {iconForRoleName(role.role)}
-            <h1 className="text-lg font-bold leading-tight">{role.role}</h1>
-            <Badge><span className="opacity-70">Зарплата:</span> {role.salary}</Badge>
-            {(() => { const v = isRecentlyUpdated(`role:${role.id}`); return v.recent ? <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] text-yellow-800" title={`Обновлено ${v.date}`}>обновлено</span> : null; })()}
+          <div className="flex flex-col items-center">
+            <div className="flex items-center gap-2">
+              {iconForRoleName(role.role)}
+              <h1 className="text-lg font-bold leading-tight">{role.role}</h1>
+              <Badge><span className="opacity-70">Оклад:</span> {role.salary}</Badge>
+              {(() => { const v = isRecentlyUpdated(`role:${role.id}`); return v.recent ? <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] text-yellow-800" title={`Обновлено: ${v.date}`}>Обновлено</span> : null; })()}
+            </div>
+            <ContextText />
           </div>
+          <FavStar kind="role" id={role.id} title={role.role} url={`/roles/${role.id}`} />
         </div>
       </header>
       <main className="mx-auto max-w-3xl px-4 py-6">
         <div className="mb-3 flex items-center gap-2">
           <a className="btn" href={`/print?role=${role.id}`}><Printer className="h-4 w-4" /> Export: PDF</a>
-          <button
-            className="btn"
-            onClick={() => { const nowFav = toggleFavorite('role', role.id); setFav(nowFav); try{ (document.activeElement as HTMLElement)?.blur?.(); }catch{}; }}
-            aria-label={fav ? 'Удалить из избранного' : 'Добавить в избранное'}
-            title={fav ? 'В избранном' : 'В закладки'}
-          >
-            {fav ? 'В избранном' : 'В закладки'}
-          </button>
         </div>
         <Card title="Обязанности" footer={<div>Источник: <Source href={role.source} /></div>}>
           <ul className="ml-4 list-disc">
@@ -84,3 +80,4 @@ export default function RolePage() {
     </div>
   );
 }
+

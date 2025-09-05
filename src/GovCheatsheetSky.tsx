@@ -16,6 +16,7 @@ import {
   Lightbulb,
   AlertCircle,
   Send,
+  Settings,
 } from "lucide-react";
 
 import { rolesData } from "./roles";
@@ -26,11 +27,27 @@ import LawSearch from "./LawSearch";
 import { interactionsData } from "./interactions";
 // Resolve asset path with Vite base (for GitHub Pages)
 const assetPath = (p: string) => `${import.meta.env.BASE_URL}${p.replace(/^\/+/, '')}`;
-import ThemeToggle from "./ThemeToggle";
 import { iconForRoleName } from "./roleIcons";
 import RelatedBlock from "./RelatedBlock";
 import VoteWidget from "./VoteWidget";
 import { isRecentlyUpdated } from "./versioning";
+import ContextText from "./ContextText";
+
+const APPLY_FORUM: Record<string, string> = {
+  guard: "https://forum.amazing-online.com/forums/mladshij-sostav/create-thread",
+  lawyer: "https://forum.amazing-online.com/forums/mladshij-sostav/create-thread",
+  inspector: "https://forum.amazing-online.com/forums/otchetnaya-deyatelnost-inspektorov/create-thread",
+  advisor: "https://forum.amazing-online.com/forums/otchetnaya-deyatelnost-inspektorov/create-thread",
+};
+
+function buildApplyUrl(roleId: string, roleName: string) {
+  const base = APPLY_FORUM[roleId];
+  if (!base) return null;
+  const url = new URL(base);
+  url.searchParams.set("title", `Заявление на ${roleName}`);
+  url.searchParams.set("message", `Ник: \nРоль: ${roleName}\nПричина: `);
+  return url.toString();
+}
 
 /* ================= FlexSearch (CDN) ================= */
 declare global {
@@ -82,8 +99,7 @@ const Card: React.FC<{
       {children}
     </div>
     {footer && (
-      <div className="mt-3 border-t border-zinc-200 pt-3 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">{footer}</div>
-    )}
+      <div className="mt-3 border-t border-zinc-200 pt-3 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">{footer}</div>)}
   </div>
 );
 
@@ -102,6 +118,17 @@ const Badge = ({ children }: { children: React.ReactNode }) => (
     {children}
   </span>
 );
+
+const SectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="flex items-center gap-3">
+    <div className="h-px flex-1 bg-gradient-to-r from-transparent via-zinc-300/60 to-transparent dark:via-zinc-600/60" />
+    <h2 className="shrink-0 rounded-full border border-zinc-200/60 bg-zinc-100/70 px-3 py-1 text-sm font-semibold tracking-wide shadow-sm backdrop-blur dark:border-zinc-700/60 dark:bg-zinc-800/60">
+      {children}
+    </h2>
+    <div className="h-px flex-1 bg-gradient-to-r from-transparent via-zinc-300/60 to-transparent dark:via-zinc-600/60" />
+  </div>
+);
+
 
 // Simple accordion for VU docs
 const VUAccordion: React.FC = () => {
@@ -186,9 +213,16 @@ const FeedbackButton: React.FC = () => {
   );
 };
 
-// Simple checklist that persists per role + dept
+// Upload feature disabled: provide tiny stubs to satisfy TS
+const canUploadExternally = () => false;
+async function uploadImage(_file: File): Promise<string> { return ""; }
+async function fileToDataUrl(_file: File): Promise<string> { return ""; }
+
+// Enhanced checklist with per-criterion screenshot uploads and saved links (compact UI)
 const PromoChecklist: React.FC<{ roleId: string; dept: string; items: string[] }> = ({ roleId, dept, items }) => {
   const storageKey = useMemo(() => `promo:${roleId}:${encodeURIComponent(dept)}`, [roleId, dept]);
+  const shotsKey = useMemo(() => `promo:shots:${roleId}:${encodeURIComponent(dept)}`, [roleId, dept]);
+
   const [checked, setChecked] = useState<Set<number>>(() => {
     try {
       const raw = localStorage.getItem(storageKey);
@@ -199,9 +233,23 @@ const PromoChecklist: React.FC<{ roleId: string; dept: string; items: string[] }
     }
   });
 
+  const [shots, setShots] = useState<Record<number, string[]>>(() => {
+    try {
+      const raw = localStorage.getItem(shotsKey);
+      return raw ? (JSON.parse(raw) as Record<number, string[]>) : {};
+    } catch { return {}; }
+  });
+
+  const [uploading, setUploading] = useState<Record<number, boolean>>({});
+  const [errors, setErrors] = useState<Record<number, string | undefined>>({});
+
   useEffect(() => {
     try { localStorage.setItem(storageKey, JSON.stringify([...checked])); } catch {}
   }, [checked, storageKey]);
+
+  useEffect(() => {
+    try { localStorage.setItem(shotsKey, JSON.stringify(shots)); } catch {}
+  }, [shots, shotsKey]);
 
   function toggle(i: number) {
     setChecked(prev => {
@@ -211,17 +259,77 @@ const PromoChecklist: React.FC<{ roleId: string; dept: string; items: string[] }
     });
   }
 
+  async function onUpload(i: number, files: FileList | null) {
+    if (!files || !files.length) return;
+    const MAX = 20; // максимальная группа
+    const selected = Array.from(files).slice(0, MAX);
+    const useExternal = canUploadExternally();
+    setUploading(prev => ({ ...prev, [i]: true }));
+    setErrors(prev => ({ ...prev, [i]: undefined }));
+    for (const f of selected) {
+      let url: string | null = null;
+      try {
+        url = useExternal ? await uploadImage(f) : await fileToDataUrl(f);
+      } catch (e: any) {
+        try { url = await fileToDataUrl(f); setErrors(prev => ({ ...prev, [i]: 'Ошибка внешней загрузки, сохранено локально' })); } catch {}
+      }
+      if (!url) continue;
+      setShots(prev => {
+        const cur = prev[i] || [];
+        const next = [...cur, url];
+        return { ...prev, [i]: next.slice(0, MAX) };
+      });
+    }
+    setUploading(prev => ({ ...prev, [i]: false }));
+  }
+
+  function clearShots(i: number) {
+    setShots(prev => { const n = { ...prev }; delete n[i]; return n; });
+  }
+
+  function removeOne(i: number, idx: number) {
+    setShots(prev => {
+      const arr = (prev[i] || []).slice();
+      arr.splice(idx, 1);
+      const next = { ...prev } as Record<number, string[]>;
+      if (arr.length) next[i] = arr; else delete next[i];
+      return next;
+    });
+  }
+
   return (
-    <ol className="ml-4 list-decimal">
+    <ol className="ml-4 list-decimal space-y-2">
       {items.map((p, i) => (
-        <li key={i} className="flex items-start gap-2">
-          <input
-            type="checkbox"
-            className="mt-0.5 h-4 w-4 accent-indigo-600 dark:accent-indigo-400"
-            checked={checked.has(i)}
-            onChange={() => toggle(i)}
-          />
-          <span className={checked.has(i) ? "opacity-60 line-through" : undefined}>{p}</span>
+        <li key={i} className="flex flex-col gap-1">
+          <div className="flex items-start gap-2">
+            <input type="checkbox" className="mt-0.5 h-4 w-4" checked={checked.has(i)} onChange={() => toggle(i)} />
+            <span className={checked.has(i) ? "opacity-60 line-through" : undefined}>{p}</span>
+          </div>
+          {false && (<div className="ml-6 rounded-lg border border-zinc-200/70 bg-white/60 p-2 text-xs shadow-sm backdrop-blur dark:border-zinc-800/70 dark:bg-zinc-900/50">
+            <div className="flex flex-wrap items-center gap-1">
+              <label className="btn px-2 py-1" title={uploading[i] ? 'Загрузка…' : 'Загрузить файлы'}>
+                
+                <input disabled={!!uploading[i]} type="file" accept="image/*" multiple className="hidden" onChange={(e)=>{ onUpload(i, e.currentTarget.files); e.currentTarget.value=''; }} />
+              </label>
+              
+            </div>
+            {!!(shots[i]?.length) && (
+              <div className="mt-2 flex gap-2 overflow-x-auto">
+                {shots[i].map((url, idx) => (
+                  <div key={idx} className="group relative shrink-0 overflow-hidden rounded-md border border-zinc-200/70 dark:border-zinc-800/70">
+                    <a href={url} target="_blank" rel="noreferrer" className="block">
+                      <img src={url} alt="Скриншот" className="h-16 w-24 object-cover" />
+                    </a>
+                    <div className="absolute inset-x-0 bottom-0 hidden items-center justify-between gap-1 bg-gradient-to-t from-black/50 to-transparent p-1 text-[10px] text-white group-hover:flex">
+                      <button className="rounded bg-white/20 px-1 py-0.5" onClick={()=>navigator.clipboard.writeText(url)}>Копировать</button>
+                      <button className="rounded bg-white/20 px-1 py-0.5" onClick={()=>removeOne(i, idx)}>Удалить</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {!!errors[i] && (<div className="mt-1 text-[11px] text-amber-600">{errors[i]}</div>)}
+          </div>)}
         </li>
       ))}
     </ol>
@@ -265,48 +373,103 @@ const radioByRole: Record<string, string[]> = {
     "/r Докладывает: (Фамилия), закончил дежурство в комнате свиданий.",
   ],
   Инспектор: [
-    "Докладывает (Фамилия). Выехал на проведение ревизии (орган)",
-    "Докладывает (Фамилия). Прибыл для проведения ревизии (орган)",
-    "Докладывает (Фамилия). Закончил проведение ревизии (орган). Итог: x/x.",
-    "Докладывает (Фамилия). Начал дежурство за стойкой регистрации.",
-    "Докладывает (Фамилия). Продолжаю дежурство за стойкой регистрации.",
-    "Докладывает (Фамилия). Закончил дежурство за стойкой регистрации.",
-    "Докладывает (фамилия). Выехал на проверку постов (орган)",
-    "Докладывает (фамилия). Прибыл на пост (название посат). Сотрудники присутствуют/отсутствуют.",
+    "/r Докладывает (Фамилия). Выехал на проведение ревизии (орган)",
+    "/r Докладывает (Фамилия). Прибыл для проведения ревизии (орган)",
+    "/r Докладывает (Фамилия). Закончил проведение ревизии (орган). Итог: x/x.",
+    "/r Докладывает (Фамилия). Начал дежурство за стойкой регистрации.",
+    "/r Докладывает (Фамилия). Продолжаю дежурство за стойкой регистрации.",
+    "/r Докладывает (Фамилия). Закончил дежурство за стойкой регистрации.",
+    "/r Докладывает (фамилия). Выехал на проверку постов (орган)",
+    "/r Докладывает (фамилия). Прибыл на пост (название посат). Сотрудники присутствуют/отсутствуют.",
   ],
   Советник: [
-    "Докладывает (фамилия). Начал дежурство (место). ",
-    "Докладывает (фамилия). Продолжил дежурство (место).",
-    "Докладывает (фамилия). Закончил дежурство (место).",
-    "Докладывает (Фамилия). Начал контролировать собеседование в ЕСС/ВЧ/УМВД/ГАИ.",
-    "Докладывает (Фамилия). Продолжил контролировать собеседование в ЕСС/ВЧ/УМВД/ГАИ.",
-    "Докладывает (Фамилия). Закончил контролировать собеседование в ЕСС/ВЧ/УМВД/ГАИ.",
-    "Докладывает (фамилия). Выехал на помощь проведения плановой/внеплановой проверки (орган).",
-    "Докладывает (фамилия). Начал оказывать помощь на проведении плановой/внеплановой проверки (орган).",
-    "Докладывает (фамилия). Начал проверку жетона x-x-x.",
-    "Докладывает (фамилия). Закончил проверку жетона x-x-x. Итог: x/x.",
-    "Докладывает (фамилия). Закончил оказывать помощь на плановой/внеплановой проверке (орган).",
+    "/r Докладывает (фамилия). Начал дежурство (место). ",
+    "/r Докладывает (фамилия). Продолжил дежурство (место).",
+    "/r Докладывает (фамилия). Закончил дежурство (место).",
+    "/r Докладывает (Фамилия). Начал контролировать собеседование в ЕСС/ВЧ/УМВД/ГАИ.",
+    "/r Докладывает (Фамилия). Продолжил контролировать собеседование в ЕСС/ВЧ/УМВД/ГАИ.",
+    "/r Докладывает (Фамилия). Закончил контролировать собеседование в ЕСС/ВЧ/УМВД/ГАИ.",
+    "/r Докладывает (фамилия). Выехал на помощь проведения плановой/внеплановой проверки (орган).",
+    "/r Докладывает (фамилия). Начал оказывать помощь на проведении плановой/внеплановой проверки (орган).",
+    "/r Докладывает (фамилия). Начал проверку жетона x-x-x.",
+    "/r Докладывает (фамилия). Закончил проверку жетона x-x-x. Итог: x/x.",
+    "/r Докладывает (фамилия). Закончил оказывать помощь на плановой/внеплановой проверке (орган).",
   ],
   "Зам. Министра": [
-    "Докладывает (фамилия). Начал прослушивать рацию (орган).",
-    "Докладывает (фамилия). Продолжаю прослушивать рацию (орган).",
-    "Докладывает (фамилия). Закончил прослушивать рацию (орган).",
-    "Докладывает (Фамилия). Начал контролировать собеседование в ЕСС/ВЧ/УМВД/ГАИ.",
-    "Докладывает (Фамилия). Продолжил контролировать собеседование в ЕСС/ВЧ/УМВД/ГАИ.",
-    "Докладывает (Фамилия). Закончил контролировать собеседование в ЕСС/ВЧ/УМВД/ГАИ.",
-    "Докладывает (Фамилия). Начал контроль работы сотрудников ГАИ/УМВД/ВЧ/ЕСС.",
-    "Докладывает (Фамилия). Продолжил контроль работы сотрудников ГАИ/УМВД/ВЧ/ЕСС.",
-    "Докладывает (Фамилия). Закончил контроль работы сотрудников ГАИ/УМВД/ВЧ/ЕСС.",
+    "/r Докладывает (фамилия). Начал прослушивать рацию (орган).",
+    "/r Докладывает (фамилия). Продолжаю прослушивать рацию (орган).",
+    "/r Докладывает (фамилия). Закончил прослушивать рацию (орган).",
+    "/r Докладывает (Фамилия). Начал контролировать собеседование в ЕСС/ВЧ/УМВД/ГАИ.",
+    "/r Докладывает (Фамилия). Продолжил контролировать собеседование в ЕСС/ВЧ/УМВД/ГАИ.",
+    "/r Докладывает (Фамилия). Закончил контролировать собеседование в ЕСС/ВЧ/УМВД/ГАИ.",
+    "/r Докладывает (Фамилия). Начал контроль работы сотрудников ГАИ/УМВД/ВЧ/ЕСС.",
+    "/r Докладывает (Фамилия). Продолжил контроль работы сотрудников ГАИ/УМВД/ВЧ/ЕСС.",
+    "/r Докладывает (Фамилия). Закончил контроль работы сотрудников ГАИ/УМВД/ВЧ/ЕСС.",
   ],
 };
 
-const postsData = [
+type PostItem = { code: string; where: string; img: string };
+
+const postsData: PostItem[] = [
   { code: "A1-A2", where: "Вход в здание Правительства", img: "/img/a1.png" },
   { code: "B1-B2", where: "Холл здания Правительства", img: "/img/b1.png" },
   { code: "C1-C2", where: "Задний вход, парковка", img: "/img/c1.png" },
   { code: "D1-D2", where: "Ворота на парковку", img: "/img/d1.png" },
   { code: "E1-E2", where: "Возле кабинета Губернатора", img: "/img/e1.png" },
 ];
+
+const postsDPS: PostItem[] = [
+  { code: 'ТЦ "Анашан"', where: "ТЦ «Анашан», КАД, 1 км, 1", img: "/img/1.png" },
+  { code: "Дорога «Южный — порт»", where: "Дорога «Южный — порт», д. Гарель, 44", img: "/img/2.png" },
+  { code: "Рыжевск", where: "КАД, 7-й км (район Рыжевска)", img: "/img/3.png" },
+  { code: "стадион г. Арзамаса", where: "Стадион Арзамаса / УФСБ, ул. Карла Маркса, 61", img: "/img/4.png" },
+];
+
+
+const postsPPS: PostItem[] = [
+  { code: "ВА", where: "ВА — вокзал Арзамаса (ул. Мира, 3)",                     img: "/img/5.png" },
+  { code: "ВЧ", where: "ВЧ — КПП-1 воинской части (пгт. Батырево)",               img: "/img/6.png" },
+  { code: "ЦР", where: "ЦР — центральный рынок (Батырево, ул. Ворошилова, 18)",   img: "/img/7.png" },
+  { code: "ВЮ", where: "ВЮ — вокзал г. Южный (ул. Заводская, 7)",                 img: "/img/8.png" },
+  { code: "ЕСС", where: "ЕСС — напротив здания ЕСС (ул. Алексеевская, 12)",        img: "/img/9.png" },
+  { code: "ПР", where: "ПР — здание Правительства (пгт. Батырево, ул. Ленина, 1)",img: "/img/10.png" },
+  { code: "ХЕСС", where: "ХЕСС — внутри ЕСС (ул. Дорогобужская, 1)",                img: "/img/11.png" },
+  { code: "КПЗ", where: "КПЗ — внутри УМВД (Ленинский б-р, 17)",                   img: "/img/12.png" },
+  { code: "ВК", where: "ВК — внутри военкомата (пгт. Батырево, ул. Ленина, 4)",   img: "/img/13.png" },
+];
+
+
+const PostsGrid: React.FC<{ items: PostItem[] }> = ({ items }) => (
+  <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+    {items.map((p) => (
+      <article
+        key={p.code}
+        className="group relative overflow-hidden rounded-2xl border border-zinc-200/70 bg-white/80 p-0 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg dark:border-zinc-800/70 dark:bg-zinc-900/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-zinc-900/60"
+      >
+        <div className="relative">
+          <img
+            src={assetPath(p.img)}
+            alt={`${p.code} — ${p.where}`}
+            className="aspect-[16/9] w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+            loading="lazy"
+            decoding="async"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = assetPath('/img/noimg.png'); }}
+          />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/35 to-transparent" />
+          <span className="absolute left-2 top-2 rounded-full border border-zinc-200/60 bg-white/90 px-2 py-0.5 text-[11px] font-semibold tracking-wide shadow-sm dark:border-zinc-700/60 dark:bg-zinc-900/90">
+            {p.code}
+          </span>
+        </div>
+        <div className="p-3">
+          <div className="min-h-[2.25rem] text-xs leading-snug text-zinc-600 dark:text-zinc-400">
+            {p.where}
+          </div>
+        </div>
+      </article>
+    ))}
+  </div>
+);
+
 
 /* ================== Умный поиск по законам ================== */
 const SmartLawSearch: React.FC = () => {
@@ -600,14 +763,14 @@ export default function GovCheatsheetSky() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-zinc-50 to-zinc-100 text-zinc-900 dark:from-zinc-900 dark:to-zinc-950 dark:text-zinc-100">
+    <div className="min-h-screen text-zinc-900 dark:text-zinc-100">
       <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-3">
             <Building2 className="h-6 w-6" />
             <div>
               <div className="text-lg font-bold leading-tight">Правительство — Памятка (SKY)</div>
-              <div className="text-xs text-zinc-500">Локальные тексты • быстрый поиск • мобильный UI</div>
+              <ContextText />
             </div>
           </div>
 
@@ -629,8 +792,8 @@ export default function GovCheatsheetSky() {
           <div className="flex items-center gap-2 md:ml-auto">
             <Link to="/whats-new" className="btn">Что нового</Link>
             <Link to="/favorites" className="btn"><span className="inline-block h-4 w-4">★</span> Избранное</Link>
+            <Link to="/settings" className="btn"><Settings className="h-4 w-4" /> Настройки</Link>
             <FeedbackButton />
-            <ThemeToggle />
           </div>
         </div>
       </header>
@@ -734,6 +897,10 @@ export default function GovCheatsheetSky() {
                         ? (r as any).promotionByDept?.[deptTab] ?? []
                         : (r as any).promotion ?? [];
 
+                    const isAll = deptTab === "Все";
+                    const excludedTop = ['advisor','deputy-minister','minister','admin-chief','vice-governor','governor'];
+                    if (isAll && excludedTop.includes((r as any).id)) return null;
+
                     return (
                       <Card
                         key={r.id}
@@ -786,75 +953,27 @@ export default function GovCheatsheetSky() {
         )}
 
         {/* ПОСТЫ */}
-        {mainTab === "posts" && (
-        <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
-          {postsData.map((p) => (
-            <div
-              key={p.code}
-              className="flex flex-col items-center gap-2 rounded-2xl border border-zinc-200 bg-white p-3 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
-            >
-              <img
-                src={assetPath(p.img)}
-                alt={p.code}
-                className="h-24 w-full rounded-xl border border-zinc-200 object-cover dark:border-zinc-700"
-                onError={(e) => {
-                  // если файла нет — прячем картинку и оставляем карточку
-                  (e.currentTarget as HTMLImageElement).style.display = "none";
-                }}
-              />
-              <div className="text-2xl font-extrabold leading-none">{p.code}</div>
-              <div className="text-xs text-zinc-500 dark:text-zinc-400">{p.where}</div>
-            </div>
-          ))}
-        </section>
-      )}
+    {mainTab === "posts" && (
+      <section className="mt-6 grid gap-6">
+        <div>
+          <SectionTitle>Стационарные посты</SectionTitle>
+          <div className="mt-3"><PostsGrid items={postsData} /></div>
+        </div>
 
-        {/* Фоторазделы для вкладки "Посты" */}
-        {false && mainTab === "posts" && (
-          <section className="mt-6 grid gap-5">
-            <div>
-              <h2 className="mb-3 text-lg font-bold">Стационарные посты для несения наружной службы подразделениями Госавтоинспекции</h2>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
-                {[
-                  { caption: "A1 — Вход в здание", img: "/img/a1.png" },
-                  { caption: "B1 — Холл здания", img: "/img/b1.png" },
-                  { caption: "C1 — Задний вход", img: "/img/c1.png" },
-                  { caption: "D1 — Ворота парковки", img: "/img/d1.png" },
-                ].map((ph, i) => (
-                  <figure key={i} className="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                    <img src={assetPath(ph.img)} alt={ph.caption} className="h-40 w-full rounded-xl border border-zinc-200 object-cover dark:border-zinc-700" />
-                    <figcaption className="mt-2 text-center text-xs text-zinc-600 dark:text-zinc-400">{ph.caption}</figcaption>
-                  </figure>
-                ))}
-              </div>
-            </div>
+        <div>
+          <SectionTitle>Посты ДПС</SectionTitle>
+          <div className="mt-3"><PostsGrid items={postsDPS} /></div>
+        </div>
 
-            <div>
-              <h2 className="mb-3 text-lg font-bold">ECC</h2>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
-                {[
-                  { caption: "ECC — схема 1", img: "/img/ess.png" },
-                  { caption: "ECC — схема 2", img: "/img/ess2.png" },
-                  { caption: "Красная зона", img: "/img/red-zone.png" },
-                  { caption: "YFSB", img: "/img/yfsb.png" },
-                ].map((ph, i) => (
-                  <figure key={i} className="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                    <img src={assetPath(ph.img)} alt={ph.caption} className="h-40 w-full rounded-xl border border-zinc-200 object-cover dark:border-zinc-700" />
-                    <figcaption className="mt-2 text-center text-xs text-zinc-600 dark:text-zinc-400">{ph.caption}</figcaption>
-                  </figure>
-                ))}
-              </div>
-            </div>
-          </section>
-      )}
+        <div>
+          <SectionTitle>Посты ППС</SectionTitle>
+          <div className="mt-3"><PostsGrid items={postsPPS} /></div>
+        </div>
+      </section>
+    )}
 
-        {mainTab === "posts" && (
-          <section className="grid gap-4">
-            <Card title={<div className="w-full text-center">В разработке</div>}>
-              <p className="text-sm">Данный раздел находится в <b>Разработке</b></p>
-            </Card>
-          </section>
-        )}
+
+
 
         {/* ПРОЦЕДУРЫ (пример) */}
         {false && mainTab === "procedures" && (
@@ -1043,7 +1162,7 @@ export default function GovCheatsheetSky() {
 
         {/* ПОДВАЛ */}
         <div className="mt-8 grid gap-3 rounded-2xl border border-zinc-200 bg-white/70 p-4 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
-          <div>UI для ПК и телефонов • Создатель: Pavel_Bolshoy. Донаты не нужно делать! </div>
+          <div>Создатель: Pavel_Bolshoy. • Скачать подсказку: https://imgur.com/a/oJr8UKV • Донаты не нужно делать!</div>
         </div>
       </main>
     </div>

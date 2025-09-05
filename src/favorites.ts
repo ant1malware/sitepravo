@@ -32,6 +32,12 @@ function metaKey(kind: FavKind, id: string) {
   return `${META_PREFIX}${kind}:${id}`;
 }
 
+function notifyChange() {
+  try {
+    window.dispatchEvent(new CustomEvent('favorites:change'));
+  } catch {}
+}
+
 /** Проверка: в избранном ли элемент */
 export function isFavorite(kind: FavKind, id: string): boolean {
   if (!hasLocalStorage()) return false;
@@ -63,12 +69,14 @@ export function toggleFavoriteMeta(
     if (existed) {
       localStorage.removeItem(fk);
       localStorage.removeItem(mk);
+      notifyChange();
       return false;
     } else {
       localStorage.setItem(fk, '1');
       if (meta && (meta.title || meta.url)) {
         localStorage.setItem(mk, JSON.stringify(meta));
       }
+      notifyChange();
       return true;
     }
   } catch {
@@ -84,9 +92,11 @@ export function toggleFavorite(kind: FavKind, id: string): boolean {
     if (localStorage.getItem(fk)) {
       localStorage.removeItem(fk);
       localStorage.removeItem(metaKey(kind, id));
+      notifyChange();
       return false;
     } else {
       localStorage.setItem(fk, '1');
+      notifyChange();
       return true;
     }
   } catch {
@@ -122,8 +132,11 @@ export function listFavoritesMeta(kind?: FavKind): FavListItem[] {
   } catch {
     // ignore
   }
-
-  return out;
+  // Sort by kind, then title
+  return out.sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind.localeCompare(b.kind);
+    return (a.title || a.id).localeCompare(b.title || b.id);
+  });
 }
 
 /** Совместимый алиас под старый импорт в FavoritesPage.tsx */
@@ -136,4 +149,9 @@ export function removeFavorite(kind: FavKind, id: string): void {
   if (isFavorite(kind, id)) {
     toggleFavoriteMeta(kind, id);
   }
+}
+
+// Utils for other modules
+export function isFavKey(k: string): boolean {
+  return k.startsWith(FAV_PREFIX) || k.startsWith(META_PREFIX);
 }

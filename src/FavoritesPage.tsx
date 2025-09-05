@@ -10,12 +10,21 @@ import {
 } from './favorites';
 import { rolesData } from './roles';
 import { lawsData } from './laws';
+import ContextText from './ContextText';
 
 export default function FavoritesPage() {
-  // явный тип, чтобы не словить TS7006 в map()
   const [favs, setFavs] = React.useState<FavListItem[]>(() => listFavorites());
 
-  // строим ряды на основе favs (и данных из roles/laws)
+  React.useEffect(() => {
+    const reload = () => setFavs(listFavorites());
+    window.addEventListener('favorites:change', reload);
+    window.addEventListener('storage', reload);
+    return () => {
+      window.removeEventListener('favorites:change', reload);
+      window.removeEventListener('storage', reload);
+    };
+  }, []);
+
   const rows = React.useMemo(() => {
     return favs
       .map((f): { title: string; url: string; kindLabel: string } | null => {
@@ -25,7 +34,7 @@ export default function FavoritesPage() {
           return {
             title: f.title ?? r.role,
             url: f.url ?? `/roles/${r.id}`,
-            kindLabel: 'Роль',
+            kindLabel: 'Должность',
           };
         }
         if (f.kind === 'law') {
@@ -48,7 +57,7 @@ export default function FavoritesPage() {
           return {
             title: f.title ?? f.id,
             url: f.url ?? `/vu/${f.id}`,
-            kindLabel: 'Документ ВУ',
+            kindLabel: 'ВУ материал',
           };
         }
         return null;
@@ -56,18 +65,20 @@ export default function FavoritesPage() {
       .filter(Boolean) as { title: string; url: string; kindLabel: string }[];
   }, [favs]);
 
-  // корректное удаление без reload()
   function onRemove(kind: FavKind, id: string) {
     removeFavorite(kind, id);
     setFavs(prev => prev.filter(x => !(x.kind === kind && x.id === id)));
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-zinc-50 to-zinc-100 text-zinc-900 dark:from-zinc-900 dark:to-zinc-950 dark:text-zinc-100">
+    <div className="min-h-screen text-zinc-900 dark:text-zinc-100">
       <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
-          <Link to="/" className="text-sm underline decoration-dotted hover:no-underline">На главную</Link>
-          <h1 className="text-lg font-bold">Избранное</h1>
+          <Link to="/" className="text-sm underline decoration-dotted hover:no-underline">Назад</Link>
+          <div className="flex flex-col items-center">
+            <h1 className="text-lg font-bold">Избранное</h1>
+            <ContextText />
+          </div>
           <span />
         </div>
       </header>
@@ -75,17 +86,17 @@ export default function FavoritesPage() {
       <main className="mx-auto max-w-3xl px-4 py-6">
         {!rows.length ? (
           <div className="card text-sm text-zinc-600 dark:text-zinc-300">
-            Пока пусто. Добавляйте роли и законы в закладки.
+            Пока пусто. Добавляйте статьи, разделы законов, роли и материалы ВУ — они появятся здесь.
           </div>
         ) : (
           <div className="grid gap-2">
             {rows.map((r, i) => {
-              const f = favs[i]; // индексы синхронизированы с map() выше
+              const f = favs[i];
               if (!f) return null;
               return (
                 <div
                   key={`${f.kind}:${f.id}`}
-                  className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900"
+                  className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white/80 p-3 shadow-sm backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/60"
                 >
                   <Link to={r.url} className="min-w-0">
                     <div className="truncate text-sm font-semibold">{r.title}</div>
@@ -117,3 +128,4 @@ export default function FavoritesPage() {
     </div>
   );
 }
+

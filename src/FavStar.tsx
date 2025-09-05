@@ -31,11 +31,12 @@ export default function FavStar({
   return (
     <button
       onClick={onClick}
-      title={active ? 'В избранном' : 'В закладки'}
-      aria-label={active ? 'Удалить из избранного' : 'Добавить в избранное'}
+      title={active ? 'Убрать из избранного' : 'Добавить в избранное'}
+      aria-label={active ? 'Убрать из избранного' : 'Добавить в избранное'}
       className={`fav-star-btn ${dims} ${active ? 'is-active' : ''}`}
     >
       <Star className={`fav-star-icon ${iconDims}`} />
     </button>
   );
 }
+

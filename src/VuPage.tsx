@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { vuDocs } from './vu';
 import { ArrowLeft, Shield } from 'lucide-react';
+import ContextText from './ContextText';
 
 export default function VuPage() {
   const { id } = useParams();
@@ -14,15 +15,18 @@ export default function VuPage() {
   const parsed = useMemo(()=>parseVu(doc.text || ''), [doc?.text]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-zinc-50 to-zinc-100 text-zinc-900 dark:from-zinc-900 dark:to-zinc-950 dark:text-zinc-100">
+    <div className="min-h-screen text-zinc-900 dark:text-zinc-100">
       <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <Link to="/" className="flex items-center gap-1 text-sm hover:underline">
             <ArrowLeft className="h-4 w-4" /> Назад
           </Link>
-          <div className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            <h1 className="text-lg font-bold leading-tight">{doc.title}</h1>
+          <div className="flex flex-col items-center">
+            <div className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              <h1 className="text-lg font-bold leading-tight">{doc.title}</h1>
+            </div>
+            <ContextText />
           </div>
           <div className="text-xs text-zinc-500">{doc.updated ? `Обновлено: ${doc.updated}` : ''}</div>
         </div>
