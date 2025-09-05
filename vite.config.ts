@@ -16,3 +16,6 @@ export default defineConfig(({ mode }) => {
     server: { host: true },
   }
 })
+
+
+// ты лох
