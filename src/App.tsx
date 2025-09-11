@@ -13,6 +13,7 @@ import { useLocation } from "react-router-dom";
 import { track } from "./track";
 import SettingsPage from "./SettingsPage";
 import FavoritesPage from "./FavoritesPage";
+import BackgroundShapes from "./components/BackgroundShapes";
 
 // Tracks page views on route change
 function RouteTracker() {
@@ -26,6 +27,7 @@ function RouteTracker() {
 export default function App() {
   return (
     <BrowserRouter basename={import.meta.env.BASE_URL}>
+      <BackgroundShapes />
       <CommandPalette />
       <RouteTracker />
       <Routes>
