@@ -2,11 +2,39 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
+    <!-- НЕ НУЖЕН <base>. Пути для GH Pages задаём в vite.config.ts через base:'/pravo/'. -->
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Памятка Правительства • SKY</title>
+    <meta name="color-scheme" content="light dark" />
+
+    <!-- просим браузер чаще проверять новую версию index.html -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+
+    <title>Правительство — Памятка (SKY)</title>
+
+    <!-- (необязательно) preconnect под ваши шрифты/ресурсы -->
+    <!-- <link rel="preconnect" href="https://rsms.me" crossorigin> -->
   </head>
+
   <body class="bg-zinc-50 text-zinc-900">
     <div id="root"></div>
+
+    <!-- убиваем любой старый service worker и его кэши (чтоб не прилипала старая версия) -->
+    <script>
+      (function killSW() {
+        try {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+          }
+          if ('caches' in window) {
+            caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+          }
+        } catch {}
+      })();
+    </script>
+
+    <!-- dev-скрипт; при билде Vite сам заменит на /pravo/assets/index-*.js и подключит CSS -->
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

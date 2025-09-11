@@ -1,0 +1,1 @@
+import{j as s}from"./index-YwVVk8ca.js";import{R as e}from"./react-vendor-DStf8yZ1.js";function n(){const[t,r]=e.useState("");return e.useEffect(()=>{try{r(localStorage.getItem("context_text")||"")}catch{}},[]),t?s.jsx("div",{className:"text-xs text-zinc-500 dark:text-zinc-400 whitespace-pre-line",children:t}):null}export{n as C};

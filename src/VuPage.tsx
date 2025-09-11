@@ -50,9 +50,18 @@ export default function VuPage() {
           </div>
         </aside>
         <section>
-          <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="vu prose prose-zinc max-w-none text-sm leading-relaxed dark:prose-invert">
-              {parsed.nodes}
+          <nav className="mb-3 text-xs text-zinc-500">
+            <Link to="/" className="underline decoration-dotted hover:no-underline">Главная</Link>
+            <span className="mx-1">/</span>
+            <span>ВУ</span>
+            <span className="mx-1">/</span>
+            <span className="text-zinc-700 dark:text-zinc-300">{doc.title}</span>
+          </nav>
+          <div className="reading">
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="vu prose prose-zinc max-w-none text-sm leading-relaxed dark:prose-invert">
+                {parsed.nodes}
+              </div>
             </div>
           </div>
         </section>

@@ -1,0 +1,10 @@
+name = "notifications-worker"
+main = "src/worker.ts"
+compatibility_date = "2024-06-20"
+
+kv_namespaces = [
+  { binding = "NOTIF_KV", id = "1887faeeecb5417f9f6ea95c25c17c15", preview_id = "e21a8dafd36448a39f0413fc2f1bf6fd" }
+]
+
+[vars]
+# Secret задаём отдельно командой (см. шаг 2)

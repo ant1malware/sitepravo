@@ -1,0 +1,33 @@
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { Building2, Search, Star, Settings, MessageSquare } from 'lucide-react';
+import { getWhatsNew } from './versioning';
+
+export default function GlobalTopbar() {
+  const hasNews = React.useMemo(() => {
+    try { const it = getWhatsNew()[0]; if (!it) return false; const d = new Date(it.date+'T00:00:00Z'); return (Date.now()-d.getTime())/(1000*60*60*24) <= 14; } catch { return false; }
+  }, []);
+  function openSearch() {
+    const api = (window as any).openCommandPalette;
+    if (typeof api === 'function') { try { api(); return; } catch {} }
+    const meta = navigator.platform.includes('Mac');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: !meta, metaKey: meta } as any));
+  }
+  return (
+    <div className="sticky top-0 z-40 border-b border-zinc-200 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:border-zinc-800 dark:bg-[color:var(--surface)]/90 dark:supports-[backdrop-filter]:bg-[color:var(--surface)]/70">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-1 sm:gap-3 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <Building2 className="h-6 w-6" />
+          <div className="text-base sm:text-lg font-bold truncate leading-tight">Правительство — Памятка (SKY)</div>
+        </div>
+        <div className="flex items-center gap-1 sm:gap-2">
+          <button className="btn btn-secondary" onClick={openSearch}><Search className="h-4 w-4" /> Поиск</button>
+          <Link to="/whats-new" className="btn">Что нового{hasNews && <span className="ml-2 inline-block h-2 w-2 rounded-full bg-amber-500" />}</Link>
+          <Link to="/favorites" className="btn"><Star className="h-4 w-4" /> Избранное</Link>
+          <Link to="/settings" className="btn"><Settings className="h-4 w-4" /> Настройки</Link>
+          <a href="https://t.me/pasha_bolshoi" target="_blank" rel="noreferrer" className="btn"><MessageSquare className="h-4 w-4" /> Фидбек</a>
+        </div>
+      </div>
+    </div>
+  );
+}

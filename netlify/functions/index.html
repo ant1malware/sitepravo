@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Сайт переехал</title>
+  <meta name="color-scheme" content="dark light" />
+  <style>
+    :root{
+      --bg:#0b0c0f;         /* тёмный фон */
+      --bg-spot:#0f1117;    /* мягкое пятно */
+      --card:#14161b;       /* карточка */
+      --border:#22232a;     /* граница */
+      --text:#e7e9ee;       /* основной текст */
+      --muted:#a1a6b2;      /* вторичный текст */
+      --accent:#5b6bff;     /* акцентная ссылка/кнопка */
+      --accent-2:#7f8aff;
+      --radius:20px;
+      --shadow:0 18px 60px rgba(0,0,0,.35), 0 6px 24px rgba(0,0,0,.25);
+    }
+    @media (prefers-color-scheme: light){
+      :root{
+        --bg:#f7f8fb; --bg-spot:#ffffff; --card:#ffffff; --border:#e5e7eb;
+        --text:#0b1020; --muted:#667085; --accent:#4f46e5; --accent-2:#6b63ff;
+      }
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font:16px/1.6 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial;
+      color:var(--text);
+      background:
+        radial-gradient(1200px 600px at 50% 15%, rgba(255,255,255,.04), transparent 60%) ,
+        linear-gradient(180deg, var(--bg-spot), var(--bg));
+      display:grid;
+      place-items:center;
+      padding:24px;
+    }
+    .card{
+      width:min(560px, 92vw);
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:32px 36px;
+      text-align:center;
+    }
+    h1{
+      margin:0 0 10px;
+      font-size:clamp(26px, 3.4vw, 34px);
+      line-height:1.15;
+      letter-spacing:.2px;
+    }
+    p{margin:0 0 16px;color:var(--muted)}
+    a{
+      color:var(--accent);
+      text-decoration:none;
+      border-bottom:1px solid color-mix(in oklab, var(--accent) 70%, transparent);
+      transition:all .18s ease;
+      font-weight:600;
+      word-break:break-word;
+    }
+    a:hover{color:var(--accent-2)}
+    .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px}
+    .btn{
+      appearance:none;border:1px solid var(--border);
+      background:transparent;color:var(--text);
+      padding:10px 14px;border-radius:12px;cursor:pointer;
+      transition:all .18s ease;
+    }
+    .btn:hover{border-color:color-mix(in oklab, var(--accent) 35%, var(--border))}
+    .hint{font-size:13px;color:var(--muted);margin-top:10px}
+    .fade-in{animation:fade .35s ease both}
+    @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+    @media (prefers-reduced-motion: reduce){
+      .fade-in{animation:none}
+    }
+  </style>
+</head>
+<body>
+  <main class="card fade-in" role="main" aria-labelledby="title">
+    <h1 id="title">Сайт переехал!</h1>
+    <p>Новый адрес:</p>
+    <p style="font-size:18px;">
+      <a id="link" href="https://ant1malware.github.io/pravo" rel="noopener">
+        https://ant1malware.github.io/pravo
+      </a>
+    </p>
+    <div class="row">
+      <button class="btn" id="copy">Скопировать ссылку</button>
+      <button class="btn" id="go">Открыть сейчас</button>
+    </div>
+    <div class="hint" id="hint">Вы также можете добавить страницу в закладки.</div>
+  </main>
+
+  <script>
+    // 👉 при желании можно включить автопереход через N секунд:
+    const AUTO_REDIRECT_SECONDS = 0; // 0 = отключено
+    const url = document.getElementById('link').href;
+
+    document.getElementById('go').onclick = () => window.location.href = url;
+    document.getElementById('copy').onclick = async () => {
+      try{
+        await navigator.clipboard.writeText(url);
+        document.getElementById('hint').textContent = 'Ссылка скопирована в буфер обмена.';
+      }catch{
+        document.getElementById('hint').textContent = 'Не удалось скопировать. Нажмите правой кнопкой → Копировать.';
+      }
+    };
+
+    if (AUTO_REDIRECT_SECONDS > 0){
+      const hint = document.getElementById('hint');
+      let left = AUTO_REDIRECT_SECONDS;
+      const tick = () => {
+        hint.textContent = `Через ${left} сек. будет переход…`;
+        if (--left < 0) window.location.href = url;
+        else setTimeout(tick, 1000);
+      };
+      tick();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+async function doSearch(s: string) {
+    const idx = (window as any).__LAW_INDEX2__;
+    const docs = (window as any).__LAW_DOCS2__ as any[];
+    if (!idx || !docs) return;
+
+    const dj = directJump(s);
+    if (dj) { setResults([{ url: dj, title: 'Прямой переход', excerpt: s.toUpperCase() }]); return; }
+
+    const found = idx.search(normalizeQuery(s), { enrich: true, limit: 30 }) as any[];
+    const ids = new Set<string>();
+    const rows: any[] = [];
+    for (const block of found) {
+      for (const r of block.result) {
+        if (ids.has(r.id)) continue; ids.add(r.id);
+        const d = docs.find(x => x.id === r.id); if (!d) continue;
+        const ex = d.excerpt || d.title;
+        const sn = snippet(d.text || ex, q);
+        rows.push({ url: `/laws/${d.slug}`, title: d.title, excerpt: sn, abbr: d.abbr });
+      }
+    }
+    setResults(rows);
+  }
+
+  React.useEffect(() => {
+    if (!ready) return; if (!q.trim()) { setResults([]); return; }
+    const t = setTimeout(()=>doSearch(q), 120); return ()=>clearTimeout(t);
+  }, [q, ready]);
+
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white/80 p-3 dark:border-zinc-800 dark:bg-zinc-900/50">
+      <div className="mb-2 text-xs text-zinc-600">Примеры: <code>ук 105</code>, <code>коап 12.8</code>, <code>дорожные знаки</code></div>
+      <div className="flex items-center gap-2">
+        <Search className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
+        <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Поиск по всем законам (статьи, названия, аббревиатуры)…" className="w-full rounded-xl border border-zinc-200 px-3 py-1.5 text-sm focus:outline-none focus:ring dark:border-zinc-700 dark:bg-zinc-900/50" />
+      </div>
+      {!!results.length && (
+        <div className="mt-3 grid gap-2">
+          {results.map((r,i)=> (
+            <Link key={i} to={r.url} className="block rounded-xl border border-zinc-200 p-3 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-semibold" dangerouslySetInnerHTML={{ __html: highlight(r.title, q) }} />
+                {r.abbr && <span className="rounded-full border px-2 py-0.5 text-[10px]">{r.abbr}</span>}
+              </div>
+              <div className="mt-1 line-clamp-2 text-xs text-zinc-500 dark:text-zinc-400" dangerouslySetInnerHTML={{ __html: highlight(r.excerpt || '', q) }} />
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+

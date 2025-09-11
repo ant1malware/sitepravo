@@ -15,10 +15,12 @@ export const ACCENTS: Record<Exclude<Accent, 'custom'>, { 500: string; 600: stri
 };
 
 
-export const BACKGROUNDS: Record<'bg1' | 'bg2' | 'bg3', string> = {
+export const BACKGROUNDS: Record<'bg1' | 'bg2' | 'bg3' | 'bg4' | 'bg5', string> = {
   bg1: 'img/bg1.png',
   bg2: 'img/bg2.png',
   bg3: 'img/bg3.png',
+  bg4: 'img/bg4.png',
+  bg5: 'img/bg5.png',
 };
 
 export function getStoredTheme(): Theme | null {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { lawsData } from './laws';
 import { slugify, escapeHtml, escRe, termsFrom, normalizeQuery } from './utils/strings';
@@ -21,6 +21,7 @@ export default function LawSearch() {
   const [ready, setReady] = React.useState(false);
   const [q, setQ] = React.useState('');
   const [results, setResults] = React.useState<any[]>([]);
+  const navigate = useNavigate();
 
   React.useEffect(() => {
     (async () => {
@@ -77,6 +78,37 @@ export default function LawSearch() {
     const chunk = (start>0?'…':'') + src.slice(start, end) + (end<src.length?'…':'');
     return highlight(chunk, q);
   }
+
+  // Прямой переход по запросам вида: "ук 105", "коап 12.8", "ст 105 ук", "глава 1 ук"
+  function directJumpBetter(s: string): string | null {
+    const str = s.toLowerCase().replace(/ё/g,'е').replace(/\s+/g,' ').trim();
+    if (!str) return null;
+    let code: 'uk' | 'koap' | null = null;
+    if (/(^|\s)(ук|уголовн)/i.test(str)) code = 'uk';
+    if (/(^|\s)(коап|админ|административ)/i.test(str)) code = 'koap';
+    let num: string | null = null;
+    let type: 'article' | 'chapter' = 'article';
+    const mChap = str.match(/глава\s*(\d+(?:\.\d+)?)/i);
+    const mArt = str.match(/(?:ст\.?|статья)?\s*(\d+(?:\.\d+)?)(?=\b)/i);
+    if (mChap) { num = mChap[1]; type = 'chapter'; }
+    else if (mArt) { num = mArt[1]; }
+    if (!num) return null;
+    if (!code) code = str.includes('коап') ? 'koap' : (str.includes('ук') ? 'uk' : null);
+    if (!code) return null;
+    const law = lawsData.find(l => l.slug === code);
+    if (!law) return null;
+    const id = `${type === 'chapter' ? 'глава' : 'статья'}-${num.replace(/\./g,'-')}`;
+    return `/laws/${law.slug}#${id}`;
+  }
+
+  // Автопереход при распознавании запроса
+  React.useEffect(() => {
+    const t = setTimeout(() => {
+      const dj = directJumpBetter(q);
+      if (dj) navigate(dj);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [q]);
 
   function directJump(s: string): string | null {
     const str = s.toLowerCase().replace(/\s+/g,' ').trim();
