@@ -26,10 +26,9 @@ const NAV: NavItem[] = [
 ];
 
 export default function Sidebar() {
-  const [open, setOpen] = React.useState(false);
-  React.useEffect(() => {
-    if (typeof window !== 'undefined') setOpen(window.innerWidth >= 1024);
-  }, []);
+  const [open, setOpen] = React.useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 1024 : false
+  );
   const loc = useLocation();
 
   // Определяем режим роутера (HashRouter или BrowserRouter)
