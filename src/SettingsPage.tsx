@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import {
   ACCENTS, applyAccent, applyTheme, systemPrefersDark, getStoredAccent, type Accent,
-  setCustomAccent,
+  setCustomAccent, BACKGROUNDS,
 } from './theme';
 import {
   applyDensity, getDensity, type Density,
@@ -12,26 +12,10 @@ import {
   applyGlass, getGlass,
 } from './uiSettings';
 
-/* ====================== ассеты и пресеты фонов ====================== */
-// безопасный join BASE_URL + относительный путь (без new URL)
-const BASE = (import.meta as any)?.env?.BASE_URL ?? '/';
-const asset = (p: string) => {
-  const clean = p.replace(/^\//, '');
-  return (BASE.endsWith('/') ? BASE : BASE + '/') + clean;
-};
-
-// доступные ключи фонов
-type BgKey = 'bg1' | 'bg2' | 'bg3' | 'bg4' | 'bg5';
-const BG_KEYS: readonly BgKey[] = ['bg1', 'bg2', 'bg3', 'bg4', 'bg5'] as const;
-
-// карты «ключ → путь»
-const PRESET_BG: Record<BgKey, string> = {
-  bg1: asset('img/bg1.png'),
-  bg2: asset('img/bg2.png'),
-  bg3: asset('img/bg3.png'),
-  bg4: asset('img/bg4.png'),
-  bg5: asset('img/bg5.png'),
-};
+/* ====================== пресеты фонов ====================== */
+type BgKey = keyof typeof BACKGROUNDS;
+const BG_KEYS: readonly BgKey[] = Object.keys(BACKGROUNDS) as BgKey[];
+const PRESET_BG: Record<BgKey, string> = BACKGROUNDS;
 
 /* ====================== мини-UI хелперы ====================== */
 const Card: React.FC<React.PropsWithChildren<{ title: string; desc?: string }>> = ({ title, desc, children }) => (

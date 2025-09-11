@@ -1,6 +1,6 @@
 export type Theme = 'light' | 'dark';
 export type Accent = 'indigo' | 'violet' | 'blue' | 'custom';
-export type Background = 'none' | 'bg1' | 'bg2' | 'bg3' | 'custom';
+export type Background = 'none' | 'bg1' | 'bg2' | 'bg3' | 'bg4' | 'bg5' | 'custom';
 
 const STORAGE_KEY = 'theme';
 const ACCENT_KEY = 'accent';
@@ -14,13 +14,19 @@ export const ACCENTS: Record<Exclude<Accent, 'custom'>, { 500: string; 600: stri
   blue:   { 500: '#3B82F6', 600: '#2563EB' },
 };
 
+// безопасный join BASE_URL + относительный путь (без new URL)
+const BASE = (import.meta as any)?.env?.BASE_URL ?? '/';
+const asset = (p: string) => {
+  const clean = p.replace(/^\/+/, '');
+  return (BASE.endsWith('/') ? BASE : BASE + '/') + clean;
+};
 
 export const BACKGROUNDS: Record<'bg1' | 'bg2' | 'bg3' | 'bg4' | 'bg5', string> = {
-  bg1: 'img/bg1.png',
-  bg2: 'img/bg2.png',
-  bg3: 'img/bg3.png',
-  bg4: 'img/bg4.png',
-  bg5: 'img/bg5.png',
+  bg1: asset('img/bg1.png'),
+  bg2: asset('img/bg2.png'),
+  bg3: asset('img/bg3.png'),
+  bg4: asset('img/bg4.png'),
+  bg5: asset('img/bg5.png'),
 };
 
 export function getStoredTheme(): Theme | null {
@@ -40,8 +46,8 @@ export function getStoredCustomAccent(): string | null {
 }
 
 export function getStoredBackground(): Background | null {
-  const v = localStorage.getItem(BG_KEY) as Background | null;
-  return v && (v === 'none' || v === 'custom' || v in BACKGROUNDS) ? v : null;
+  const v = localStorage.getItem(BG_KEY);
+  return v && (v === 'none' || v === 'custom' || v in BACKGROUNDS) ? (v as Background) : null;
 }
 
 export function getStoredCustomBackground(): string | null {
@@ -124,7 +130,7 @@ export function applyBackground(b: Background) {
       body.style.backgroundPosition = 'center';
     }
   } else {
-    const url = `${import.meta.env.BASE_URL}${BACKGROUNDS[b]}`;
+    const url = BACKGROUNDS[b];
     body.style.backgroundImage = `url(${url})`;
     body.style.backgroundSize = 'cover';
     body.style.backgroundRepeat = 'no-repeat';
