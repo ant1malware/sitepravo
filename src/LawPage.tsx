@@ -61,6 +61,17 @@ function fixMdForLaw(src: string, title?: string) {
   return s;
 }
 
+function prefixImages(html: string) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const base = import.meta.env.BASE_URL || "/";
+  doc.querySelectorAll("img").forEach((img) => {
+    const src = img.getAttribute("src") || "";
+    if (/^(?:[a-z]+:|\/|data:)/i.test(src)) return;
+    img.setAttribute("src", base + src.replace(/^\/+/, ""));
+  });
+  return doc.body.innerHTML;
+}
+
 export default function LawPage() {
   const { slug } = useParams();
   const location = useLocation();
@@ -76,7 +87,8 @@ export default function LawPage() {
     const prepared = fixMdForLaw(law.content, law.title);
     const raw = marked.parse(prepared, { gfm: true, breaks: true }) as string;
     const safe = DOMPurify.sanitize(raw, { USE_PROFILES: { html: true } } as any) as unknown as string;
-    const { html: withAnchors, toc } = addAnchorsAndToc(safe);
+    const withImgs = prefixImages(safe);
+    const { html: withAnchors, toc } = addAnchorsAndToc(withImgs);
     setHtml(withAnchors);
     setToc(toc);
   }, [slug]);

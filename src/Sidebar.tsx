@@ -26,8 +26,8 @@ const NAV: NavItem[] = [
 ];
 
 export default function Sidebar() {
-  const [open, setOpen] = React.useState<boolean>(() =>
-    typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
+  const [open, setOpen] = React.useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 1024 : false
   );
   const loc = useLocation();
 
