@@ -29,9 +29,11 @@ import { interactionsData } from "./interactions";
 const assetPath = (p: string) => `${import.meta.env.BASE_URL}${p.replace(/^\/+/, '')}`;
 import { iconForRoleName } from "./roleIcons";
 import RelatedBlock from "./RelatedBlock";
+
 import VoteWidget from "./VoteWidget";
 import { isRecentlyUpdated } from "./versioning";
 import ContextText from "./ContextText";
+import ImportantRecordingBlock from "./components/ImportantRecordingBlock";
 
 
 // Keeps main tab state in sync with URL (?tab=... and #...)
@@ -726,7 +728,7 @@ const postsESS: PostItem[] = [
   { code: "Б-1", img: "/img/B11.png" },
   { code: "Б-3", img: "/img/B3.png" },
   { code: "Ю-2", img: "/img/U2.png" },
-  { code: "Ю-1",  img: "/img/U1.png" },
+  { code: "Ю-1", img: "/img/U1.png" },
 ];
 
 const PostsGrid: React.FC<{ items: PostItem[] }> = ({ items }) => (
@@ -1109,7 +1111,7 @@ export default function GovCheatsheetSky() {
 
               <div className="flex flex-wrap gap-2">
                 {/* под-вкладки Роли/Повышение */}
-              <div className="inline-flex rounded-full border border-zinc-200 bg-white/70 p-0.5 text-sm backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/50">
+              <div className="hidden inline-flex rounded-full border border-zinc-200 bg-white/70 p-0.5 text-sm backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/50"> 
                   <button
                     onClick={() => setRolesTab("roles")}
                       className={"px-3 py-1 rounded-full transition " + (rolesTab === "roles" ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "hover:bg-zinc-100 dark:hover:bg-zinc-800")}
@@ -1125,22 +1127,38 @@ export default function GovCheatsheetSky() {
                 </div>
 
                 {/* вкладки департаментов */}
-                <div className="inline-flex rounded-full border border-zinc-200 bg-white/70 p-0.5 text-sm backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/50">
-                  {DEPTS.map((d) => (
-                    <button
-                      key={d}
-                      onClick={() => setDeptTab(d)}
-                      className={"px-3 py-1 rounded-full transition " + (deptTab === d ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "bg-white hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800")}
-                    >
-                      {d}
-                    </button>
-                  ))}
-                </div>
+                <div className="hidden inline-flex rounded-full border border-zinc-200 bg-white/70 p-0.5 text-sm backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/50"> 
+                  {DEPTS.map((d) => ( 
+                    <button 
+                      key={d} 
+                      onClick={() => setDeptTab(d)} 
+                      className={"px-3 py-1 rounded-full transition " + (deptTab === d ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "bg-white hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800")} 
+                    > 
+                      {d} 
+                    </button> 
+                  ))} 
+                </div> 
               </div>
             </div>
+            
+            <ImportantRecordingBlock /> 
 
-            {/* Вкладка "Роли" */}
-            {rolesTab === "roles" && (
+            {/* Фильтр по департаментам под блоком "Важно" */}
+            <div className="mt-2 flex flex-wrap gap-2">
+              <div className="inline-flex rounded-full border border-zinc-200 bg-white/70 p-0.5 text-sm backdrop-blur dark:border-zinc-700 dark:bg-zinc-900/50">
+                {DEPTS.map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setDeptTab(d)}
+                    className={"px-3 py-1 rounded-full transition " + (deptTab === d ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "bg-white hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800")}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {false && (
               <section className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {rolesData
                   .filter((r) => {
@@ -1184,7 +1202,7 @@ export default function GovCheatsheetSky() {
             )}
 
             {/* Вкладка "Повышение" */}
-            {rolesTab === "promotion" && (
+            {true && (
               <section className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {rolesData
                   .filter((r) => {

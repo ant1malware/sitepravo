@@ -1,20 +1,44 @@
-<!doctype html>
-<html lang="ru">
-    <head>
+<!doctype html>
+<html lang="ru">
+  <head>
     <meta charset="UTF-8" />
+    <!-- НЕ НУЖЕН <base>. Пути для GH Pages задаём в vite.config.ts через base:'/pravo/'. -->
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
-    <link rel="preconnect" href="https://rsms.me" crossorigin>
+    <link rel="icon" href="favicon.ico" />
+
+    <!-- просим браузер чаще проверять новую версию index.html -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+
     <title>Правительство — Памятка (SKY)</title>
-    <script type="module" crossorigin src="/assets/index-ClbCSjzU.js"></script>
-    <link rel="modulepreload" crossorigin href="/assets/react-vendor-DplbGVpw.js">
-    <link rel="modulepreload" crossorigin href="/assets/icons-BSwHFIJz.js">
-    <link rel="stylesheet" crossorigin href="/assets/index-BOAZMeUg.css">
-  </head>
-  <body class="bg-zinc-50 text-zinc-900">
-    <div id="root"></div>
-  </body>
-</html>
-
 
+    <!-- (необязательно) preconnect под ваши шрифты/ресурсы -->
+    <!-- <link rel="preconnect" href="https://rsms.me" crossorigin> -->
+    <script type="module" crossorigin src="/assets/index-CxIyExD8.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/react-vendor-DTkXckhQ.js">
+    <link rel="modulepreload" crossorigin href="/assets/icons-BPBp9R4S.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-BPL1qxW4.css">
+  </head>
 
+  <body class="bg-zinc-50 text-zinc-900">
+    <div id="root"></div>
+
+    <!-- убиваем любой старый service worker и его кэши (чтоб не прилипала старая версия) -->
+    <script>
+      (function killSW() {
+        try {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+          }
+          if ('caches' in window) {
+            caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+          }
+        } catch {}
+      })();
+    </script>
+
+    <!-- dev-скрипт; при билде Vite сам заменит на /pravo/assets/index-*.js и подключит CSS -->
+  </body>
+</html>

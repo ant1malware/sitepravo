@@ -1,7 +1,7 @@
 import { defineConfig, splitVendorChunkPlugin } from 'vite';
 import react from '@vitejs/plugin-react';
-import { writeFileSync, readFileSync } from 'fs';   // ← добавили readFileSync
-import { resolve } from 'path';
+import { writeFileSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 // кладём docs/.nojekyll (чтобы Pages не включал Jekyll)
 function noJekyllPlugin(enable: boolean) {
@@ -43,10 +43,10 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       splitVendorChunkPlugin(),
-      noJekyllPlugin(isGh),           // ← подключили
-      copy404Plugin(outDir),          // ← добавили
+      noJekyllPlugin(isGh),
+      copy404Plugin(outDir),
     ],
-    base: isGh ? '/pravo/' : '/',     // имя репозитория
+    base: isGh ? '/pravo/' : '/', // имя репозитория
     define: { __APP_VERSION__: JSON.stringify(version) },
     build: {
       outDir,

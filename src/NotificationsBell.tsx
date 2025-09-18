@@ -1,5 +1,6 @@
-import React from 'react'
+﻿import React from 'react'
 import { Bell } from 'lucide-react'
+import LiquidGlass from './components/LiquidGlass'
 
 type Notif = {
   id: string
@@ -43,7 +44,7 @@ export default function NotificationsBell() {
 
   return (
     <div className="relative">
-      <button className="btn btn-secondary relative" onClick={onOpen} aria-label="Уведомления">
+      <button className="btn btn-secondary relative" onClick={onOpen} aria-label="РЈРІРµРґРѕРјР»РµРЅРёСЏ">
         <Bell className="h-4 w-4" />
         {unread > 0 && (
           <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white">
@@ -52,10 +53,10 @@ export default function NotificationsBell() {
         )}
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-zinc-200 bg-white p-2 text-sm shadow-soft dark:border-zinc-700 dark:bg-zinc-900">
-          <div className="mb-1 px-1 text-xs text-zinc-500">Уведомления</div>
+        <LiquidGlass className="absolute right-0 mt-2 w-80 p-2 text-sm z-[80]" blur={22} tint="16 18 36" opacity={0.22} gloss={0.7} elevation={1.1} interactive={false}>
+          <div className="mb-1 px-1 text-xs text-zinc-500">РЈРІРµРґРѕРјР»РµРЅРёСЏ</div>
           {!items.length ? (
-            <div className="px-2 py-3 text-xs text-zinc-500">Пока нет уведомлений</div>
+            <div className="px-2 py-3 text-xs text-zinc-500">РџРѕРєР° РЅРµС‚ СѓРІРµРґРѕРјР»РµРЅРёР№</div>
           ) : (
             <ul className="max-h-80 space-y-1 overflow-y-auto">
               {items.map((n) => (
@@ -78,9 +79,9 @@ export default function NotificationsBell() {
               ))}
             </ul>
           )}
-        </div>
-      )}
-    </div>
-  )
-}
+          </LiquidGlass>
+        )}
+      </div>
+    )
+  }
 

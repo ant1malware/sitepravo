@@ -10,6 +10,17 @@ import DOMPurify from "dompurify";
 
 function addAnchorsAndToc(html: string) {
   const doc = new DOMParser().parseFromString(html, "text/html");
+  // Fix image src to respect Vite base on GitHub Pages
+  try {
+    const base = (import.meta as any).env?.BASE_URL || import.meta.env.BASE_URL || '/';
+    doc.querySelectorAll('img').forEach((img) => {
+      const src = (img.getAttribute('src') || '').trim();
+      if (/^(?:\/)?img\//.test(src)) {
+        const clean = src.replace(/^\/+/, '');
+        img.setAttribute('src', `${base}${clean}`);
+      }
+    });
+  } catch {}
   const headings = Array.from(doc.querySelectorAll("h2, h3, h4"));
   const toc: { id: string; text: string; level: number }[] = [];
 

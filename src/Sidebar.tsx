@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   BookOpen,
@@ -9,20 +9,23 @@ import {
   MessageSquare,
   Shield,
   ListChecks,
+  Info,
 } from 'lucide-react';
+import LiquidGlass from './components/LiquidGlass';
+import { useStyleMode } from './useStyleMode';
 
 type NavItem = { label: string; icon: React.ReactNode; id: string };
 
-const NAV: NavItem[] = [
-  { label: 'Роли',           icon: <Users className="h-4 w-4" />,        id: 'roles' },
-  { label: 'Шаблоны',        icon: <FileText className="h-4 w-4" />,      id: 'templates' },
-  { label: 'Посты',          icon: <LayoutList className="h-4 w-4" />,    id: 'posts' },
-  { label: 'Процедуры',      icon: <ClipboardList className="h-4 w-4" />, id: 'procedures' },
+export const NAV: NavItem[] = [
+  { label: 'Повышение', icon: <Users className="h-4 w-4" />, id: 'roles' },
+  { label: 'Шаблоны', icon: <FileText className="h-4 w-4" />, id: 'templates' },
+  { label: 'Посты', icon: <LayoutList className="h-4 w-4" />, id: 'posts' },
+  { label: 'Процедуры', icon: <ClipboardList className="h-4 w-4" />, id: 'procedures' },
   { label: 'Взаимодействия', icon: <MessageSquare className="h-4 w-4" />, id: 'interactions' },
-  { label: 'Проверки',       icon: <ListChecks className="h-4 w-4" />,    id: 'checks' },      // новая вкладка
-  { label: 'Лекции',         icon: <BookOpen className="h-4 w-4" />,      id: 'lectures' },
-  { label: 'ВУ',             icon: <Shield className="h-4 w-4" />,        id: 'vu' },
-  { label: 'Законы',         icon: <BookOpen className="h-4 w-4" />,      id: 'laws' },
+  { label: 'Проверки', icon: <ListChecks className="h-4 w-4" />, id: 'checks' },
+  { label: 'Лекции', icon: <BookOpen className="h-4 w-4" />, id: 'lectures' },
+  { label: 'ВУ', icon: <Shield className="h-4 w-4" />, id: 'vu' },
+  { label: 'Законы', icon: <BookOpen className="h-4 w-4" />, id: 'laws' },
 ];
 
 export default function Sidebar() {
@@ -30,14 +33,13 @@ export default function Sidebar() {
     typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
   );
   const loc = useLocation();
+  const [styleMode] = useStyleMode();
 
-  // Определяем режим роутера (HashRouter или BrowserRouter)
   const isHashRouter = React.useMemo(
     () => typeof window !== 'undefined' && window.location.hash.startsWith('#/'),
     []
   );
 
-  // Текущая вкладка: сначала ?tab=..., если нет — берём #anchor для обратной совместимости
   const currentTab = React.useMemo(() => {
     const params = new URLSearchParams(loc.search || '');
     const fromQuery = (params.get('tab') || '').toLowerCase();
@@ -45,19 +47,22 @@ export default function Sidebar() {
     return fromQuery || fromHash || '';
   }, [loc.search, loc.hash]);
 
-  const isActive = (id: string) => currentTab === id;
+  const isActive = React.useCallback((id: string) => currentTab === id, [currentTab]);
 
   React.useEffect(() => {
-  const isNarrow = typeof window !== 'undefined' && window.innerWidth < 1024;
-  if (isNarrow && open) {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }
-}, [open]);
+    const isNarrow = typeof window !== 'undefined' && window.innerWidth < 1024;
+    if (isNarrow && open) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = prev; };
+    }
+  }, [open]);
 
   React.useEffect(() => {
-    function onResize() { if (typeof window !== 'undefined') setOpen(window.innerWidth >= 1024); }
+    function onResize() {
+      if (typeof window === 'undefined') return;
+      setOpen(window.innerWidth >= 1024);
+    }
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
@@ -73,93 +78,115 @@ export default function Sidebar() {
   );
   const shortcutLabel = isMac ? '⌘ K' : 'Ctrl K';
 
-  const kbdClass =
-    'inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium shadow-sm ' +
-    'border-zinc-300 bg-white/90 text-zinc-800 ' +
-    'dark:border-zinc-700 dark:bg-zinc-800/90 dark:text-zinc-100 dark:shadow-none';
+  const kbdClass = styleMode === 'liquid'
+    ? 'inline-flex items-center rounded-md border border-white/20 bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/80 shadow-[0_8px_20px_-12px_rgba(80,120,255,0.75)]'
+    : 'inline-flex items-center rounded-md border border-zinc-300 bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-zinc-800 shadow-sm dark:border-zinc-700 dark:bg-zinc-800/90 dark:text-zinc-100 dark:shadow-none';
 
-  // Собираем `to` так, чтобы не ломать HashRouter:
-  // - Всегда используем search-парам ?tab=ID
-  // - Hash добавляем ТОЛЬКО когда не HashRouter (для старых ссылок/скролла по якорю)
+  const linkBaseClass = styleMode === 'liquid'
+    ? 'glass-nav-link flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40'
+    : 'flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800';
+
+  const linkActiveClass = styleMode === 'liquid'
+    ? 'glass-nav-link--active'
+    : 'bg-zinc-100 dark:bg-zinc-800';
+
+  const hintClass = styleMode === 'liquid'
+    ? 'mt-4 rounded-2xl border border-white/10 bg-white/8 p-2 text-xs text-white/70 shadow-[0_24px_60px_-45px_rgba(80,120,255,0.65)] backdrop-blur'
+    : 'mt-4 rounded-xl border border-zinc-200 bg-white/70 p-2 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300';
+
+  const asideClass = styleMode === 'liquid'
+    ? 'app-sidebar hidden lg:block fixed inset-y-0 left-0 z-[60] w-[260px] px-3 py-5 text-sm text-white overscroll-contain'
+    : 'app-sidebar hidden lg:block fixed inset-y-0 left-0 z-[60] w-[240px] border-r border-zinc-200 bg-white/85 backdrop-blur text-sm shadow-sm overscroll-contain dark:border-zinc-800 dark:bg-zinc-900/80';
+
   const buildTo = (id: string) => {
     const search = `?tab=${encodeURIComponent(id)}`;
     if (isHashRouter) return { pathname: '/', search };
     return { pathname: '/', search, hash: `#${id}` };
   };
 
+  const sidebarContent = (
+    <>
+      <div className="mb-4 flex items-center justify-start">
+        <Link
+          to="/"
+          className="text-sm font-semibold tracking-tight text-[color:var(--text-1)] no-underline focus:outline-none focus:ring-2 focus:ring-[color:var(--accent-600)]/60 hover:opacity-90"
+          aria-label="Справочник SKY"
+        >
+          Справочник SKY
+        </Link>
+      </div>
+
+      <nav role="navigation" className="grid max-h-[calc(100vh-160px)] gap-1 overflow-y-auto pr-1">
+        <ul className="flex flex-col gap-1">
+          {NAV.map((n) => {
+            const active = isActive(n.id);
+            return (
+              <li key={n.id}>
+                <Link
+                  to={buildTo(n.id)}
+                  className={[linkBaseClass, active ? linkActiveClass : ''].filter(Boolean).join(' ')}
+                  aria-current={active ? 'page' : undefined}
+                  aria-label={n.label}
+                  onClick={() => {
+                    if (typeof window !== 'undefined' && window.innerWidth < 1024) setOpen(false);
+                  }}
+                >
+                  {n.icon}
+                  <span className="truncate">{n.label}</span>
+                </Link>
+              </li>
+            );
+          })}
+          <li>
+            <Link
+              to="/about"
+              className={linkBaseClass}
+              aria-label="О нас"
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.innerWidth < 1024) setOpen(false);
+              }}
+            >
+              <Info className="h-4 w-4" />
+              <span className="truncate">О нас</span>
+            </Link>
+          </li>
+        </ul>
+      </nav>
+
+      <div className={hintClass}>
+        Подсказка: нажмите <kbd className={kbdClass}>{shortcutLabel}</kbd>, чтобы открыть быстрый поиск
+      </div>
+    </>
+  );
+
   return (
     <>
       <button
+        hidden
         className="fixed left-3 top-3 z-50 rounded-lg border border-zinc-300 bg-white/90 px-2 py-1 text-xs shadow-sm backdrop-blur hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-400 dark:border-zinc-700 dark:bg-zinc-900/80 lg:hidden"
-        onClick={() => setOpen(v => !v)}
+        onClick={() => setOpen((v) => !v)}
         aria-label="Открыть меню"
         aria-expanded={open}
         aria-controls="app-sidebar"
       >
         Меню
       </button>
-    {/* overlay под мобильное меню */}
-    {open && (
-      <div
-        className="fixed inset-0 z-30 bg-black/40 lg:hidden"
-        onClick={() => setOpen(false)}
-        aria-hidden="true"
-      />
-    )}
-      <aside
-        id="app-sidebar"
-        aria-label="Навигация"
-        className={`app-sidebar fixed inset-y-0 left-0 z-40 w-[240px] transform border-r border-zinc-200
-              bg-white/85 backdrop-blur text-sm shadow-sm transition-transform duration-200 ease-out
-              dark:border-zinc-800 dark:bg-zinc-900/80
-              ${open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        }`}
-        
-      >
-        {/* Шапка: только "Главная", без правой подписи */}
-        <div className="mb-3 flex items-center justify-start">
-          <Link
-            to="/"
-            className="rounded font-semibold no-underline focus:outline-none focus:ring-2 focus:ring-zinc-400
-                       text-zinc-900 hover:underline hover:text-zinc-900
-                       dark:text-zinc-100 dark:hover:text-white"
-            aria-label="Главная"
+      <aside id="app-sidebar" aria-label="Основная навигация" className={asideClass}>
+        {styleMode === 'liquid' ? (
+          <LiquidGlass
+            className="flex h-full flex-col gap-4 p-4 text-white/90"
+            blur={28}
+            tint="16 18 36"
+            opacity={0.24}
+            gloss={0.7}
+            elevation={1.2}
+            interactive={false}
           >
-            Главная
-          </Link>
-        </div>
-
-        <nav role="navigation" className="grid max-h[calc(100vh-140px)] gap-1 overflow-y-auto pr-1">
-          <ul className="flex flex-col gap-1">
-            {NAV.map((n) => {
-              const active = isActive(n.id);
-              return (
-                <li key={n.id}>
-                  <Link
-                    to={buildTo(n.id)}
-                    className={[
-                      'flex items-center gap-2 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-zinc-400',
-                      'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800',
-                      active ? 'bg-zinc-100 dark:bg-zinc-800' : '',
-                    ].join(' ')}
-                    aria-current={active ? 'page' : undefined}
-                    aria-label={n.label}
-                    onClick={() => {
-                      if (typeof window !== 'undefined' && window.innerWidth < 1024) setOpen(false);
-                    }}
-                  >
-                    {n.icon}
-                    <span className="truncate">{n.label}</span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-
-        <div className="mt-4 rounded-xl border border-zinc-200 bg-white/70 p-2 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300">
-          Подсказка: нажмите <kbd className={kbdClass}>{shortcutLabel}</kbd> для быстрого поиска
-        </div>
+            {sidebarContent}
+          </LiquidGlass>
+        ) : (
+          sidebarContent
+        )}
       </aside>
     </>
   );

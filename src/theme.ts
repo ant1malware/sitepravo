@@ -1,12 +1,14 @@
-export type Theme = 'light' | 'dark';
+﻿export type Theme = 'light' | 'dark';
 export type Accent = 'indigo' | 'violet' | 'blue' | 'custom';
-export type Background = 'none' | 'bg1' | 'bg2' | 'bg3' | 'custom';
+export type Background = 'none' | 'bg1' | 'bg2' | 'bg3' | 'bg4' | 'bg5' | 'custom';
+export type StyleMode = 'classic' | 'liquid';
 
 const STORAGE_KEY = 'theme';
 const ACCENT_KEY = 'accent';
 const ACCENT_CUSTOM_KEY = 'accent_custom';
 const BG_KEY = 'bg';
 const BG_CUSTOM_KEY = 'bg_custom';
+const STYLE_MODE_KEY = 'ui:style-mode';
 
 export const ACCENTS: Record<Exclude<Accent, 'custom'>, { 500: string; 600: string }> = {
   indigo: { 500: '#6366F1', 600: '#4F46E5' },
@@ -14,13 +16,19 @@ export const ACCENTS: Record<Exclude<Accent, 'custom'>, { 500: string; 600: stri
   blue:   { 500: '#3B82F6', 600: '#2563EB' },
 };
 
+// Р±РµР·РѕРїР°СЃРЅС‹Р№ join BASE_URL + РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅС‹Р№ РїСѓС‚СЊ (Р±РµР· new URL)
+const BASE = (import.meta as any)?.env?.BASE_URL ?? '/';
+const asset = (p: string) => {
+  const clean = p.replace(/^\/+/, '');
+  return (BASE.endsWith('/') ? BASE : BASE + '/') + clean;
+};
 
 export const BACKGROUNDS: Record<'bg1' | 'bg2' | 'bg3' | 'bg4' | 'bg5', string> = {
-  bg1: 'img/bg1.png',
-  bg2: 'img/bg2.png',
-  bg3: 'img/bg3.png',
-  bg4: 'img/bg4.png',
-  bg5: 'img/bg5.png',
+  bg1: asset('img/bg1.png'),
+  bg2: asset('img/bg2.png'),
+  bg3: asset('img/bg3.png'),
+  bg4: asset('img/bg4.png'),
+  bg5: asset('img/bg5.png'),
 };
 
 export function getStoredTheme(): Theme | null {
@@ -40,12 +48,46 @@ export function getStoredCustomAccent(): string | null {
 }
 
 export function getStoredBackground(): Background | null {
-  const v = localStorage.getItem(BG_KEY) as Background | null;
-  return v && (v === 'none' || v === 'custom' || v in BACKGROUNDS) ? v : null;
+ const v = localStorage.getItem(BG_KEY);
+  return v && (v === 'none' || v === 'custom' || v in BACKGROUNDS) ? (v as Background) : null;
 }
 
 export function getStoredCustomBackground(): string | null {
   return localStorage.getItem(BG_CUSTOM_KEY);
+}
+
+export function getStoredStyleMode(): StyleMode | null {
+  const v = localStorage.getItem(STYLE_MODE_KEY);
+  return v === 'classic' || v === 'liquid' ? v : null;
+}
+
+export function applyStyleMode(mode: StyleMode) {
+  const root = document.documentElement;
+  root.classList.toggle('theme-liquid', mode === 'liquid');
+  root.dataset.styleMode = mode;
+  if (mode === 'liquid') {
+    try {
+      const body = document.body;
+      body.style.removeProperty('background');
+      body.style.removeProperty('background-size');
+      body.style.removeProperty('background-repeat');
+      body.style.removeProperty('background-attachment');
+      body.style.removeProperty('background-position');
+    } catch {}
+  } else {
+    try {
+      const bg = getStoredBackground() ?? 'none';
+      applyBackground(bg);
+    } catch {}
+  }
+  try { window.dispatchEvent(new CustomEvent<StyleMode>('stylemodechange', { detail: mode })); } catch {}
+  try { localStorage.setItem(STYLE_MODE_KEY, mode); } catch {}
+}
+
+export function toggleStyleMode(): StyleMode {
+  const next: StyleMode = document.documentElement.classList.contains('theme-liquid') ? 'classic' : 'liquid';
+  applyStyleMode(next);
+  return next;
 }
 
 export function systemPrefersDark(): boolean {
@@ -95,17 +137,8 @@ export function setCustomAccent(hex: string) {
 
 export function applyBackground(b: Background) {
   const body = document.body;
-  const isDark = document.documentElement.classList.contains('dark');
-  // In dark theme keep background clean and solid for readability
-  if (isDark) {
-    body.style.backgroundImage = '';
-    body.style.backgroundSize = '';
-    body.style.backgroundRepeat = '';
-    body.style.backgroundAttachment = '';
-    body.style.backgroundPosition = '';
-    localStorage.setItem(BG_KEY, b);
-    return;
-  }
+  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  const attach = isMobile ? 'scroll' : 'fixed';
   if (b === 'none') {
     body.style.backgroundImage = '';
     body.style.backgroundSize = '';
@@ -120,15 +153,16 @@ export function applyBackground(b: Background) {
       body.style.backgroundImage = `url(${url})`;
       body.style.backgroundSize = 'cover';
       body.style.backgroundRepeat = 'no-repeat';
-      body.style.backgroundAttachment = 'fixed';
+      body.style.backgroundAttachment = attach as any;
       body.style.backgroundPosition = 'center';
     }
   } else {
-    const url = `${import.meta.env.BASE_URL}${BACKGROUNDS[b]}`;
+    // BACKGROUNDS already includes BASE_URL via asset()
+    const url = BACKGROUNDS[b];
     body.style.backgroundImage = `url(${url})`;
     body.style.backgroundSize = 'cover';
     body.style.backgroundRepeat = 'no-repeat';
-    body.style.backgroundAttachment = 'fixed';
+    body.style.backgroundAttachment = attach as any;
     body.style.backgroundPosition = 'center';
   }
   localStorage.setItem(BG_KEY, b);
@@ -147,6 +181,8 @@ export function initTheme() {
   applyAccent(accent);
   const bg = getStoredBackground() ?? 'none';
   applyBackground(bg);
+  const styleMode = getStoredStyleMode() ?? 'classic';
+  applyStyleMode(styleMode);
 }
 
 export function toggleTheme(): Theme {
@@ -179,3 +215,12 @@ function shadeHexColor(hex: string, percent: number): string {
   const toHex = (v: number) => v.toString(16).padStart(2, '0');
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
+
+
+
+
+
+
+
+
+
