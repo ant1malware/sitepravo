@@ -1,21 +1,26 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { BookOpen, Users, LayoutList, ClipboardList, FileText, MessageSquare, Shield, ListChecks, Info, Ghost } from 'lucide-react';
+import { BookOpen, Users, LayoutList, ClipboardList, FileText, MessageSquare, Shield, ListChecks, Info, Ghost, Home } from 'lucide-react';
 import LiquidGlass from './components/LiquidGlass';
 import { useStyleMode } from './useStyleMode';
 
-type NavItem = { label: string; icon: React.ReactNode; id: string };
+type BaseNavItem = { key: string; label: string; icon: React.ReactNode };
+type TabNavItem = BaseNavItem & { type: 'tab'; id: string };
+type RouteNavItem = BaseNavItem & { type: 'route'; to: string };
+
+export type NavItem = TabNavItem | RouteNavItem;
 
 export const NAV: NavItem[] = [
-  { label: 'Роли',           icon: <Users className="h-4 w-4" />,         id: 'roles' },
-  { label: 'Шаблоны',        icon: <FileText className="h-4 w-4" />,       id: 'templates' },
-  { label: 'Посты',          icon: <LayoutList className="h-4 w-4" />,     id: 'posts' },
-  { label: 'Процедуры',      icon: <ClipboardList className="h-4 w-4" />,  id: 'procedures' },
-  { label: 'Взаимодействия', icon: <MessageSquare className="h-4 w-4" />,  id: 'interactions' },
-  { label: 'Проверки',       icon: <ListChecks className="h-4 w-4" />,     id: 'checks' },
-  { label: 'Лекции',         icon: <BookOpen className="h-4 w-4" />,       id: 'lectures' },
-  { label: 'ВУ',             icon: <Shield className="h-4 w-4" />,         id: 'vu' },
-  { label: 'Законы',         icon: <BookOpen className="h-4 w-4" />,       id: 'laws' },
+  { key: 'home',          type: 'route', label: 'Главная',       icon: <Home className="h-4 w-4" />,        to: '/home' },
+  { key: 'roles',         type: 'tab',   label: 'Повышения',     icon: <Users className="h-4 w-4" />,       id: 'roles' },
+  { key: 'templates',     type: 'tab',   label: 'Шаблоны',       icon: <FileText className="h-4 w-4" />,   id: 'templates' },
+  { key: 'posts',         type: 'tab',   label: 'Посты',         icon: <LayoutList className="h-4 w-4" />, id: 'posts' },
+  { key: 'procedures',    type: 'tab',   label: 'Процедуры',     icon: <ClipboardList className="h-4 w-4" />, id: 'procedures' },
+  { key: 'interactions',  type: 'tab',   label: 'Взаимодействия', icon: <MessageSquare className="h-4 w-4" />, id: 'interactions' },
+  { key: 'checks',        type: 'tab',   label: 'Проверки',      icon: <ListChecks className="h-4 w-4" />, id: 'checks' },
+  { key: 'lectures',      type: 'tab',   label: 'Лекции',        icon: <BookOpen className="h-4 w-4" />,   id: 'lectures' },
+  { key: 'vu',            type: 'tab',   label: 'ВУ',            icon: <Shield className="h-4 w-4" />,     id: 'vu' },
+  { key: 'laws',          type: 'tab',   label: 'Законы',        icon: <BookOpen className="h-4 w-4" />,   id: 'laws' },
 ];
 
 export default function Sidebar() {
@@ -80,7 +85,7 @@ export default function Sidebar() {
   const sidebarContent = (
     <>
       <div className="mb-4 flex items-center justify-start">
-        <Link to="/" className="text-sm font-semibold tracking-tight text-[color:var(--text-1)] no-underline focus:outline-none focus:ring-2 focus:ring-[color:var(--accent-600)]/60 hover:opacity-90" aria-label="Справочник SKY">
+        <Link to="/home" className="text-sm font-semibold tracking-tight text-[color:var(--text-1)] no-underline focus:outline-none focus:ring-2 focus:ring-[color:var(--accent-600)]/60 hover:opacity-90" aria-label="Справочник SKY">
           Справочник SKY
         </Link>
       </div>
@@ -88,11 +93,12 @@ export default function Sidebar() {
       <nav role="navigation" className="grid max-h-[calc(100vh-160px)] gap-1 overflow-y-auto pr-1">
         <ul className="flex flex-col gap-1">
           {NAV.map((n) => {
-            const active = isActive(n.id);
+            const active = n.type === 'route' ? loc.pathname === n.to : isActive(n.id);
+            const to = n.type === 'route' ? n.to : buildTo(n.id);
             return (
-              <li key={n.id}>
+              <li key={n.key}>
                 <Link
-                  to={buildTo(n.id)}
+                  to={to}
                   className={[linkBaseClass, active ? linkActiveClass : ''].filter(Boolean).join(' ')}
                   aria-current={active ? 'page' : undefined}
                   aria-label={n.label}

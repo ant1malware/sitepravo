@@ -925,7 +925,9 @@ function hydrateSave(raw: unknown): Save {
 
   const dailyRaw = typeof data.daily === 'object' && data.daily ? data.daily : {};
   const questsRaw = Array.isArray((dailyRaw as any).quests) ? (dailyRaw as any).quests : [];
-  const quests = questsRaw.map(normalizeQuest).filter((q): q is Quest => q !== null);
+  const quests = questsRaw
+    .map((quest: unknown) => normalizeQuest(quest))
+    .filter((quest: Quest | null): quest is Quest => quest !== null);
   const daily: Daily = {
     ...base.daily,
     date: typeof (dailyRaw as any).date === 'string' ? (dailyRaw as any).date : base.daily.date,
@@ -2621,10 +2623,14 @@ export default function BuddyPlayground() {
   }, [setSave]);
 
   const toggleSounds = React.useCallback(() => {
-    setSave((s) => ({
-      ...s,
-      config: { ...(s.config ?? {}), sounds: !(s.config?.sounds ?? true) },
-    }));
+    setSave((s) => {
+      const config: ChebConfig = {
+        animations: s.config?.animations ?? true,
+        sounds: !(s.config?.sounds ?? true),
+        haptics: s.config?.haptics,
+      };
+      return { ...s, config };
+    });
   }, [setSave]);
 
   const log = (line: string) => setSave((s) => ({ ...s, log: [line, ...s.log].slice(0, 20) }));

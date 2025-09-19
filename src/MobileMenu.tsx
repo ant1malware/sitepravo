@@ -54,18 +54,21 @@ export default function MobileMenu() {
         </header>
         <nav className="flex-1 overflow-y-auto px-2 py-2">
           <ul className="grid gap-2">
-            {NAV.map(n => (
-              <li key={n.id}>
-                <Link
-                  to={buildTo(n.id)}
-                  className="flex items-center gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white/95 dark:bg-zinc-900/90 px-3 py-3 text-base text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100/70 dark:hover:bg-zinc-800/70 transition active:scale-[0.99]"
-                  onClick={() => setOpen(false)}
-                >
-                  {n.icon}
-                  <span className="truncate">{n.label}</span>
-                </Link>
-              </li>
-            ))}
+            {NAV.map((n) => {
+              const to = n.type === 'route' ? n.to : buildTo(n.id);
+              return (
+                <li key={n.key}>
+                  <Link
+                    to={to}
+                    className="flex items-center gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white/95 dark:bg-zinc-900/90 px-3 py-3 text-base text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100/70 dark:hover:bg-zinc-800/70 transition active:scale-[0.99]"
+                    onClick={() => setOpen(false)}
+                  >
+                    {n.icon}
+                    <span className="truncate">{n.label}</span>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <Link to="/favorites" className="btn btn-secondary"><Star className="h-4 w-4" /> РР·Р±СЂР°РЅРЅРѕРµ</Link>

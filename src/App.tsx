@@ -9,6 +9,7 @@ const RolePage = React.lazy(() => import('./RolePage'));
 const LawPage = React.lazy(() => import('./LawPage'));
 const VuPage = React.lazy(() => import('./VuPage'));
 const BuddyPlayground = React.lazy(() => import('./BuddyPlayground'));
+const HomePage = React.lazy(() => import('./HomePage'));
 import RecorderPage from './RecorderPage';
 import AboutPage from './AboutPage';
 import CommandPalette from "./CommandPalette";
@@ -77,6 +78,7 @@ export default function App() {
       <React.Suspense fallback={<div className="p-4 text-sm text-zinc-300">Загрузка…</div>}>
         <Routes>
           <Route path="/" element={<GovCheatsheetSky />} />
+          <Route path="/home" element={<HomePage />} />
           <Route path="/whats-new" element={<WhatsNew />} />
           <Route path="/diff/:id" element={<DiffPage />} />
           <Route path="/print" element={<PrintSheet />} />
