@@ -83,9 +83,6 @@ export default function HomePage() {
             <h2 className="text-lg font-semibold">Командный чат</h2>
           </div>
           <SimpleChat room="global" className="bg-transparent border-0 p-0" />
-          <p className="mt-2 text-xs text-white/50">
-            Админ назначается автоматически после входа по секретной ссылке.
-          </p>
         </div>
       </section>
     </main>
