@@ -158,8 +158,9 @@ export default {
     if (req.method === 'POST' && url.pathname === '/admin/nick-epoch/bump') {
       if (!adminAuthorized(req, env)) return text(req, 'Unauthorized', { status: 401 })
       const cur = await readNickEpoch(env)
-      await writeNickEpoch(env, cur + 1)
-      return text(req, 'ok')
+      const next = cur + 1
+      await writeNickEpoch(env, next)
+      return json(req, { epoch: next })
     }
     if (req.method === 'POST' && url.pathname === '/admin/nick-epoch/set') {
       if (!adminAuthorized(req, env)) return text(req, 'Unauthorized', { status: 401 })
@@ -307,7 +308,7 @@ export class ChatRoom {
     try {
       const history: ChatMessage[] = (await this.state.storage.get<ChatMessage[]>('history')) || []
       ws.send(JSON.stringify({ type: 'history', messages: history }))
-      ws.send(JSON.stringify({ type: 'system', text: isAdminInitial ? 'admin-ok' : 'hello-ok', name: session.name }))
+      ws.send(JSON.stringify({ type: 'system', text: isAdminInitial ? 'admin-ok' : 'hello-ok' }))
     } catch (e) {
       console.error('do:history send failed', e)
     }

@@ -33,7 +33,7 @@ const NICKS = [
 function suggestNick(): string {
   const base = NICKS[Math.floor(Math.random() * NICKS.length)];
   const suffix = Math.floor(Math.random() * 900 + 100);
-  return `${base} #${suffix}`;
+  return `${base} ${suffix}`;
 }
 
 function parseWsData(data: any): ServerEvent | null {
@@ -125,6 +125,14 @@ export default function SimpleChat({ room = 'global', className }: Props) {
   const [needNick, setNeedNick] = React.useState<boolean>(true);
   const [nickDraft, setNickDraft] = React.useState<string>(suggestNick());
 
+  const latestStateRef = React.useRef<{ epochReady: boolean; needNick: boolean; nick: string | null }>({
+    epochReady,
+    needNick,
+    nick,
+  });
+  const keysRef = React.useRef(keys);
+  const helloSentRef = React.useRef<string | null>(null);
+
   // Подтянули epoch — теперь читаем текущие ключи и решаем, нужна ли модалка
   React.useEffect(() => {
     if (!epochReady) return;
@@ -152,6 +160,18 @@ export default function SimpleChat({ room = 'global', className }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [epochReady, keys.NAME_KEY, keys.NAME_LOCK]);
 
+  React.useEffect(() => {
+    latestStateRef.current = { epochReady, needNick, nick };
+  }, [epochReady, needNick, nick]);
+
+  React.useEffect(() => {
+    keysRef.current = keys;
+  }, [keys]);
+
+  React.useEffect(() => {
+    if (needNick) helloSentRef.current = null;
+  }, [needNick]);
+
   // тянем epoch с воркера один раз
   React.useEffect(() => {
     let aborted = false;
@@ -177,20 +197,26 @@ export default function SimpleChat({ room = 'global', className }: Props) {
     if (!wsUrl) return;
     let stop = false;
     let retry = 0;
+    let ws: WebSocket | null = null;
 
     const connect = () => {
       if (stop) return;
+      setConnected(false);
       const url = new URL(wsUrl);
       url.searchParams.set('room', room);
-      const ws = new WebSocket(url);
+      ws = new WebSocket(url);
       wsRef.current = ws;
 
       ws.addEventListener('open', () => {
         setConnected(true);
+        pendingRef.current = {};
         retry = 0;
-        // hello ШЛЁМ ТОЛЬКО когда epoch известен и модалка закрыта
-        if (epochReady && nick && !needNick) {
-          ws.send(JSON.stringify({ type: 'hello', name: nick }));
+        const { epochReady: ready, needNick: need, nick: currentNick } = latestStateRef.current;
+        if (ready && currentNick && !need) {
+          try {
+            ws!.send(JSON.stringify({ type: 'hello', name: currentNick }));
+            helloSentRef.current = currentNick;
+          } catch {}
         }
       });
 
@@ -228,13 +254,16 @@ export default function SimpleChat({ room = 'global', className }: Props) {
             setMessages((arr) => arr.map((m) => (m.id === parsed!.id ? { ...m, text: parsed!.text } : m)));
           } else if (parsed.type === 'system') {
             if (parsed.text === 'admin-ok') setIsAdmin(true);
-            if (parsed.text === 'hello-ok') setIsAdmin(false);
-            if (parsed.name) {
+            else if (parsed.text === 'hello-ok' && !parsed.name) setIsAdmin(false);
+            if (parsed.name && (parsed.text === 'hello-ok' || parsed.text === 'admin-ok')) {
               // сервер сообщил окончательное имя
               setNick(parsed.name);
+              setNickDraft(parsed.name);
+              helloSentRef.current = parsed.name;
               try {
-                localStorage.setItem(keys.NAME_KEY, parsed.name);
-                localStorage.setItem(keys.NAME_LOCK, '1');
+                const { NAME_KEY, NAME_LOCK } = keysRef.current;
+                localStorage.setItem(NAME_KEY, parsed.name);
+                localStorage.setItem(NAME_LOCK, '1');
               } catch {}
               setNeedNick(false); // закрываем модалку ТОЛЬКО здесь
             }
@@ -243,32 +272,49 @@ export default function SimpleChat({ room = 'global', className }: Props) {
       });
 
       const onClose = () => {
-        setConnected(false);
         if (stop) return;
+        setConnected(false);
         retry = Math.min(retry + 1, 6);
         setTimeout(connect, 400 * retry);
       };
       ws.addEventListener('close', onClose);
-      ws.addEventListener('error', () => ws.close());
+      ws.addEventListener('error', () => ws?.close());
     };
 
     connect();
     return () => {
       stop = true;
-      try { wsRef.current?.close(); } catch {}
+      try { ws?.close(); } catch {}
+      wsRef.current = null;
+      helloSentRef.current = null;
     };
-  }, [wsUrl, room, epochReady, nick, needNick, keys.NAME_KEY, keys.NAME_LOCK]);
+  }, [wsUrl, room]);
+
+  React.useEffect(() => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!epochReady || needNick || !nick) return;
+    if (helloSentRef.current === nick) return;
+    try {
+      ws.send(JSON.stringify({ type: 'hello', name: nick }));
+      helloSentRef.current = nick;
+    } catch {}
+  }, [epochReady, needNick, nick]);
 
   // действия
   function confirmNick() {
     const clean = (nickDraft || '').trim().slice(0, 80);
-    const finalName = (clean || suggestNick()).replace(/[^\p{L}\p{N}_# -]+/gu, '');
+    const finalName = (clean || suggestNick()).replace(/[^\p{L}\p{N}_ -]+/gu, '');
     setNick(finalName);
+    setNickDraft(finalName);
     try { localStorage.setItem(keys.NAME_KEY, finalName); } catch {}
 
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'hello', name: finalName }));
+      try {
+        ws.send(JSON.stringify({ type: 'hello', name: finalName }));
+        helloSentRef.current = finalName;
+      } catch {}
     }
     // модалку НЕ закрываем — дождёмся system.name от сервера
   }
