@@ -46,7 +46,8 @@ export default defineConfig(({ mode }) => {
       noJekyllPlugin(isGh),
       copy404Plugin(outDir),
     ],
-    base: isGh ? '/pravo/' : '/', // имя репозитория
+    // имя репозитория на GitHub Pages:
+    base: isGh ? '/betatestik/' : '/',
     define: { __APP_VERSION__: JSON.stringify(version) },
     build: {
       outDir,
