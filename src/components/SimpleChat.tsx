@@ -11,7 +11,7 @@ type ServerEvent =
   | { type: 'message'; message: ChatMessage; cid?: string }
   | { type: 'delete'; id: string }
   | { type: 'edit'; id: string; text: string }
-  | { type: 'system'; text: string; name?: string };
+  | { type: 'system'; text: string; name?: string; count?: number };
 
 type Props = {
   room?: string;
@@ -52,11 +52,16 @@ function hhmmss(ts: number) {
 }
 
 const CHAT_CSS = `
-.rc-wrap{border:1px solid #111;background:#111;border-radius:4px;overflow:hidden;font:13px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,'Helvetica Neue',Arial}
-.rc-head{padding:6px 8px;color:#c9d1d9;background:#0e0e0f;border-bottom:1px solid #0b0b0b;display:flex;justify-content:space-between;align-items:center}
-.rc-head .pill{display:inline-flex;align-items:center;gap:6px;border-radius:10px;padding:2px 8px;font-size:12px}
-.rc-pill-online{background:#193a2b;color:#7ee787;border:1px solid #2ea04344}
-.rc-pill-admin{background:#1a2438;color:#79c0ff;border:1px solid #79c0ff33}
+.rc-wrap{border:1px solid #111;background:rgba(15,16,18,.92);border-radius:12px;overflow:hidden;font:13px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,'Helvetica Neue',Arial, sans-serif;box-shadow:0 20px 40px rgba(0,0,0,.35)}
+.rc-head{padding:12px 14px;color:#d1d5db;background:rgba(12,13,16,.92);border-bottom:1px solid rgba(148,163,184,.12);display:flex;justify-content:space-between;align-items:center;gap:16px}
+.rc-head-title{font-weight:600;font-size:14px;letter-spacing:.02em;text-transform:uppercase;color:#e2e8f0}
+.rc-head-meta{display:flex;align-items:center;gap:12px}
+.rc-presence{display:flex;align-items:center;gap:8px;font-size:12px;color:#94a3b8;letter-spacing:.01em}
+.rc-presence-dot{width:10px;height:10px;border-radius:999px;background:#ef4444;box-shadow:0 0 12px rgba(239,68,68,.4);transition:all .25s ease}
+.rc-presence-dot.on{background:#22c55e;box-shadow:0 0 12px rgba(34,197,94,.45)}
+.rc-presence-count{display:flex;align-items:baseline;gap:4px;font-weight:600;color:#f8fafc}
+.rc-presence-count span{font-size:11px;font-weight:500;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em}
+.rc-role-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(56,189,248,.12);color:#bae6fd;font-size:11px;letter-spacing:.08em;border:1px solid rgba(56,189,248,.3)}
 .rc-list{height:280px;overflow:auto;background:#1a1a1b}
 .rc-list ul{list-style:none;margin:0;padding:0}
 .rc-list li{padding:3px 8px;white-space:pre-wrap;word-break:break-word}
@@ -113,6 +118,7 @@ export default function SimpleChat({ room = 'global', className }: Props) {
 
   // === 2) chat state ===
   const [connected, setConnected] = React.useState(false);
+  const [onlineCount, setOnlineCount] = React.useState<number>(0);
   const [isAdmin, setIsAdmin] = React.useState(false);
   const [input, setInput] = React.useState('');
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
@@ -211,6 +217,7 @@ export default function SimpleChat({ room = 'global', className }: Props) {
         setConnected(true);
         pendingRef.current = {};
         retry = 0;
+        setOnlineCount(0);
         const { epochReady: ready, needNick: need, nick: currentNick } = latestStateRef.current;
         if (ready && currentNick && !need) {
           try {
@@ -255,6 +262,10 @@ export default function SimpleChat({ room = 'global', className }: Props) {
           } else if (parsed.type === 'system') {
             if (parsed.text === 'admin-ok') setIsAdmin(true);
             else if (parsed.text === 'hello-ok' && !parsed.name) setIsAdmin(false);
+            if (parsed.text === 'presence') {
+              const next = Number(parsed.count);
+              setOnlineCount(Number.isFinite(next) && next > 0 ? Math.round(next) : 0);
+            }
             if (parsed.name && (parsed.text === 'hello-ok' || parsed.text === 'admin-ok')) {
               // сервер сообщил окончательное имя
               setNick(parsed.name);
@@ -274,6 +285,7 @@ export default function SimpleChat({ room = 'global', className }: Props) {
       const onClose = () => {
         if (stop) return;
         setConnected(false);
+        setOnlineCount(0);
         retry = Math.min(retry + 1, 6);
         setTimeout(connect, 400 * retry);
       };
@@ -357,12 +369,16 @@ export default function SimpleChat({ room = 'global', className }: Props) {
 
       <div className="rc-wrap" aria-busy={!epochReady}>
         <div className="rc-head">
-          <div>Chat</div>
-          <div>
-            <span className={`pill ${connected ? 'rc-pill-online' : ''}`}>
-              {connected ? 'online' : (epochReady ? 'offline' : '…')}
-            </span>
-            {isAdmin && <span className="pill rc-pill-admin" style={{ marginLeft: 6 }}>Admin</span>}
+          <div className="rc-head-title">Командный чат</div>
+          <div className="rc-head-meta">
+            <div className="rc-presence" role="status" aria-live="polite">
+              <span className={`rc-presence-dot ${connected ? 'on' : ''}`} aria-hidden />
+              <span className="rc-presence-count">
+                {connected ? Math.max(onlineCount, 0) : 0}
+                <span>в сети</span>
+              </span>
+            </div>
+            {isAdmin && <span className="rc-role-pill">ADMIN</span>}
           </div>
         </div>
 

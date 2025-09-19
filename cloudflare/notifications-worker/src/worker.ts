@@ -313,14 +313,34 @@ export class ChatRoom {
       console.error('do:history send failed', e)
     }
 
+    this.broadcastPresence()
+
     const keepAlive = setInterval(() => {
       try { ws.send(JSON.stringify({ type: 'system', text: 'ping' })) } catch {}
     }, 30_000)
 
     ws.addEventListener('message', (ev) => this.onMessage(session, ev.data))
-    const cleanup = () => { clearInterval(keepAlive); this.sessions.delete(session); console.log('do:close', { sessions: this.sessions.size }) }
+    const cleanup = () => {
+      clearInterval(keepAlive)
+      this.sessions.delete(session)
+      console.log('do:close', { sessions: this.sessions.size })
+      this.broadcastPresence()
+    }
     ws.addEventListener('close', cleanup)
     ws.addEventListener('error', () => { try { ws.close() } catch {} cleanup() })
+  }
+
+  broadcastPresence() {
+    if (!this.sessions.size) return
+    const payload = JSON.stringify({ type: 'system', text: 'presence', count: this.sessions.size })
+    for (const sess of this.sessions) {
+      try {
+        sess.ws.send(payload)
+      } catch (err) {
+        console.warn('do:presence send failed', err)
+        try { sess.ws.close() } catch {}
+      }
+    }
   }
 
   async onMessage(session: Session, data: any) {
