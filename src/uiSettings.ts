@@ -7,6 +7,7 @@ const SHADOW_KEY = 'ui:shadow'; // 'none' | 'soft' | 'strong'
 const RADIUS_KEY = 'ui:radius'; // 'subtle' | 'standard' | 'rounded'
 const GLASS_KEY = 'ui:glass'; // number px (0..16)
 const READW_KEY = 'ui:readw'; // number ch (60..96)
+const ANIM_KEY = 'ui:anim'; // '1' | '0'
 
 export type Density = 'standard' | 'compact';
 export type Shadow = 'none' | 'soft' | 'strong';
@@ -128,5 +129,16 @@ export function initUi() {
     applyRadius(getRadius());
     applyGlass(getGlass());
     applyReadingWidth(getReadingWidth());
+    applyAnimations(getAnimationsOn());
   } catch {}
+}
+
+// Animations on/off
+export function applyAnimations(on: boolean) {
+  const root = document.documentElement;
+  root.classList.toggle('anim-off', !on);
+  try { localStorage.setItem(ANIM_KEY, on ? '1' : '0'); } catch {}
+}
+export function getAnimationsOn(): boolean {
+  try { return localStorage.getItem(ANIM_KEY) !== '0'; } catch { return true; }
 }

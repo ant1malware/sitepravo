@@ -1,6 +1,6 @@
 ﻿import React from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, Search, Star, Settings, MessageSquare, Menu } from 'lucide-react';
+import { Building2, Search, Star, Settings, MessageSquare, Menu, Ghost } from 'lucide-react';
 import { getWhatsNew } from './versioning';
 import { useStyleMode } from './useStyleMode';
 import LiquidGlass from './components/LiquidGlass';
@@ -13,27 +13,18 @@ export default function GlobalTopbar() {
       if (!it) return false;
       const d = new Date(it.date + 'T00:00:00Z');
       return (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24) <= 14;
-    } catch {
-      return false;
-    }
+    } catch { return false; }
   }, []);
 
   function openSearch() {
     const api = (window as any).openCommandPalette;
-    if (typeof api === 'function') {
-      try {
-        api();
-        return;
-      } catch {}
-    }
+    if (typeof api === 'function') { try { api(); return; } catch {} }
     const meta = navigator.platform.includes('Mac');
-    window.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'k', ctrlKey: !meta, metaKey: meta } as any)
-    );
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: !meta, metaKey: meta } as any));
   }
 
   const innerClasses = 'global-topbar__inner mx-auto flex max-w-6xl items-center justify-between gap-1 px-4 py-3 sm:gap-3';
-  const shellClass = styleMode === 'liquid'
+  const shellClass = styleMode === 'liquid' || styleMode === 'beta'
     ? 'global-topbar-shell sticky top-0 z-50 border-transparent bg-transparent px-2 sm:px-4'
     : 'global-topbar-shell sticky top-0 z-40 border-b border-zinc-200 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:border-zinc-800 dark:bg-[color:var(--surface)]/90 dark:supports-[backdrop-filter]:bg-[color:var(--surface)]/70';
 
@@ -53,9 +44,7 @@ export default function GlobalTopbar() {
         </button>
         <Link to="/whats-new" className="btn" aria-label="Что нового">
           <span className="hidden sm:inline">Что нового</span>
-          {hasNews && (
-            <span className="ml-2 inline-block h-2 w-2 rounded-full bg-amber-500" />
-          )}
+          {hasNews && (<span className="ml-2 inline-block h-2 w-2 rounded-full bg-amber-500" />)}
         </Link>
         <Link to="/favorites" className="btn" aria-label="Избранное">
           <Star className="h-4 w-4" />
@@ -65,13 +54,7 @@ export default function GlobalTopbar() {
           <Settings className="h-4 w-4" />
           <span className="hidden sm:inline">Настройки</span>
         </Link>
-        <a
-          href="https://t.me/pasha_bolshoi"
-          target="_blank"
-          rel="noreferrer"
-          className="btn"
-          aria-label="Связаться в Telegram"
-        >
+        <a href="https://t.me/pasha_bolshoi" target="_blank" rel="noreferrer" className="btn" aria-label="Связаться в Telegram">
           <MessageSquare className="h-4 w-4" />
           <span className="hidden sm:inline">Связаться</span>
         </a>
@@ -82,15 +65,7 @@ export default function GlobalTopbar() {
   return (
     <div className={shellClass}>
       {styleMode === 'liquid' ? (
-        <LiquidGlass
-          className={`${innerClasses} global-topbar__glass`}
-          blur={26}
-          tint="16 18 34"
-          opacity={0.24}
-          gloss={0.65}
-          elevation={1.2}
-          interactive={false}
-        >
+        <LiquidGlass className={`${innerClasses} global-topbar__glass`} blur={26} tint="16 18 34" opacity={0.24} gloss={0.65} elevation={1.2} interactive={false} animate>
           {content}
         </LiquidGlass>
       ) : (
@@ -99,3 +74,4 @@ export default function GlobalTopbar() {
     </div>
   );
 }
+

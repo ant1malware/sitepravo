@@ -1,7 +1,10 @@
 ﻿export type Theme = 'light' | 'dark';
 export type Accent = 'indigo' | 'violet' | 'blue' | 'custom';
 export type Background = 'none' | 'bg1' | 'bg2' | 'bg3' | 'bg4' | 'bg5' | 'custom';
-export type StyleMode = 'classic' | 'liquid';
+
+export type StyleMode = 'classic' | 'liquid' | 'beta';
+export type LiquidTone = 'dark' | 'light';
+
 
 const STORAGE_KEY = 'theme';
 const ACCENT_KEY = 'accent';
@@ -9,6 +12,8 @@ const ACCENT_CUSTOM_KEY = 'accent_custom';
 const BG_KEY = 'bg';
 const BG_CUSTOM_KEY = 'bg_custom';
 const STYLE_MODE_KEY = 'ui:style-mode';
+const LIQUID_PREV_THEME_KEY = 'ui:liquid:prev-theme';
+const LIQUID_TONE_KEY = 'ui:liquid:tone';
 
 export const ACCENTS: Record<Exclude<Accent, 'custom'>, { 500: string; 600: string }> = {
   indigo: { 500: '#6366F1', 600: '#4F46E5' },
@@ -16,7 +21,8 @@ export const ACCENTS: Record<Exclude<Accent, 'custom'>, { 500: string; 600: stri
   blue:   { 500: '#3B82F6', 600: '#2563EB' },
 };
 
-// Р±РµР·РѕРїР°СЃРЅС‹Р№ join BASE_URL + РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅС‹Р№ РїСѓС‚СЊ (Р±РµР· new URL)
+
+
 const BASE = (import.meta as any)?.env?.BASE_URL ?? '/';
 const asset = (p: string) => {
   const clean = p.replace(/^\/+/, '');
@@ -48,7 +54,8 @@ export function getStoredCustomAccent(): string | null {
 }
 
 export function getStoredBackground(): Background | null {
- const v = localStorage.getItem(BG_KEY);
+const v = localStorage.getItem(BG_KEY);
+
   return v && (v === 'none' || v === 'custom' || v in BACKGROUNDS) ? (v as Background) : null;
 }
 
@@ -58,14 +65,38 @@ export function getStoredCustomBackground(): string | null {
 
 export function getStoredStyleMode(): StyleMode | null {
   const v = localStorage.getItem(STYLE_MODE_KEY);
-  return v === 'classic' || v === 'liquid' ? v : null;
+  return v === 'classic' || v === 'liquid' || v === 'beta' ? v as StyleMode : null;
+}
+
+export function getStoredLiquidTone(): LiquidTone {
+  const v = (localStorage.getItem(LIQUID_TONE_KEY) || 'dark') as LiquidTone;
+  return v === 'light' ? 'light' : 'dark';
+}
+
+export function applyLiquidTone(tone: LiquidTone) {
+  try { localStorage.setItem(LIQUID_TONE_KEY, tone); } catch {}
+  const root = document.documentElement;
+  root.classList.toggle('liquid-light', tone === 'light');
+  root.classList.toggle('liquid-dark', tone !== 'light');
+  // If Liquid mode is active, sync base theme for better contrast
+  if (root.classList.contains('theme-liquid')) {
+    try { applyTheme(tone === 'light' ? 'light' : 'dark'); } catch {}
+  }
 }
 
 export function applyStyleMode(mode: StyleMode) {
   const root = document.documentElement;
   root.classList.toggle('theme-liquid', mode === 'liquid');
+  root.classList.toggle('theme-beta', mode === 'beta');
   root.dataset.styleMode = mode;
-  if (mode === 'liquid') {
+  if (mode === 'liquid' || mode === 'beta') {
+    // Force dark theme for Liquid mode and remember previous theme
+    try {
+      const prev = getStoredTheme() ?? (systemPrefersDark() ? 'dark' : 'light');
+      localStorage.setItem(LIQUID_PREV_THEME_KEY, prev);
+      const tone = getStoredLiquidTone();
+      applyLiquidTone(tone);
+    } catch {}
     try {
       const body = document.body;
       body.style.removeProperty('background');
@@ -75,6 +106,14 @@ export function applyStyleMode(mode: StyleMode) {
       body.style.removeProperty('background-position');
     } catch {}
   } else {
+    // Restore theme that was active before Liquid mode
+    try {
+      const prev = localStorage.getItem(LIQUID_PREV_THEME_KEY) as Theme | null;
+      if (prev === 'light' || prev === 'dark') {
+        applyTheme(prev);
+      }
+      localStorage.removeItem(LIQUID_PREV_THEME_KEY);
+    } catch {}
     try {
       const bg = getStoredBackground() ?? 'none';
       applyBackground(bg);
@@ -157,7 +196,6 @@ export function applyBackground(b: Background) {
       body.style.backgroundPosition = 'center';
     }
   } else {
-    // BACKGROUNDS already includes BASE_URL via asset()
     const url = BACKGROUNDS[b];
     body.style.backgroundImage = `url(${url})`;
     body.style.backgroundSize = 'cover';
@@ -215,12 +253,3 @@ function shadeHexColor(hex: string, percent: number): string {
   const toHex = (v: number) => v.toString(16).padStart(2, '0');
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
-
-
-
-
-
-
-
-
-

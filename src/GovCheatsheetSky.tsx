@@ -17,7 +17,8 @@ import {
   AlertCircle,
   Send,
   Settings,
- ListChecks } from "lucide-react";
+ ListChecks, Home as HomeIcon } from "lucide-react";
+import SimpleChat from "./components/SimpleChat";
 
 import { rolesData } from "./roles";
 import { lawsData } from "./laws";

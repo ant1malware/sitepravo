@@ -1,4 +1,4 @@
-﻿@import url('https://rsms.me/inter/inter.css');
+@import url('https://rsms.me/inter/inter.css');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -6,6 +6,7 @@
 /* Theme tokens and component utilities */
 :root {
   color-scheme: light dark;
+  --sidebar-w: 240px;
   /* Surfaces */
   --bg-1: #f8f9fb;      /* app background */
   --bg-2: #ffffff;      /* elevated surface */
@@ -146,10 +147,10 @@ header.sticky.top-0,
 
 :root { color-scheme: light dark; }
 
-/* РЈРјРµРЅСЊС€Р°РµРј Р»РµРІС‹Р№ РѕС‚СЃС‚СѓРї СЃРїРёСЃРєРѕРІ РІРЅСѓС‚СЂРё СЃС‚СЂР°РЅРёС†С‹ Р·Р°РєРѕРЅР° */
+/* Уменьшаем левый отступ списков внутри страницы закона */
 .law :where(ol, ul) {
   margin-left: 0 !important;
-  padding-left: 1rem !important; /* РїСЂРё Р¶РµР»Р°РЅРёРё 0.75rem РёР»Рё 0 */
+  padding-left: 1rem !important; /* при желании 0.75rem или 0 */
 }
 .law :where(h1, h2, h3, h4, p) { margin-left: 0 !important; }
 
@@ -164,6 +165,94 @@ kbd { @apply rounded border border-zinc-400 bg-white px-1 text-[11px] font-mono 
   .vu h2 { @apply mt-4 border-b border-dotted border-zinc-300 pb-1 text-base font-semibold dark:border-zinc-700; }
   .vu p { @apply my-1.5; }
 }
+
+/* ===== Liquid animations ===== */
+@keyframes glassFloat {
+  0%   { transform: translate3d(0, 0, 0); }
+  50%  { transform: translate3d(0, -2px, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+@keyframes glassSheenSweep {
+  0%   { background-position: -120% 0; opacity: .0; }
+  25%  { opacity: .25; }
+  50%  { background-position: 120% 0; opacity: .0; }
+  100% { background-position: 120% 0; opacity: .0; }
+}
+@keyframes glowPulse {
+  0%,100% { filter: drop-shadow(0 0 0 rgba(126,158,255,0.0)); }
+  50%     { filter: drop-shadow(0 8px 24px rgba(126,158,255,0.25)); }
+}
+
+/* Apply to Liquid containers when requested */
+.liquid-glass[data-animate='true'] { animation: glassFloat 14s ease-in-out infinite; }
+.liquid-glass[data-animate='true']::after {
+  content: '';
+  position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(100deg, transparent 30%, rgba(255,255,255,.22) 50%, transparent 70%);
+  background-size: 220% 100%;
+  animation: glassSheenSweep 6s ease-in-out infinite;
+  mix-blend-mode: overlay;
+}
+html.theme-liquid .global-topbar__glass { animation: glassFloat 12s ease-in-out infinite; }
+html.theme-liquid .global-topbar__glass::after { animation: glowPulse 10s ease-in-out infinite; }
+
+/* Animate all cards in Liquid unless animations are off */
+html.theme-liquid:not(.anim-off) .card { animation: glassFloat 18s ease-in-out infinite; }
+
+/* Default animate all LiquidGlass blocks in Liquid */
+html.theme-liquid:not(.anim-off) .liquid-glass { animation: glassFloat 14s ease-in-out infinite; }
+html.theme-liquid:not(.anim-off) .liquid-glass::after { animation: glassSheenSweep 8s ease-in-out infinite; }
+
+/* Global kill switch */
+html.anim-off * { animation: none !important; }
+
+/* ===== Buddy (tiny helper) ===== */
+.buddy {
+  position: fixed;
+  left: 0; top: 0;
+  transform: translate3d(16px, 60px, 0);
+  z-index: 70;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+/* Показываем и на мобильных; позиция сохранная логикой Buddy */
+.buddy__hit {
+  pointer-events: auto;
+  border: 0; background: transparent; padding: 0; margin: 0;
+  width: 48px; height: 48px; border-radius: 999px;
+  display: grid; place-items: center;
+  filter: drop-shadow(0 6px 16px rgba(86,120,255,.45));
+  opacity: .85;
+  cursor: pointer;
+}
+.buddy__hit:hover { opacity: 1; transform: scale(1.02); }
+.buddy__hit:active { transform: scale(.98); }
+.buddy__bubble {
+  position: absolute;
+  bottom: 52px; left: 50%; transform: translateX(-50%);
+  pointer-events: none;
+  white-space: nowrap;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  color: var(--text-1);
+  background: rgba(var(--lg-tint, 16 18 36) / 0.85);
+  border: 1px solid rgba(140,150,210,0.28);
+  backdrop-filter: blur(10px) saturate(160%);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+  box-shadow: 0 10px 30px -16px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.12);
+  animation: fadeUp .25s ease, glassFloat 8s ease-in-out infinite;
+}
+@keyframes fadeUp { from { opacity: 0; transform: translate(-50%, 6px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* Buddy restore button when hidden */
+.buddy-restore { position: fixed; left: 8px; bottom: 12px; z-index: 48; pointer-events: none; }
+.buddy-restore__btn {
+  pointer-events: auto; width: 28px; height: 28px; border-radius: 999px; border: 1px solid rgba(140,150,210,0.28);
+  background: rgba(16,18,36,0.6); color: #fff; display: grid; place-items: center; cursor: pointer;
+  backdrop-filter: blur(8px) saturate(160%); -webkit-backdrop-filter: blur(8px) saturate(160%);
+}
+@media (max-width: 640px) { .buddy-restore { display: none; } }
 
 /* Anchor offset for sticky header */
 .law :where(h2, h3, h4) { scroll-margin-top: 80px; position: relative; }
@@ -216,7 +305,7 @@ button[data-ui="apply-btn"] { display: none !important; }
 /* Sidebar layout helper */
 .has-sidebar body { padding-left: 0; }
 @media (min-width: 1024px) { /* lg */
-  .has-sidebar body { padding-left: 240px; }
+  .has-sidebar body { padding-left: var(--sidebar-w, 240px); }
 }
 
 /* Sidebar perf polish */
@@ -239,7 +328,7 @@ button[data-ui="apply-btn"] { display: none !important; }
 /* Hide duplicate action buttons inside Gov header (moved to GlobalTopbar) */
 header.sticky.top-0 .md\:ml-auto { display: none !important; }
 
-/* ===== UI polish: СЃРµРіРјРµРЅС‚С‹, СЃР»Р°Р№РґРµСЂС‹, СЃРІРѕС‚С‡Рё, Рё fallback-РєР»Р°СЃСЃС‹ ===== */
+/* ===== UI polish: сегменты, слайдеры, свотчи, и fallback-классы ===== */
 
 /* Segmented control */
 .seg {
@@ -309,14 +398,14 @@ header.sticky.top-0 .md\:ml-auto { display: none !important; }
 .accent-swatch:hover { transform: translateY(-1px); box-shadow: 0 8px 24px -10px color-mix(in oklab, var(--sw2) 60%, transparent); }
 .accent-swatch.is-active { outline: 2px solid var(--accent-600, #4F46E5); outline-offset: 2px; }
 .accent-swatch.is-active::after {
-  content: "вњ“";
+  content: "✓";
   position: absolute;
   right: 6px; bottom: 4px;
   font-size: 12px; color: #fff;
   text-shadow: 0 1px 2px rgba(0,0,0,.4);
 }
 
-/* РЈР»СѓС‡С€РµРЅРЅС‹Р№ РІРёРґ .btn-primary */
+/* Улучшенный вид .btn-primary */
 .btn-primary {
   background: linear-gradient(180deg, var(--accent-500, #6366F1), var(--accent-600, #4F46E5));
   color: white;
@@ -325,7 +414,7 @@ header.sticky.top-0 .md\:ml-auto { display: none !important; }
 }
 .btn-primary:hover { filter: brightness(1.05); }
 
-/* ===== Fallback-РєР»Р°СЃСЃС‹, РµСЃР»Рё apply* РЅРµ С‚СЂРѕРіР°РµС‚ РїРµСЂРµРјРµРЅРЅС‹Рµ ===== */
+/* ===== Fallback-классы, если apply* не трогает переменные ===== */
 html.ui-shadow-none .card { box-shadow: none !important; }
 html.ui-shadow-soft .card { box-shadow: 0 12px 34px -14px rgba(0,0,0,.16) !important; }
 html.ui-shadow-strong .card { box-shadow: 0 28px 70px -24px rgba(0,0,0,.35) !important; }
@@ -346,16 +435,16 @@ html.has-glass .glass { backdrop-filter: blur(var(--glass-blur, 10px)); -webkit-
   padding-bottom: var(--safe-bot);
 }
 
-/* РјРѕР±РёР»СЊРЅС‹Рµ СѓР»СѓС‡С€РµРЅРёСЏ */
+/* мобильные улучшения */
 @media (max-width: 640px) {
   .card { padding: 12px; border-radius: 14px; }
   .seg-item { padding: 8px 12px; min-height: 40px; }
   .btn { min-height: 44px; padding: 10px 14px; }
-  .input { font-size: 16px; } /* С‡С‚РѕР±С‹ iOS РЅРµ РјР°СЃС€С‚Р°Р±РёСЂРѕРІР°Р» */
+  .input { font-size: 16px; } /* чтобы iOS не масштабировал */
   .app-sidebar a { padding-top: 10px; padding-bottom: 10px; }
 }
 
-/* С‡С‚РѕР±С‹ СЏРєРѕСЂРЅС‹Рµ СЃРµРєС†РёРё РЅРµ РїСЂСЏС‚Р°Р»РёСЃСЊ РїРѕРґ С„РёРєСЃ-С€Р°РїРєРѕР№ */
+/* чтобы якорные секции не прятались под фикс-шапкой */
 section, [id] { scroll-margin-top: 72px; }
 
 .badge {
@@ -363,14 +452,14 @@ section, [id] { scroll-margin-top: 72px; }
          dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200;
 }
 
-/* РєСЂСѓРїРЅР°СЏ, РЅРѕ Р°РґР°РїС‚РёРІРЅР°СЏ С‚РёРїРѕРіСЂР°С„РёРєР° РґР»СЏ hero */
+/* крупная, но адаптивная типографика для hero */
 .display-hero{
   font-size: clamp(34px, 5.8vw, 64px);
   line-height: 1.05;
   letter-spacing: -.01em;
 }
 
-/* РіСЂР°РґРёРµРЅС‚РЅС‹Р№ Р°РєС†РµРЅС‚ РІ Р·Р°РіРѕР»РѕРІРєРµ */
+/* градиентный акцент в заголовке */
 .accent-text{
   background: linear-gradient(90deg, var(--accent-500, #6366F1), var(--accent-600, #4F46E5));
   -webkit-background-clip: text;
@@ -378,10 +467,10 @@ section, [id] { scroll-margin-top: 72px; }
   color: transparent;
 }
 
-/* С‡СѓС‚СЊ РєСЂСѓРїРЅРµРµ РєРЅРѕРїРєРё */
+/* чуть крупнее кнопки */
 .btn-lg{ padding: 0.72rem 1.1rem; font-size: 1rem; border-radius: 0.8rem; }
 
-/* Р±РµР№РґР¶Рё (РµСЃР»Рё РµС‰С‘ РЅРµ РѕРїСЂРµРґРµР»РµРЅС‹) */
+/* бейджи (если ещё не определены) */
 .badge{
   display:inline-flex; align-items:center; gap:.5rem;
   padding:.35rem .6rem; border-radius:999px; font-size:.72rem; font-weight:600;
@@ -395,7 +484,7 @@ section, [id] { scroll-margin-top: 72px; }
   color: rgb(228 228 231);
 }
 
-/* РјСЏРіРєР°СЏ РїРѕРґСЃРІРµС‚РєР° РєР°СЂС‚РѕС‡РєРё hero */
+/* мягкая подсветка карточки hero */
 .hero-card{ position:relative; }
 .hero-spotlight{
   position:absolute; inset:-10%;
@@ -408,8 +497,8 @@ section, [id] { scroll-margin-top: 72px; }
 }
 .dark .hero-spotlight{ opacity: 1; }
 
-html.theme-liquid {
-  --bg-1: #050509;
+html.theme-liquid.liquid-dark {
+  --bg-1: #0b1020;
   --bg-2: rgba(12, 12, 18, 0.88);
   --surface: rgba(16, 16, 24, 0.78);
   --surface-2: rgba(24, 24, 36, 0.54);
@@ -423,15 +512,15 @@ html.theme-liquid {
   --accent: #7e9dff;
   --accent-600: #4f7cff;
   color-scheme: dark;
-  background-color: #050509;
+  background-color: #0b1020;
   background-image:
     radial-gradient(1200px 680px at 18% -5%, rgba(126, 158, 255, 0.18), transparent 65%),
     radial-gradient(1000px 720px at 90% 10%, rgba(60, 84, 210, 0.16), transparent 70%);
   background-attachment: fixed;
 }
 
-html.theme-liquid body {
-  background-color: #050509 !important;
+html.theme-liquid.liquid-dark body {
+  background-color: #0b1020 !important;
   background-image:
     radial-gradient(1100px 620px at 20% -10%, rgba(126, 158, 255, 0.16), transparent 65%),
     radial-gradient(1200px 820px at 90% 15%, rgba(60, 84, 210, 0.2), transparent 70%);
@@ -441,23 +530,32 @@ html.theme-liquid body {
 }
 
 html.theme-liquid .card {
-  background: rgba(8, 8, 18, 0.62);
-  border-color: rgba(144, 152, 210, 0.26);
-  box-shadow: 0 40px 90px -50px rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(30px);
-  -webkit-backdrop-filter: blur(30px);
+  background: rgba(8, 8, 18, 0.60);
+  border-color: rgba(144, 152, 210, 0.22);
+  box-shadow: 0 40px 90px -60px rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(var(--lg-blur, 28px)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--lg-blur, 28px)) saturate(150%);
   color: var(--text-1);
 }
 
+/* Liquid common button baseline (dark defaults) */
 html.theme-liquid .btn {
-  border-color: rgba(132, 140, 196, 0.28);
-  background-color: rgba(20, 20, 34, 0.58);
+  border-color: rgba(132, 140, 196, 0.24);
+  background-color: rgba(20, 20, 34, 0.52);
   color: var(--text-1);
 }
 
 html.theme-liquid .btn:hover {
-  background-color: rgba(34, 34, 50, 0.68);
+  background-color: rgba(34, 34, 50, 0.62);
 }
+
+/* Liquid Light buttons */
+html.theme-liquid.liquid-light .btn {
+  border-color: rgba(100, 120, 220, 0.22);
+  background-color: rgba(255, 255, 255, 0.7);
+  color: var(--text-1);
+}
+html.theme-liquid.liquid-light .btn:hover { background-color: rgba(255, 255, 255, 0.82); }
 
 html.theme-liquid .btn-primary {
   background: linear-gradient(140deg, rgba(126, 158, 255, 0.88), rgba(79, 124, 255, 0.88));
@@ -486,9 +584,9 @@ html.theme-liquid .seg-item {
 }
 
 html.theme-liquid .seg-item[aria-pressed='true'] {
-  background-color: rgba(126, 158, 255, 0.28);
+  background-color: rgba(126, 158, 255, 0.18);
   color: var(--text-1);
-  border-color: rgba(126, 158, 255, 0.45);
+  border-color: rgba(126, 158, 255, 0.32);
 }
 
 html.theme-liquid .badge {
@@ -514,10 +612,10 @@ html.theme-liquid .border-zinc-200 {
   border-color: rgba(144, 152, 210, 0.22) !important;
 }
 
-html.theme-liquid .bg-white,
-html.theme-liquid .bg-white\/80,
-html.theme-liquid .bg-white\/70,
-html.theme-liquid .bg-white\/60 {
+html.theme-liquid.liquid-dark .bg-white,
+html.theme-liquid.liquid-dark .bg-white\/80,
+html.theme-liquid.liquid-dark .bg-white\/70,
+html.theme-liquid.liquid-dark .bg-white\/60 {
   background-color: rgba(12, 12, 26, 0.7) !important;
 }
 
@@ -656,7 +754,7 @@ html.theme-liquid .global-topbar__glass::after {
   height: 220px;
   background: radial-gradient(closest-side, rgba(255, 255, 255, 0.35), transparent);
   mix-blend-mode: screen;
-  opacity: 0.5;
+  opacity: 0.35;
 }
 
 .glass-nav-link {
@@ -756,10 +854,10 @@ html.theme-liquid .mobile-menu-panel a:hover {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: 0.7;
+  opacity: 0.45;
   background: radial-gradient(850px 620px at 15% 0%, rgba(126, 158, 255, 0.22), transparent 60%),
               radial-gradient(750px 540px at 85% 8%, rgba(220, 120, 255, 0.18), transparent 68%);
-  filter: blur(14px);
+  filter: blur(12px);
   z-index: -2;
 }
 
@@ -770,6 +868,7 @@ html.theme-liquid .mobile-menu-panel a:hover {
   font-size: 13px;
   color: var(--text-2);
 }
+html.theme-liquid.liquid-dark .settings-breadcrumb { color: rgba(200, 210, 255, 0.65); }
 
 .settings-breadcrumb__link {
   color: inherit;
@@ -835,6 +934,7 @@ html.theme-liquid .mobile-menu-panel a:hover {
   font-size: 15px;
   color: rgba(255, 255, 255, 0.78);
 }
+html.theme-liquid.liquid-dark .settings-hero__subtitle { color: rgba(235, 238, 255, 0.76); }
 
 .settings-shell:not(.settings-shell--liquid) .settings-hero__badge { color: var(--text-2); background: rgba(0,0,0,0.06); }
 .settings-shell:not(.settings-shell--liquid) .settings-hero__subtitle { color: var(--text-2); }
@@ -848,6 +948,7 @@ html.theme-liquid .mobile-menu-panel a:hover {
   background: rgba(0, 0, 0, 0.18);
   color: rgba(255, 255, 255, 0.85);
 }
+html.theme-liquid.liquid-dark .settings-hero__stats { background: rgba(8, 10, 22, 0.35); color: rgba(245, 246, 255, 0.88); }
 
 .settings-shell:not(.settings-shell--liquid) .settings-hero__stats {
   background: rgba(0,0,0,0.04);
@@ -1048,9 +1149,9 @@ html.theme-liquid .card::before {
   content: '';
   position: absolute; inset: 0; pointer-events: none;
   background:
-    radial-gradient(220px 220px at var(--lg-x, 50%) var(--lg-y, 50%), rgba(255,255,255, calc(var(--lg-gloss, .8) * .55)) 0%, rgba(255,255,255,0) 60%),
-    radial-gradient(1px 1px at 50% 50%, rgba(255,255,255,.12) .5px, transparent .6px);
-  background-size: 100% 100%, 3px 3px;
+    radial-gradient(220px 220px at var(--lg-x, 50%) var(--lg-y, 50%), rgba(255,255,255, calc(var(--lg-gloss, .8) * .45)) 0%, rgba(255,255,255,0) 60%),
+    radial-gradient(1px 1px at 50% 50%, rgba(255,255,255,.06) .5px, transparent .6px);
+  background-size: 100% 100%, 4px 4px;
   background-repeat: no-repeat, repeat;
   mix-blend-mode: soft-light;
   mask-image: radial-gradient(200px 200px at var(--lg-x, 50%) var(--lg-y, 50%), rgba(0,0,0,.96) 0%, rgba(0,0,0,.22) 60%, transparent 100%);
@@ -1071,7 +1172,144 @@ html.theme-liquid .card::before {
 }
 
 /* Unified liquid glass tone (no auto dark/light) */
-html.theme-liquid {
-  --lg-tint: 16 18 36;
-  --lg-opacity: 0.22;
+html.theme-liquid.liquid-dark {
+  --lg-tint: 12 14 28;
+  --lg-opacity: 0.18;
+  --lg-blur: 28px;
+  --lg-gloss: 0.70;
+  --lg-elev: 1.1;
 }
+
+/* Liquid Light tone */
+html.theme-liquid.liquid-light {
+  --bg-1: #e9eef6;
+  --bg-2: rgba(255, 255, 255, 0.88);
+  --surface: rgba(255, 255, 255, 0.82);
+  --surface-2: rgba(245, 248, 255, 0.64);
+  --card: rgba(255, 255, 255, 0.74);
+  --border: rgba(80, 110, 200, 0.22);
+  --card-border: rgba(80, 110, 200, 0.22);
+  --text-1: #0a0a0a;
+  --text-2: #52525b;
+  --muted: #6b7280;
+  --ring: rgba(99, 102, 241, 0.45);
+  --accent: #6366F1;
+  --accent-600: #4F46E5;
+  color-scheme: light;
+  background-color: #f3f6ff;
+  background-image:
+    radial-gradient(1200px 680px at 18% -5%, rgba(126, 158, 255, 0.18), transparent 65%),
+    radial-gradient(1000px 720px at 90% 10%, rgba(60, 84, 210, 0.16), transparent 70%);
+  background-attachment: fixed;
+  --lg-tint: 238 242 252;
+  --lg-opacity: 0.26;
+  --lg-blur: 22px;
+  --lg-gloss: 0.5;
+  --lg-elev: 1.0;
+}
+html.theme-liquid.liquid-light body { background: var(--bg-1) !important; }
+
+/* ==========================
+   BETA THEME (experimental)
+   ========================== */
+html.theme-beta {
+  --bg-1: #070915;
+  --bg-2: rgba(10, 12, 26, 0.92);
+  --surface: rgba(12, 14, 30, 0.78);
+  --surface-2: rgba(16, 18, 40, 0.56);
+  --card: rgba(8, 10, 24, 0.6);
+  --border: rgba(64, 200, 255, 0.28);
+  --card-border: rgba(168, 85, 247, 0.22);
+  --text-1: #eff6ff;
+  --text-2: #97a5d0;
+  --muted: #7b88b5;
+  --ring: rgba(36, 198, 255, 0.45);
+  --accent: #22d3ee; /* cyan-400 */
+  --accent-600: #06b6d4; /* cyan-500 */
+  color-scheme: dark;
+  background-color: #070915;
+  background-image:
+    radial-gradient(1200px 720px at 15% -8%, rgba(34, 211, 238, 0.18), transparent 66%),
+    radial-gradient(1200px 820px at 92% 6%, rgba(168, 85, 247, 0.20), transparent 68%);
+  background-attachment: fixed;
+}
+
+html.theme-beta body { background: var(--bg-1) !important; color: var(--text-1); }
+
+/* Gradient-border glass cards */
+html.theme-beta .card {
+  position: relative;
+  background: linear-gradient(rgba(10,12,28,0.66), rgba(10,12,28,0.66));
+  border: 1px solid transparent;
+  background-clip: padding-box, border-box;
+  background-origin: border-box;
+  background-image:
+    linear-gradient(rgba(10,12,28,0.66), rgba(10,12,28,0.66)),
+    linear-gradient(135deg, rgba(34, 211, 238, 0.5), rgba(168, 85, 247, 0.5));
+  backdrop-filter: blur(26px) saturate(170%);
+  -webkit-backdrop-filter: blur(26px) saturate(170%);
+  box-shadow: 0 48px 120px -60px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.12);
+}
+
+/* Buttons: neon outline + subtle fill */
+html.theme-beta .btn {
+  border-color: rgba(80, 180, 255, 0.28);
+  background: linear-gradient(180deg, rgba(16,18,36,0.55), rgba(12,14,30,0.5));
+  color: var(--text-1);
+  box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.06);
+}
+html.theme-beta .btn:hover { background: linear-gradient(180deg, rgba(24,26,48,0.62), rgba(14,16,34,0.56)); }
+html.theme-beta .btn-primary {
+  color: #051014;
+  background: linear-gradient(120deg, #22d3ee, #a855f7);
+  border-color: transparent;
+  box-shadow: 0 28px 64px -28px rgba(34, 211, 238, 0.6);
+}
+
+/* Segmented control */
+html.theme-beta .seg { background: rgba(12,14,30,0.6); border-color: rgba(60, 180, 255, 0.18); }
+html.theme-beta .seg-item { color: var(--text-2); }
+html.theme-beta .seg-item[aria-pressed='true'] {
+  background: linear-gradient(120deg, rgba(34, 211, 238, 0.22), rgba(168, 85, 247, 0.22));
+  border-color: rgba(34, 211, 238, 0.4);
+  color: var(--text-1);
+}
+
+/* Topbar: floating gradient bar */
+html.theme-beta .global-topbar-shell { border-bottom: 0 !important; }
+html.theme-beta .global-topbar__inner {
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(12,14,30,0.88), rgba(14,16,34,0.6));
+  border: 1px solid rgba(70, 160, 255, 0.28);
+  backdrop-filter: blur(22px) saturate(170%);
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+  box-shadow: 0 36px 90px -50px rgba(36, 60, 120, 0.75), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+/* Sidebar + Mobile menu */
+html.theme-beta .app-sidebar {
+  background: rgba(10, 12, 28, 0.6) !important;
+  border-right: 1px solid rgba(70, 160, 255, 0.24) !important;
+  backdrop-filter: blur(28px) saturate(170%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(170%) !important;
+}
+html.theme-beta .mobile-menu-panel { background: rgba(10,12,28,0.92) !important; border-left: 1px solid rgba(70,160,255,0.24); }
+
+/* Settings shells get subtle neon fog */
+html.theme-beta .settings-shell--liquid::before,
+html.theme-beta .settings-shell--liquid::after,
+html.theme-beta .settings-shell::before,
+html.theme-beta .settings-shell::after {
+  content: '';
+  position: absolute; inset: 0; pointer-events: none; z-index: -2;
+  background: radial-gradient(900px 600px at 20% -5%, rgba(34,211,238,0.18), transparent 60%),
+              radial-gradient(1000px 700px at 88% 10%, rgba(168,85,247,0.16), transparent 65%);
+  filter: blur(12px); opacity: .5;
+}
+
+
+html.theme-liquid{ --sidebar-w:260px; }
+html.theme-beta{ --sidebar-w:260px; }
+
+html.theme-liquid{ --sidebar-w:260px; }
+html.theme-beta{ --sidebar-w:260px; }

@@ -1,0 +1,583 @@
+import React from 'react';
+import { Link } from 'react-router-dom';
+import LiquidGlass from './components/LiquidGlass';
+
+/**
+ * BuddyPlayground — v3 "Чебзик+" (апгрейд)
+ * — Новый прогресс: LVL / XP / Coins
+ * — Инвентарь и Магазин (печеньки, обед, игрушка, аптечка, подарки)
+ * — Мини‑игра «Поймай блик» (реакция, 15 сек)
+ * — Ежедневный вход (streak) и бонусы
+ * — Ачивки (бейджи) и лог событий
+ * — Редактор имени, экспорт/импорт сейва, сброс
+ * — Гладить Чебзика :) (считает для квеста)
+ * — Адаптировано под ваш LiquidGlass (тёмные тона)
+ *
+ * Drop‑in replacement файла BuddyPlayground.tsx
+ */
+
+// ---------- Типы и утилиты ----------
+
+type Stats = {
+  hunger: number;   // 0..100 (0 — сыт)
+  mood: number;     // 0..100
+  energy: number;   // 0..100
+  name: string;
+  last: number;     // ts последнего тика
+};
+
+type Inv = { cookie: number; meal: number; toy: number; medkit: number; gift: number };
+
+type Ach = Record<string, boolean>;
+
+type Daily = {
+  date: string;                          // YYYY-MM-DD
+  petGoal: number; petProgress: number;  // «погладь N раз»
+  winBlink: boolean;                     // «выиграй мини‑игру»
+  rewardClaimed: boolean;
+};
+
+type Game = {
+  xp: number;
+  level: number;
+  coins: number;
+  streak: number;
+  lastLogin: string; // YYYY-MM-DD
+  petCount: number;  // всего поглаживаний за всё время
+  minigameBest: number;
+};
+
+type Save = {
+  version: 3;
+  stats: Stats;
+  inv: Inv;
+  game: Game;
+  ach: Ach;
+  log: string[];
+  daily: Daily;
+};
+
+const K = 'buddy:save:v3';
+
+function clamp(v: number, a = 0, b = 100) { return Math.max(a, Math.min(b, v)); }
+function clamp01(x: number) { return clamp(x, 0, 1); }
+function todayStr() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${dd}`;
+}
+
+function defaultSave(): Save {
+  const date = todayStr();
+  return {
+    version: 3,
+    stats: { hunger: 35, mood: 70, energy: 80, name: 'Чебзик', last: Date.now() },
+    inv: { cookie: 2, meal: 1, toy: 1, medkit: 0, gift: 0 },
+    game: { xp: 0, level: 1, coins: 10, streak: 1, lastLogin: date, petCount: 0, minigameBest: 0 },
+    ach: {},
+    log: ['Чебзик появился в вашем мире! ✨'],
+    daily: { date, petGoal: 10, petProgress: 0, winBlink: false, rewardClaimed: false },
+  };
+}
+
+function migrate(): Save {
+  // Миграция со старого stats‑ключа, если он есть
+  try {
+    const rawV3 = localStorage.getItem(K);
+    if (rawV3) return JSON.parse(rawV3) as Save;
+  } catch {}
+
+  try {
+    const rawV1 = localStorage.getItem('buddy:stats:v1');
+    if (rawV1) {
+      const s = JSON.parse(rawV1) as { hunger: number; mood: number; name: string; last: number };
+      const base = defaultSave();
+      base.stats = { hunger: s.hunger ?? 35, mood: s.mood ?? 70, name: s.name ?? 'Чебзик', energy: 80, last: s.last ?? Date.now() };
+      base.log.unshift('Сейв мигрирован с v1 ✅');
+      return base;
+    }
+  } catch {}
+  return defaultSave();
+}
+
+// ---------- Хуки сохранения и тикер ----------
+
+function useSave(): [Save, React.Dispatch<React.SetStateAction<Save>>] {
+  const [save, setSave] = React.useState<Save>(() => migrate());
+  React.useEffect(() => { try { localStorage.setItem(K, JSON.stringify(save)); } catch {} }, [save]);
+  return [save, setSave];
+}
+
+function useLiquid(): boolean {
+  try { return document.documentElement.classList.contains('theme-liquid'); } catch { return false; }
+}
+
+// Аудио‑бип без ассетов
+const Beeper = (() => {
+  let ctx: AudioContext | null = null;
+  return {
+    beep(freq = 660, ms = 80, type: OscillatorType = 'sine') {
+      try {
+        ctx = ctx || new (window.AudioContext || (window as any).webkitAudioContext)();
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.type = type; o.frequency.value = freq; o.connect(g); g.connect(ctx.destination);
+        const t = ctx.currentTime; g.gain.setValueAtTime(0.001, t);
+        g.gain.exponentialRampToValueAtTime(0.2, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.001, t + ms/1000);
+        o.start(); o.stop(t + ms/1000 + 0.02);
+      } catch {}
+    }
+  };
+})();
+
+// ---------- UI атомарки ----------
+
+const Bar: React.FC<{ value: number; label: string; invert?: boolean; className?: string }> = ({ value, label, invert, className }) => (
+  <div className={className}>
+    <div className="text-xs uppercase tracking-wider opacity-70">{label}</div>
+    <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-white/10 dark:bg-zinc-800">
+      <div className="h-full rounded-full bg-[color:var(--accent)] transition-[width]" style={{ width: `${(invert ? (1-value) : value) * 100}%` }} />
+    </div>
+  </div>
+);
+
+const Pill: React.FC<React.PropsWithChildren<{ className?: string }>> = ({ children, className }) => (
+  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs bg-white/10 dark:bg-zinc-800 ${className??''}`}>{children}</span>
+);
+
+const SectionTitle: React.FC<React.PropsWithChildren> = ({ children }) => (
+  <div className="text-[13px] uppercase tracking-wider opacity-70">{children}</div>
+);
+
+// ---------- Мини‑игра «Поймай блик» ----------
+
+type MiniGameProps = {
+  onClose: () => void;
+  onFinish: (score: number) => void;
+};
+
+const MiniGameBlink: React.FC<MiniGameProps> = ({ onClose, onFinish }) => {
+  const W = 380, H = 220, R = 18; // размер поля
+  const [t, setT] = React.useState(15);
+  const [score, setScore] = React.useState(0);
+  const [pos, setPos] = React.useState({ x: 60, y: 60 });
+  const [running, setRunning] = React.useState(true);
+
+  React.useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => setT(v => v-1), 1000);
+    return () => clearInterval(id);
+  }, [running]);
+
+  React.useEffect(() => { if (t <= 0) { setRunning(false); onFinish(score); } }, [t]);
+
+  function randPos() {
+    const x = Math.random() * (W - R*2) + R;
+    const y = Math.random() * (H - R*2) + R;
+    setPos({ x, y });
+  }
+
+  function hit() {
+    if (!running) return;
+    setScore(s => s + 1);
+    Beeper.beep(900, 60, 'square');
+    randPos();
+  }
+
+  return (
+    <div className="p-4 rounded-xl bg-black/20 border border-white/10">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="text-sm opacity-80">Поймай блик • Набери как можно больше за 15с</div>
+        <button className="btn" onClick={onClose}>Закрыть</button>
+      </div>
+      <div className="mb-2 flex items-center gap-3 text-sm opacity-80">
+        <Pill>⏱ {t}s</Pill>
+        <Pill>⭐ {score}</Pill>
+      </div>
+      <div className="relative overflow-hidden rounded-lg bg-[rgba(255,255,255,0.04)]" style={{ width: W, height: H }}>
+        <div
+          onClick={hit}
+          title="Кликни меня!"
+          style={{ left: pos.x - R, top: pos.y - R, width: R*2, height: R*2 }}
+          className="absolute grid place-items-center rounded-full cursor-pointer shadow-lg"
+        >
+          <div className="w-full h-full rounded-full" style={{
+            background: 'radial-gradient(closest-side, rgba(255,255,255,0.9), rgba(255,255,255,0.05))',
+            boxShadow: '0 0 20px rgba(120,150,255,.65)'
+          }}/>
+        </div>
+      </div>
+      {!running && (
+        <div className="mt-3 text-sm opacity-80">Игра окончена. Счёт: {score}</div>
+      )}
+    </div>
+  );
+};
+
+// ---------- Главный компонент ----------
+
+export default function BuddyPlayground() {
+  const [save, setSave] = useSave();
+  const [msg, setMsg] = React.useState('');
+  const [shopOpen, setShopOpen] = React.useState(false);
+  const [miniOpen, setMiniOpen] = React.useState(false);
+  const isLiquid = useLiquid();
+
+  // суточная логика входа
+  React.useEffect(() => {
+    const d = todayStr();
+    setSave(s => {
+      if (s.game.lastLogin !== d) {
+        const streak = (new Date(s.game.lastLogin).getTime() > 0 &&
+          (new Date(d).getTime() - new Date(s.game.lastLogin).getTime()) <= 1000*60*60*24*2) ? (s.game.streak + 1) : 1;
+        const daily: Daily = { date: d, petGoal: 10 + Math.min(10, streak*2), petProgress: 0, winBlink: false, rewardClaimed: false };
+        const coinsBonus = Math.min(30, 10 + streak*2);
+        return { ...s,
+          game: { ...s.game, lastLogin: d, streak, coins: s.game.coins + coinsBonus },
+          daily,
+          log: [`Ежедневный вход: +${coinsBonus} 🪙 (streak ${streak})`, ...s.log].slice(0, 40)
+        };
+      }
+      return s;
+    });
+  }, []);
+
+  // Тикер естественных потребностей (голод ↑, энергия ↓, настроение в зависимости)
+  React.useEffect(() => {
+    let raf = 0; let prev = performance.now();
+    const step = (t: number) => {
+      const dt = (t - prev) / 1000; prev = t; // сек
+      setSave(state => {
+        const s = { ...state };
+        const st = { ...s.stats };
+        // базовая динамика
+        st.hunger = clamp(st.hunger + dt / 30 * 1.0);    // +1 за 30с
+        st.energy = clamp(st.energy - dt / 50 * 1.0);    // -1 за 50с
+        let mood = st.mood;
+        mood += (st.hunger < 30 ? dt * 0.6 : 0);         // сыт — радуется
+        mood -= (st.hunger > 70 ? dt * 1.2 : 0);         // голоден — грустит
+        mood -= (st.energy < 25 ? dt * 1.0 : 0);         // устал — грустит
+        st.mood = clamp(mood);
+        st.last = Date.now();
+        s.stats = st;
+        return s;
+      });
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // Утилиты обновления сейва
+  function addLog(text: string) {
+    setSave(s => ({ ...s, log: [text, ...s.log].slice(0, 40) }));
+  }
+  function addXP(dx: number) {
+    setSave(s => {
+      let { xp, level, coins } = s.game; xp += dx;
+      while (xp >= level * 100) { xp -= level*100; level += 1; coins += 10; addLog(`Новый уровень ${level}! +10 🪙`); Beeper.beep(880,120,'sawtooth'); }
+      return { ...s, game: { ...s.game, xp, level, coins } };
+    });
+  }
+  function addCoins(dc: number) { setSave(s => ({ ...s, game: { ...s.game, coins: s.game.coins + dc } })); }
+
+  // Действия
+  function pet() {
+    setSave(s => {
+      const mood = clamp(s.stats.mood + 1.5);
+      const daily = { ...s.daily, petProgress: Math.min(s.daily.petGoal, s.daily.petProgress + 1) };
+      const game = { ...s.game, petCount: s.game.petCount + 1 };
+      return { ...s, stats: { ...s.stats, mood }, daily, game };
+    });
+    addXP(1); Beeper.beep(760,60,'triangle');
+  }
+
+  function consume(kind: keyof Inv) {
+    setSave(s => {
+      if (s.inv[kind] <= 0) return s;
+      const inv = { ...s.inv, [kind]: s.inv[kind] - 1 } as Inv;
+      let { hunger, mood, energy } = s.stats;
+      if (kind === 'cookie') { hunger = clamp(hunger - 12, 0, 100); mood = clamp(mood + 4); }
+      if (kind === 'meal')   { hunger = clamp(hunger - 30, 0, 100); mood = clamp(mood + 10); }
+      if (kind === 'toy')    { mood = clamp(mood + 12); energy = clamp(energy - 8); }
+      if (kind === 'medkit') { energy = clamp(energy + 25); mood = clamp(mood + 6); }
+      if (kind === 'gift')   { mood = clamp(mood + 18); addLog('🎁 Чебзик в восторге от подарка!'); }
+      return { ...s, inv, stats: { ...s.stats, hunger, mood, energy } };
+    });
+    addXP(3); Beeper.beep(600,70,'sine');
+  }
+
+  function buy(kind: keyof Inv, cost: number) {
+    setSave(s => {
+      if (s.game.coins < cost) { addLog('Не хватает монет.'); Beeper.beep(220,120,'square'); return s; }
+      const inv = { ...s.inv, [kind]: s.inv[kind] + 1 } as Inv;
+      const game = { ...s.game, coins: s.game.coins - cost };
+      addLog(`Куплено: ${labelOf(kind)} — ${cost}🪙`);
+      Beeper.beep(520,80,'triangle');
+      return { ...s, inv, game };
+    });
+  }
+
+  function claimDaily() {
+    setSave(s => {
+      if (s.daily.date !== todayStr() || s.daily.rewardClaimed) return s;
+      if (s.daily.petProgress >= s.daily.petGoal && s.daily.winBlink) {
+        const bonus = 25;
+        addLog(`Ежедневная награда: +${bonus}🪙`);
+        return { ...s, game: { ...s.game, coins: s.game.coins + bonus }, daily: { ...s.daily, rewardClaimed: true } };
+      } else { addLog('Выполните все ежедневные задания.'); return s; }
+    });
+  }
+
+  // Мини‑игра завершена
+  function finishMini(score: number) {
+    setMiniOpen(false);
+    const win = score >= 12; // планка победы
+    const coins = Math.min(40, score);
+    if (win) addXP(10);
+    addCoins(coins);
+    addLog(`Мини‑игра: +${coins}🪙${win ? ' • Победа!':''}`);
+    setSave(s => ({
+      ...s,
+      daily: { ...s.daily, winBlink: s.daily.date === todayStr() ? true : s.daily.winBlink },
+      game: { ...s.game, minigameBest: Math.max(s.game.minigameBest, score) }
+    }));
+  }
+
+  // Сообщения (чатик)
+  function say(text: string) {
+    addLog(text);
+  }
+
+  function sendMessage(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    const text = msg.trim(); if (!text) return;
+    setMsg('');
+    const t = text.toLowerCase();
+    const { hunger, mood } = save.stats;
+    if (/(привет|hello|hi)/.test(t)) say('Привет! Я Чебзик 👻');
+    else if (/(как дела|как ты)/.test(t)) say(hunger > 60 ? 'Немного проголодался… 🥺' : 'Отлично! ✨');
+    else if (/(любишь|нрав)/.test(t)) say('Люблю блистать и сиять! ✨');
+    else if (/(спать|сон)/.test(t)) say(save.stats.energy < 30 ? 'Похрапываю иногда… 😴' : 'Пока не хочу спать!');
+    else say('Хи‑хи! Я запомню это.');
+    addXP(1);
+  }
+
+  // Ачивки (присваиваем по условию)
+  React.useEffect(() => {
+    setSave(s => {
+      const ach = { ...s.ach };
+      function setOnce(id: string) { if (!ach[id]) { ach[id] = true; addLog(`Ачивка: ${badgeTitle(id)}`); Beeper.beep(1020,120,'square'); } }
+      if (s.game.level >= 2) setOnce('lvl2');
+      if (s.game.coins >= 100) setOnce('c100');
+      if (s.stats.mood >= 100) setOnce('mood100');
+      if (s.game.petCount >= 10) setOnce('pet10');
+      if (s.game.minigameBest >= 20) setOnce('blink20');
+      return { ...s, ach };
+    });
+  }, [save.game.level, save.game.coins, save.stats.mood, save.game.petCount, save.game.minigameBest]);
+
+  // Внешний вид Чебзика под настроение
+  const hungry = clamp01(save.stats.hunger / 100);
+  const happy = clamp01(save.stats.mood / 100);
+  const energy01 = clamp01(save.stats.energy / 100);
+  const face = {
+    eye: happy > 0.5 ? '#0b1020' : '#0a0e18',
+    gradientFrom: happy > 0.5 ? '#cfe0ff' : '#d9cfff',
+    gradientTo: hungry > 0.6 ? '#ff6a6a' : '#6a79ff',
+    mouthSad: hungry > 0.7 || happy < 0.3,
+  };
+
+  const Body: React.FC<React.PropsWithChildren<{ className?: string }>> = ({ children, className }) => (
+    isLiquid ? (
+      <LiquidGlass className={`p-5 sm:p-6 ${className ?? ''}`} blur={28} gloss={0.88} tint="16 18 36" opacity={0.22} elevation={1.25} animate>
+        {children}
+      </LiquidGlass>
+    ) : (
+      <section className={`card ${className ?? ''}`}>{children}</section>
+    )
+  );
+
+  // Экспорт/импорт/сброс
+  function doExport() {
+    const blob = new Blob([JSON.stringify(save, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'chebzik-save.json'; a.click(); URL.revokeObjectURL(url);
+  }
+  function doImport(file: File) {
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const data = JSON.parse(String(r.result));
+        if (data && typeof data === 'object' && data.version === 3) setSave(data as Save);
+        else alert('Неверный файл сейва');
+      } catch { alert('Не удалось прочитать файл'); }
+    };
+    r.readAsText(file);
+  }
+  function resetAll() {
+    if (!confirm('Сбросить прогресс?')) return;
+    setSave(defaultSave());
+  }
+
+  return (
+    <div className="mx-auto max-w-3xl px-4 py-6">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="text-sm opacity-70"><Link to="/">← На главную</Link></div>
+        <div className="text-sm opacity-70">{save.stats.name}</div>
+      </div>
+
+      <Body>
+        <div className="flex flex-col gap-6">
+          {/* Хиро‑секция */}
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            {/* Бадди */}
+            <div className="relative isolate">
+              <div className="absolute -inset-6 -z-10 rounded-full blur-2xl opacity-40" style={{ background: 'radial-gradient(closest-side, rgba(126,158,255,.5), transparent)' }} />
+              <div className="buddy buddy--inline" style={{ position: 'relative', transform: 'none' }}>
+                <button className="buddy__hit" title="Погладить" onClick={pet}>
+                  <svg width="88" height="88" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                      <radialGradient id="g2" cx="50%" cy="30%" r="70%">
+                        <stop offset="0%" stopColor={face.gradientFrom} stopOpacity="0.95"/>
+                        <stop offset="100%" stopColor={face.gradientTo} stopOpacity="0.85"/>
+                      </radialGradient>
+                    </defs>
+                    <g>
+                      <path d="M18 2c6.2 0 11 4.8 11 11v8.5c0 2-1.7 3.7-3.7 3.7-1.3 0-2.6-.7-3.3-1.8-.6 1.1-1.8 1.8-3 1.8s-2.4-.7-3-1.8c-.7 1.1-2 1.8-3.3 1.8-2 0-3.7-1.7-3.7-3.7V13C5 6.8 10 2 16.2 2H18z" fill="url(#g2)" />
+                      {/* глаза */}
+                      <circle cx="13.5" cy="13.5" r="2.4" fill={face.eye}/>
+                      <circle cx="22.5" cy="13.5" r="2.4" fill={face.eye}/>
+                      <circle cx="13" cy="13.2" r=".8" fill="#fff"/>
+                      <circle cx="22" cy="13.2" r=".8" fill="#fff"/>
+                      {/* рот */}
+                      {face.mouthSad ? (
+                        <path d="M12 20c1.8-2.2 6.2-2.2 8 0" stroke="#0b1020" strokeWidth="1.4" strokeLinecap="round" fill="none"/>
+                      ) : (
+                        <path d="M12 19c1.8 2.2 6.2 2.2 8 0" stroke="#0b1020" strokeWidth="1.4" strokeLinecap="round" fill="none"/>
+                      )}
+                    </g>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Статы и быстрые действия */}
+            <div className="grid flex-1 gap-3 sm:grid-cols-2 w-full">
+              <Bar label="Сытость" value={1 - hungry} />
+              <Bar label="Настроение" value={happy} />
+              <Bar label="Энергия" value={energy01} />
+              <div className="flex items-center gap-2">
+                <Pill>LVL {save.game.level}</Pill>
+                <Pill>XP {Math.floor(save.game.xp)}/{save.game.level*100}</Pill>
+                <Pill>🪙 {save.game.coins}</Pill>
+              </div>
+              <div className="col-span-2 flex flex-wrap items-center gap-2">
+                <button className="btn" onClick={() => consume('cookie')}>🍪 Печенька ({save.inv.cookie})</button>
+                <button className="btn" onClick={() => consume('meal')}>🍲 Обед ({save.inv.meal})</button>
+                <button className="btn" onClick={() => consume('toy')}>🪀 Игрушка ({save.inv.toy})</button>
+                <button className="btn" onClick={() => consume('medkit')}>🩹 Аптечка ({save.inv.medkit})</button>
+                <button className="btn" onClick={() => consume('gift')}>🎁 Подарок ({save.inv.gift})</button>
+              </div>
+            </div>
+          </div>
+
+          {/* Панель управления */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex items-center gap-2">
+              <button className="btn btn-primary" onClick={() => setMiniOpen(true)}>✨ Мини‑игра</button>
+              <button className="btn" onClick={() => setShopOpen(v=>!v)}>{shopOpen ? 'Закрыть магазин' : '🛒 Магазин'}</button>
+              <button className="btn" onClick={claimDaily}>🎯 Ежедневная награда</button>
+            </div>
+            <div className="flex items-center gap-2 justify-end">
+              <input className="input w-40" value={save.stats.name} onChange={e=>setSave(s=>({ ...s, stats:{...s.stats, name: e.target.value.slice(0,16)} }))} />
+              <button className="btn" onClick={doExport}>Экспорт</button>
+              <label className="btn cursor-pointer">
+                Импорт<input type="file" accept="application/json" className="hidden" onChange={e=>{const f=e.target.files?.[0]; if (f) doImport(f);}}/>
+              </label>
+              <button className="btn" onClick={resetAll}>Сброс</button>
+            </div>
+          </div>
+
+          {/* Ежедневка */}
+          <div className="grid sm:grid-cols-3 gap-3">
+            <div className="rounded-lg p-3 bg-white/5 dark:bg-zinc-900/50 border border-white/10">
+              <SectionTitle>Сегодня</SectionTitle>
+              <div className="mt-1 text-sm opacity-80">Streak: {save.game.streak} день(дней)</div>
+              <div className="mt-1 text-sm opacity-80">Погладь питомца: {save.daily.petProgress}/{save.daily.petGoal}</div>
+              <div className="mt-1 text-sm opacity-80">Победи в мини‑игре: {save.daily.winBlink ? '✅' : '—'}</div>
+              <div className="mt-2 text-sm">Награда: {save.daily.rewardClaimed ? 'получена' : 'ожидает'}</div>
+            </div>
+
+            {/* Магазин */}
+            <div className="rounded-lg p-3 bg-white/5 dark:bg-zinc-900/50 border border-white/10 sm:col-span-2">
+              <SectionTitle>Магазин {shopOpen ? '' : '(закрыт)'}</SectionTitle>
+              {shopOpen && (
+                <div className="mt-2 grid grid-cols-2 sm:grid-cols-5 gap-2 text-sm">
+                  <ShopItem title="Печенька" price={3} onBuy={()=>buy('cookie',3)}>🍪 +сытость</ShopItem>
+                  <ShopItem title="Обед" price={8} onBuy={()=>buy('meal',8)}>🍲 +много сытости</ShopItem>
+                  <ShopItem title="Игрушка" price={12} onBuy={()=>buy('toy',12)}>🪀 +настрой</ShopItem>
+                  <ShopItem title="Аптечка" price={15} onBuy={()=>buy('medkit',15)}>🩹 +энергия</ShopItem>
+                  <ShopItem title="Подарок" price={20} onBuy={()=>buy('gift',20)}>🎁 сюрприз</ShopItem>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Чат‑болталка */}
+          <form onSubmit={sendMessage} className="flex items-center gap-2">
+            <input className="input flex-1" placeholder="Напишите Чебзику…" value={msg} onChange={(e) => setMsg(e.target.value)} />
+            <button type="submit" className="btn btn-primary">Отправить</button>
+          </form>
+
+          {/* Лог */}
+          {!!save.log.length && (
+            <ul className="mt-2 space-y-1 text-sm text-[color:var(--text-2)] max-h-52 overflow-auto pr-2">
+              {save.log.map((l, i) => (<li key={i}>— {l}</li>))}
+            </ul>
+          )}
+
+          {/* Мини‑игра модалка */}
+          {miniOpen && (
+            <div className="fixed inset-0 z-[60] grid place-items-center bg-black/60 p-4" onClick={()=>setMiniOpen(false)}>
+              <div className="max-w-fit" onClick={e=>e.stopPropagation()}>
+                <MiniGameBlink onClose={()=>setMiniOpen(false)} onFinish={finishMini} />
+              </div>
+            </div>
+          )}
+        </div>
+      </Body>
+    </div>
+  );
+}
+
+// ---------- Мелкие компоненты ----------
+
+const ShopItem: React.FC<{ title: string; price: number; onBuy: () => void } & React.PropsWithChildren> = ({ title, price, onBuy, children }) => (
+  <div className="rounded-md border border-white/10 p-2 bg-black/20">
+    <div className="font-medium text-sm">{title}</div>
+    <div className="opacity-80 text-xs mt-0.5">{children}</div>
+    <button className="btn mt-2 w-full" onClick={onBuy}>Купить — {price}🪙</button>
+  </div>
+);
+
+function labelOf(k: keyof Inv) {
+  return k === 'cookie' ? 'Печенька'
+    : k === 'meal' ? 'Обед'
+    : k === 'toy' ? 'Игрушка'
+    : k === 'medkit' ? 'Аптечка'
+    : 'Подарок';
+}
+
+function badgeTitle(id: string) {
+  switch (id) {
+    case 'lvl2': return 'Новый уровень 2+';
+    case 'c100': return 'Кошелёк тяжелеет: 100 монет';
+    case 'mood100': return 'Эйфория: настроение 100';
+    case 'pet10': return 'Любящий хозяин: 10 поглаживаний';
+    case 'blink20': return 'Мастер бликов: счёт 20';
+    default: return id;
+  }
+}
