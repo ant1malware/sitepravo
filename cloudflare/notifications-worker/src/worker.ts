@@ -156,8 +156,7 @@ export default {
       const room = (url.searchParams.get('room') || 'global').slice(0, 64)
       const id = env.ROOM.idFromName(room)
       const stub = env.ROOM.get(id)
-      // ВАЖНО: передаём исходный запрос целиком — DO сам создаст пару
-      return await stub.fetch(req)
+      return await stub.fetch(req) // DO сам создаст пару
     }
 
     /* ----------------------------- уведомления ----------------------------- */
@@ -225,12 +224,10 @@ export class ChatRoom {
   }
 
   async fetch(request: Request): Promise<Response> {
-    // только апгрейд
     if (request.headers.get('Upgrade') !== 'websocket') {
       return new Response('Not Found', { status: 404 })
     }
 
-    // создаём ПАРУ тут
     const pair = new WebSocketPair()
     // @ts-ignore
     const client = pair[0] as WebSocket
@@ -242,10 +239,7 @@ export class ChatRoom {
     const adminToken = getCookie(cookie, 'chat_admin')
     const isAdmin = await checkAdminToken(this.env, adminToken)
 
-    // запускаем сессию на server-половине
     this.handleSession(server, isAdmin).catch((e) => console.error('handleSession error', e))
-
-    // отдаём клиентскую половину обратно
     return new Response(null, { status: 101, webSocket: client as any })
   }
 
@@ -309,22 +303,16 @@ export class ChatRoom {
     }
 
     if (type === 'message') {
-      const text: string = (parsed.text || '').toString().trim().slice(0, 800);
-      if (!text) return;
+      const text: string = (parsed.text || '').toString().trim().slice(0, 800)
+      if (!text) return
+      // берём cid от клиента, чтобы фронт мог убрать дубль оптимистики
       const cid: string | undefined =
-        typeof parsed.cid === 'string' ? parsed.cid.slice(0, 64) : undefined;
+        typeof parsed.cid === 'string' ? parsed.cid.slice(0, 64) : undefined
 
-      const msg: ChatMessage = {
-        id: uid(),
-        author: session.isAdmin ? 'Admin' : session.name,
-        text,
-        ts: Date.now(),
-      };
-      console.log('do:msg', { author: msg.author, text: msg.text });
-
-      // пишем историю и шлём всем; в payload добавляем cid
-      await this.appendAndBroadcastWithCid(msg, cid);
-      return;
+      const msg: ChatMessage = { id: uid(), author: session.isAdmin ? 'Admin' : session.name, text, ts: Date.now() }
+      console.log('do:msg', { author: msg.author, text: msg.text })
+      await this.appendAndBroadcast(msg, cid)
+      return
     }
 
     if (type === 'delete' && session.isAdmin) {
@@ -346,7 +334,7 @@ export class ChatRoom {
     return trimmed.replace(/[^\p{L}\p{N}_ -]+/gu, '')
   }
 
-  async appendAndBroadcast(msg: ChatMessage) {
+  async appendAndBroadcast(msg: ChatMessage, cid?: string) {
     await this.state.blockConcurrencyWhile(async () => {
       const history: ChatMessage[] = (await this.state.storage.get<ChatMessage[]>('history')) || []
       history.push(msg)
@@ -354,7 +342,8 @@ export class ChatRoom {
       await this.state.storage.put('history', history)
       console.log('do:stored', { count: history.length })
     })
-    this.broadcast(JSON.stringify({ type: 'message', message: msg }))
+    // Прокидываем cid обратно — фронт заменит «локальное» сообщение настоящим
+    this.broadcast(JSON.stringify({ type: 'message', message: msg, cid }))
   }
 
   async deleteAndBroadcast(id: string) {

@@ -1,13 +1,13 @@
-// src/components/SimpleChat.tsx
-// WebSocket чат с рандомными никами и Admin через HttpOnly-cookie.
-// Надёжный парсинг WS, оптимистическое добавление сообщений.
+// WebSocket-чат с рандомными никами и Admin через HttpOnly-cookie.
+// Ретро-вид как на скрине: тёмный список, полосы, строка "[hh:mm:ss] ник: текст".
+// Без внешних правок проекта.
 
 import React from 'react';
 
 type ChatMessage = { id: string; author: string; text: string; ts: number };
 type ServerEvent =
   | { type: 'history'; messages: ChatMessage[] }
-  | { type: 'message'; message: ChatMessage }
+  | { type: 'message'; message: ChatMessage; cid?: string }
   | { type: 'delete'; id: string }
   | { type: 'edit'; id: string; text: string }
   | { type: 'system'; text: string };
@@ -21,8 +21,6 @@ type Props = {
 
 const MAX_LEN = 800;
 const NAME_KEY = 'chat:nick';
-
-const pendingRef = React.useRef<Record<string, string>>({});
 
 /** Пул ников */
 const NICKS = [
@@ -43,29 +41,58 @@ function parseWsData(data: any): ServerEvent | null {
   try {
     if (typeof data === 'string') return JSON.parse(data);
     if (data instanceof ArrayBuffer) return JSON.parse(new TextDecoder().decode(data));
-    // Blob (в некоторых браузерах)
+    // Blob — прочитаем отдельно
     // @ts-ignore
-    if (typeof Blob !== 'undefined' && data instanceof Blob) {
-      // @ts-ignore
-      return null; // мы подпишем отдельный обработчик ниже
-    }
+    if (typeof Blob !== 'undefined' && data instanceof Blob) return null;
     return null;
   } catch {
     return null;
   }
 }
 
+function hhmmss(ts: number) {
+  const d = new Date(ts);
+  return d.toLocaleTimeString(undefined, { hour12: false });
+}
+
+// локальные стили «как на скрине»
+const CHAT_CSS = `
+.rc-wrap{border:1px solid #111;background:#111;border-radius:4px;overflow:hidden;font:13px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial, "Apple Color Emoji","Segoe UI Emoji";}
+.rc-head{padding:6px 8px;color:#c9d1d9;background:#0e0e0f;border-bottom:1px solid #0b0b0b;display:flex;justify-content:space-between;align-items:center}
+.rc-head .pill{display:inline-flex;align-items:center;gap:6px;border-radius:10px;padding:2px 8px;font-size:12px}
+.rc-pill-online{background:#193a2b;color:#7ee787;border:1px solid #2ea04344}
+.rc-pill-admin{background:#1a2438;color:#79c0ff;border:1px solid #79c0ff33}
+.rc-list{height:280px;overflow:auto;background:#1a1a1b}
+.rc-list ul{list-style:none;margin:0;padding:0}
+.rc-list li{padding:3px 8px;white-space:pre-wrap;word-break:break-word}
+.rc-list li:nth-child(odd){background:#232324}
+.rc-list li:nth-child(even){background:#1e1e1f}
+.rc-ts{color:#9da1a6;margin-right:6px}
+.rc-me{color:#a3d977;font-weight:600}
+.rc-other{color:#e06c75;font-weight:600}
+.rc-admin{color:#facc15;font-weight:700}
+.rc-form{display:flex;gap:6px;padding:6px;background:#0f0f10;border-top:1px solid #0b0b0b}
+.rc-input{flex:1;background:#0f0f10;border:1px solid #2a2a2b;color:#e5e7eb;border-radius:4px;padding:6px 8px}
+.rc-btn{background:#2b2b2c;border:1px solid #3a3a3c;color:#e5e7eb;border-radius:4px;padding:6px 10px;cursor:pointer}
+.rc-btn:disabled{opacity:.6;cursor:not-allowed}
+.rc-actions{display:flex;gap:4px;margin-left:8px}
+.rc-ax{font-size:12px;background:#2b2b2c;border:1px solid #3a3a3c;color:#ccc;border-radius:4px;padding:2px 6px;cursor:pointer}
+.rc-empty{opacity:.7;padding:6px 8px}
+`;
+
 export default function SimpleChat({ room = 'global', className }: Props) {
   const wsUrl = (import.meta as any).env?.VITE_CHAT_WS || import.meta.env?.VITE_CHAT_WS;
 
+  // Хуки — все внутри компонента
   const [connected, setConnected] = React.useState(false);
   const [isAdmin, setIsAdmin] = React.useState(false);
   const [input, setInput] = React.useState('');
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const wsRef = React.useRef<WebSocket | null>(null);
   const listRef = React.useRef<HTMLDivElement | null>(null);
+  const pendingRef = React.useRef<Record<string, string>>({}); // ← ПРАВИЛЬНО: внутри компонента
 
-  // фиксируем ник
+  // ник
   const [nick] = React.useState<string>(() => {
     try {
       const saved = localStorage.getItem(NAME_KEY);
@@ -78,13 +105,13 @@ export default function SimpleChat({ room = 'global', className }: Props) {
     }
   });
 
-  // автоскролл вниз
+  // автоскролл
   React.useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length]);
 
-  // подключение WebSocket
+  // WS
   React.useEffect(() => {
     if (!wsUrl) return;
     let stop = false;
@@ -103,30 +130,36 @@ export default function SimpleChat({ room = 'global', className }: Props) {
         ws.send(JSON.stringify({ type: 'hello', name: nick }));
       });
 
-      // универсальный onmessage с поддержкой Blob
       ws.addEventListener('message', async (ev) => {
         try {
           let parsed = parseWsData(ev.data);
-          if (!parsed) {
-            // возможно Blob — попробуем прочитать
+          // Blob?
+          // @ts-ignore
+          if (!parsed && typeof Blob !== 'undefined' && ev.data instanceof Blob) {
             // @ts-ignore
-            if (typeof Blob !== 'undefined' && ev.data instanceof Blob) {
-              // @ts-ignore
-              const txt = await ev.data.text();
-              parsed = JSON.parse(txt);
-            }
+            parsed = JSON.parse(await ev.data.text());
           }
           if (!parsed) return;
-
-          // отладочный трейс — можно выключить
-          // console.debug('[chat:event]', parsed);
 
           if (parsed.type === 'history') {
             setMessages(parsed.messages);
           } else if (parsed.type === 'message') {
-            setMessages((arr) =>
-              arr.some((m) => m.id === parsed!.message.id) ? arr : [...arr, parsed!.message]
-            );
+            // поддержка cid: заменяем локальную «оптимистичную» запись настоящей
+            const cid = (parsed as any).cid as string | undefined;
+            if (cid && pendingRef.current[cid]) {
+              const tempId = pendingRef.current[cid];
+              delete pendingRef.current[cid];
+              setMessages((arr) => {
+                const withoutTemp = arr.filter((m) => m.id !== tempId);
+                return withoutTemp.some((m) => m.id === parsed!.message.id)
+                  ? withoutTemp
+                  : [...withoutTemp, parsed!.message];
+              });
+            } else {
+              setMessages((arr) =>
+                arr.some((m) => m.id === parsed!.message.id) ? arr : [...arr, parsed!.message]
+              );
+            }
           } else if (parsed.type === 'delete') {
             setMessages((arr) => arr.filter((m) => m.id !== parsed!.id));
           } else if (parsed.type === 'edit') {
@@ -162,90 +195,89 @@ export default function SimpleChat({ room = 'global', className }: Props) {
     const ws = wsRef.current;
     if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
 
-    const cid = `${Date.now()}_${Math.random().toString(36).slice(2)}`; // корреляция
+    const cid = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const tempId = `loc_${cid}`;
     pendingRef.current[cid] = tempId;
 
-    // оптимистично показываем
-    setMessages(arr => [...arr, {
-      id: tempId,
-      author: isAdmin ? 'Admin' : nick,
-      text,
-      ts: Date.now(),
-    }]);
+    // оптимистично добавляем 1 строку, потом заменим на серверную
+    setMessages((arr) => [
+      ...arr,
+      { id: tempId, author: isAdmin ? 'Admin' : nick, text, ts: Date.now() },
+    ]);
 
-    // отправляем с cid
     ws.send(JSON.stringify({ type: 'message', text: text.slice(0, MAX_LEN), cid }));
     setInput('');
   }
 
-  function del(id: string) {
+  const del = (id: string) => {
     const ws = wsRef.current;
     if (!isAdmin || !ws || ws.readyState !== WebSocket.OPEN) return;
     ws.send(JSON.stringify({ type: 'delete', id }));
-  }
+  };
 
-  function edit(id: string, now: string) {
+  const edit = (id: string, now: string) => {
     const ws = wsRef.current;
     if (!isAdmin || !ws || ws.readyState !== WebSocket.OPEN) return;
     const next = prompt('Изменить сообщение:', now)?.trim();
     if (!next) return;
     ws.send(JSON.stringify({ type: 'edit', id, text: next.slice(0, MAX_LEN) }));
-  }
+  };
+
+  // цвета для ника
+  const nickClass = (author: string) =>
+    author === 'Admin' ? 'rc-admin' : (author === nick ? 'rc-me' : 'rc-other');
 
   return (
-    <div className={`rounded-2xl border border-[color:var(--card-border,rgba(255,255,255,0.12))] bg-[color:var(--surface,rgba(255,255,255,0.06))] p-3 text-sm backdrop-blur ${className ?? ''}`}>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="font-medium">Общий чат</span>
-          <span className={`ml-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] ${connected ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-400/30' : 'bg-rose-500/15 text-rose-200 border border-rose-400/30'}`}>
-            {connected ? 'online' : 'offline'}
-          </span>
-          {isAdmin && <span className="ml-2 rounded-full border border-sky-400/40 bg-sky-500/20 px-2 py-0.5 text-[11px] text-sky-100">Admin</span>}
+    <div className={className ?? ''}>
+      {/* локальные стили компонента */}
+      <style dangerouslySetInnerHTML={{ __html: CHAT_CSS }} />
+
+      <div className="rc-wrap">
+        <div className="rc-head">
+          <div>Chat</div>
+          <div>
+            <span className={`pill ${connected ? 'rc-pill-online' : ''}`}>
+              {connected ? 'online' : 'offline'}
+            </span>
+            {isAdmin && <span className="pill rc-pill-admin" style={{ marginLeft: 6 }}>Admin</span>}
+          </div>
         </div>
-        <div className="text-xs opacity-75">Ваш ник: <b>{nick}</b></div>
-      </div>
 
-      {!wsUrl && (
-        <div className="mb-2 rounded-md border border-amber-400/30 bg-amber-500/10 p-2 text-xs text-amber-100">
-          Не настроен WebSocket (<code>VITE_CHAT_WS</code>).
+        <div ref={listRef} className="rc-list">
+          {messages.length === 0 ? (
+            <div className="rc-empty">…</div>
+          ) : (
+            <ul>
+              {messages.map((m) => (
+                <li key={m.id}>
+                  <span className="rc-ts">[{hhmmss(m.ts)}]</span>
+                  <span className={nickClass(m.author)}>{m.author}</span>
+                  <span>: </span>
+                  <span>{m.text}</span>
+                  {isAdmin && (
+                    <span className="rc-actions">
+                      <button className="rc-ax" onClick={() => edit(m.id, m.text)}>Ред.</button>
+                      <button className="rc-ax" onClick={() => del(m.id)}>Удал.</button>
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
-      )}
 
-      <div ref={listRef} className="max-h-80 overflow-auto rounded-lg border border-[color:var(--card-border,rgba(255,255,255,0.12))] bg-white/5 p-2 dark:bg-black/20">
-        {messages.length === 0 && <div className="opacity-70">Пока сообщений нет. Напишите первым!</div>}
-        <ul className="space-y-1">
-          {messages.map((m) => (
-            <li key={m.id} className="flex items-start justify-between gap-2">
-              <div>
-                <div className="text-xs opacity-70">{new Date(m.ts).toLocaleString()} · <b>{m.author}</b></div>
-                <div>{m.text}</div>
-              </div>
-              {isAdmin && (
-                <div className="shrink-0 space-x-1">
-                  <button className="btn !px-2 !py-0.5" onClick={() => edit(m.id, m.text)}>Ред.</button>
-                  <button className="btn !px-2 !py-0.5" onClick={() => del(m.id)}>Удал.</button>
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
+        <form className="rc-form" onSubmit={(e) => { e.preventDefault(); send(); }}>
+          <input
+            className="rc-input"
+            placeholder="напишите сообщение…"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            maxLength={MAX_LEN}
+            disabled={!connected}
+          />
+          <button type="submit" className="rc-btn" disabled={!connected}>▶</button>
+        </form>
       </div>
-
-      <form className="mt-2 flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); send(); }}>
-        <input
-          className="flex-1 rounded-md border border-[color:var(--card-border,rgba(255,255,255,0.12))] bg-transparent px-2 py-1"
-          placeholder="Напишите сообщение…"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          maxLength={MAX_LEN}
-          disabled={!connected}
-        />
-        <button type="submit" className="btn btn-primary disabled:opacity-50" disabled={!connected}>Отправить</button>
-      </form>
-
-      {/* убери/замени старую подсказку про ключ и кнопку Admin — теперь админ через скрытый логин */}
-      {/* <p className="mt-2 text-xs opacity-60">Админ назначается автоматически после скрытого логина.</p> */}
     </div>
   );
 }
