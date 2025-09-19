@@ -332,7 +332,19 @@ export class ChatRoom {
 
   broadcastPresence() {
     if (!this.sessions.size) return
-    const payload = JSON.stringify({ type: 'system', text: 'presence', count: this.sessions.size })
+    const seen = new Set<string>()
+    const names: string[] = []
+    for (const sess of this.sessions) {
+      const name = (sess.isAdmin ? 'Admin' : sess.name || '').trim()
+      if (!name) continue
+      const key = name.toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      names.push(name)
+    }
+    names.sort((a, b) => a.localeCompare(b, 'ru'))
+
+    const payload = JSON.stringify({ type: 'system', text: 'presence', count: this.sessions.size, names })
     for (const sess of this.sessions) {
       try {
         sess.ws.send(payload)
@@ -372,6 +384,7 @@ export class ChatRoom {
           name: session.name, // итоговое имя
         }))
       } catch {}
+      this.broadcastPresence()
       return
     }
 

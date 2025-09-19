@@ -13,54 +13,59 @@ import {
   Compass,
   Zap,
   ScrollText,
-  Command
+  Command,
 } from 'lucide-react';
 import SimpleChat from './components/SimpleChat';
 
-const FEATURES = [
+type IconType = React.ComponentType<React.SVGProps<SVGSVGElement>>;
+
+type Feature = { icon: IconType; title: string; text: string };
+const FEATURES: Feature[] = [
   {
-    icon: <ShieldCheck className="h-5 w-5 text-sky-300" />,
+    icon: ShieldCheck,
     title: 'Открытый доступ',
     text: 'Все материалы идут через защищённый HTTPS. Админский вход — только по секрету.',
   },
   {
-    icon: <Users className="h-5 w-5 text-emerald-300" />,
+    icon: Users,
     title: 'Живой брифинг',
     text: 'Чат для команды без регистрации: случайные ники, быстрый вход и модерация.',
   },
   {
-    icon: <CalendarCheck className="h-5 w-5 text-indigo-300" />,
+    icon: CalendarCheck,
     title: 'Всегда в курсе',
     text: 'Лента уведомлений синхронизируется с Telegram и хранит последние 100 событий.',
   },
   {
-    icon: <MessageSquare className="h-5 w-5 text-rose-300" />,
+    icon: MessageSquare,
     title: 'Инструменты админа',
     text: 'Правки и удаление сообщений доступны напрямую из интерфейса.',
   },
 ];
 
-const QUICK_LINKS = [
-  { to: '/faq', label: 'FAQ', icon: <Star className="h-4 w-4" />, hint: 'короткие ответы на частые вопросы' },
-  { to: '/rules', label: 'Правила', icon: <BadgeCheck className="h-4 w-4" />, hint: 'единый набор ограничений и допусков' },
-  { to: '/news', label: 'Новости', icon: <Newspaper className="h-4 w-4" />, hint: 'хронология изменений и апдейтов' },
+type QuickLink = { to: string; label: string; icon: IconType; hint?: string };
+const QUICK_LINKS: QuickLink[] = [
+  { to: '/faq', label: 'FAQ', icon: Star, hint: 'короткие ответы на частые вопросы' },
+  { to: '/rules', label: 'Правила', icon: BadgeCheck, hint: 'единый набор ограничений и допусков' },
+  { to: '/news', label: 'Новости', icon: Newspaper, hint: 'хронология изменений и апдейтов' },
 ];
 
-const HIGHLIGHTS = [
+type Highlight = { icon: IconType; title: string; text: string };
+const HIGHLIGHTS: Highlight[] = [
   {
-    icon: <Compass className="h-4 w-4 text-sky-300" />,
+    icon: Compass,
     title: 'Навигация в один клик',
-    text: 'Структура ролей, законов и гайдов собрана в единое дерево.'
+    text: 'Структура ролей, законов и гайдов собрана в единое дерево.',
   },
   {
-    icon: <Zap className="h-4 w-4 text-amber-300" />,
+    icon: Zap,
     title: 'Быстрые действия',
-    text: 'Командная палитра и избранное ускоряют переход к нужным материалам.'
+    text: 'Командная палитра и избранное ускоряют переход к нужным материалам.',
   },
   {
-    icon: <ScrollText className="h-4 w-4 text-emerald-300" />,
+    icon: ScrollText,
     title: 'Чистая база знаний',
-    text: 'Обновления версий и диффы фиксируются прямо на портале.'
+    text: 'Обновления версий и диффы фиксируются прямо на портале.',
   },
 ];
 
@@ -80,116 +85,192 @@ const WORKFLOW = [
 ];
 
 export default function HomePage() {
-  // Хуки — только на верхнем уровне
-  const heroRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     document.title = 'Правительство — Памятка (SKY)';
   }, []);
 
-  return (
-    <main className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10"
-      >
-        <div className="absolute inset-0 bg-[radial-gradient(900px_400px_at_20%_10%,rgba(56,189,248,0.18),transparent_70%),radial-gradient(800px_500px_at_80%_0%,rgba(236,72,153,0.16),transparent_70%),linear-gradient(180deg,rgba(15,23,42,0.9),rgba(2,6,23,0.92))]" />
-        <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.05)_1px,transparent_1px)] [background-size:42px_42px] opacity-[0.08]" />
-      </div>
+  const mutedText = React.useMemo<React.CSSProperties>(() => ({ color: 'var(--text-2)' }), []);
+  const accentText = React.useMemo<React.CSSProperties>(() => ({ color: 'var(--accent)' }), []);
+  const linkSurface = React.useMemo<React.CSSProperties>(
+    () => ({ background: 'var(--surface-2)', borderColor: 'var(--border)' }),
+    []
+  );
+  const chipSurface = React.useMemo<React.CSSProperties>(
+    () => ({ background: 'var(--surface)', borderColor: 'var(--border)' }),
+    []
+  );
 
-      {/* HERO */}
-      <section ref={heroRef} className="relative mx-auto max-w-6xl px-4 pb-12 pt-12 sm:pt-16">
-        <div className="grid gap-6 lg:grid-cols-[1.1fr_minmax(240px,0.9fr)]">
-          <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-8 shadow-[0_30px_70px_rgba(14,23,42,0.55)] backdrop-blur">
-            <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.25em] text-sky-200/80">
-              <Sparkles className="h-4 w-4" />
+  return (
+    <main
+      className="relative min-h-screen pb-16"
+      style={{ background: 'var(--bg-1)', color: 'var(--text-1)' }}
+    >
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+        <div
+          className="absolute inset-0"
+          style={{ background: 'linear-gradient(180deg, var(--accent) 0%, transparent 65%)', opacity: 0.08 }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{ background: 'radial-gradient(520px 320px at 12% 6%, var(--accent) 0%, transparent 70%)', opacity: 0.16 }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background: 'radial-gradient(460px 280px at 82% 0%, var(--accent-600, var(--accent)) 0%, transparent 75%)',
+            opacity: 0.12,
+          }}
+        />
+      </div>
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-4 pt-12">
+        <section className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(240px,0.85fr)]">
+          <div className="card relative overflow-hidden !p-8 lg:!p-10" style={{ background: 'var(--bg-2)' }}>
+            <div
+              className="absolute inset-0 -z-10"
+              style={{ background: 'linear-gradient(135deg, var(--accent) 0%, transparent 72%)', opacity: 0.18 }}
+            />
+            <div
+              className="absolute inset-0 -z-20"
+              style={{ background: 'radial-gradient(140% 90% at 50% 0%, var(--bg-1) 0%, transparent 70%)', opacity: 0.25 }}
+            />
+            <div
+              className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.4em]"
+              style={accentText}
+            >
+              <Sparkles className="h-4 w-4" aria-hidden />
               <span>SKY PORTAL</span>
             </div>
-            <h1 className="mt-6 text-3xl font-semibold leading-tight text-slate-50 sm:text-4xl">
+            <h1 className="mt-6 text-3xl font-semibold leading-tight sm:text-4xl">
               Главная точка входа в рабочую экосистему SKY
             </h1>
-            <p className="mt-4 max-w-2xl text-base text-slate-300/90 sm:text-lg">
-              Быстрые ссылки, база знаний и живой чат в едином пространстве. Всё синхронизировано и доступно из любого устройства.
+            <p className="mt-4 max-w-2xl text-base sm:text-lg" style={mutedText}>
+              Быстрые ссылки, база знаний и живой чат в едином пространстве. Всё синхронизировано и доступно из
+              любого устройства.
             </p>
 
             <div className="mt-8 grid gap-3 sm:grid-cols-3">
-              {QUICK_LINKS.map((link) => (
+              {QUICK_LINKS.map(({ to, label, icon: Icon, hint }) => (
                 <Link
-                  key={link.to}
-                  to={link.to}
-                  className="group relative flex flex-col gap-2 rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-4 text-sm transition hover:border-sky-300/60 hover:from-white/20"
+                  key={to}
+                  to={to}
+                  className="group relative flex flex-col gap-1.5 rounded-2xl border px-4 py-3 text-sm no-underline transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                  style={{ ...linkSurface, boxShadow: 'var(--card-shadow)' }}
                 >
-                  <span className="flex items-center gap-2 font-semibold text-slate-100">
-                    {link.icon}
-                    {link.label}
-                    <ArrowRight className="h-3.5 w-3.5 text-sky-200 opacity-0 transition group-hover:translate-x-1 group-hover:opacity-100" />
+                  <span className="flex items-center gap-2 font-semibold">
+                    <span
+                      className="grid h-8 w-8 place-items-center rounded-xl border"
+                      style={{ ...chipSurface, color: 'var(--accent)' }}
+                    >
+                      <Icon className="h-4 w-4" aria-hidden />
+                    </span>
+                    {label}
+                    <ArrowRight
+                      className="h-3.5 w-3.5 opacity-0 transition group-hover:translate-x-1 group-hover:opacity-100"
+                      aria-hidden
+                    />
                   </span>
-                  <span className="text-xs text-slate-300/80">{link.hint}</span>
+                  {hint && (
+                    <span className="text-xs" style={mutedText}>
+                      {hint}
+                    </span>
+                  )}
                 </Link>
               ))}
             </div>
           </div>
 
-          <div className="relative flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="text-xs uppercase tracking-[0.4em] text-slate-400">Сводка</div>
-                <div className="mt-2 text-2xl font-semibold text-slate-50">Рабочий режим</div>
-              </div>
-              <Command className="h-5 w-5 text-slate-300/70" />
-            </div>
-            <ul className="space-y-4 text-sm text-slate-300/90">
-              {HIGHLIGHTS.map((item) => (
-                <li key={item.title} className="flex gap-3 rounded-2xl border border-white/10 bg-white/10 p-3">
-                  <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-xl bg-black/40 shadow-inner">
-                    {item.icon}
-                  </span>
-                  <div>
-                    <div className="font-semibold text-slate-100">{item.title}</div>
-                    <p className="text-xs text-slate-300/80">{item.text}</p>
+          <div className="flex flex-col gap-4">
+            <div className="card !p-6">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.35em]" style={mutedText}>
+                    Сводка
                   </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      {/* FEATURES */}
-      <section className="relative mx-auto max-w-6xl px-4 pb-12">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {FEATURES.map((feature) => (
-            <div
-              key={feature.title}
-              className="group relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-5 shadow-[0_20px_50px_rgba(15,23,42,0.35)] transition hover:border-sky-300/50 hover:shadow-[0_25px_60px_rgba(37,99,235,0.35)]"
-            >
-              <div className="mb-4 inline-flex items-center gap-3 rounded-2xl bg-black/30 px-3 py-2 text-sm font-semibold text-slate-100">
-                {feature.icon}
-                {feature.title}
+                  <div className="mt-2 text-2xl font-semibold">Рабочий режим</div>
+                </div>
+                <Command className="h-5 w-5 opacity-60" aria-hidden />
               </div>
-              <p className="text-sm text-slate-300/90">{feature.text}</p>
+              <ul className="mt-5 space-y-4 text-sm">
+                {HIGHLIGHTS.map(({ icon: Icon, title, text }) => (
+                  <li key={title} className="flex gap-3 rounded-2xl border px-3 py-2" style={linkSurface}>
+                    <span
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border"
+                      style={{ ...chipSurface, borderColor: 'transparent', color: 'var(--accent)' }}
+                    >
+                      <Icon className="h-4 w-4" aria-hidden />
+                    </span>
+                    <div>
+                      <div className="font-semibold">{title}</div>
+                      <p className="text-xs" style={mutedText}>
+                        {text}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </div>
-          ))}
-        </div>
-      </section>
 
-      {/* WORKFLOW */}
-      <section className="relative mx-auto max-w-6xl px-4 pb-12">
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_minmax(260px,1fr)]">
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_20px_45px_rgba(8,47,73,0.35)] backdrop-blur">
-            <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.3em] text-sky-200/70">
-              <Compass className="h-4 w-4" />
+            <div className="card !p-6">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.35em]" style={mutedText}>
+                <Sparkles className="h-4 w-4" aria-hidden />
+                <span>Совет</span>
+              </div>
+              <p className="mt-3 text-sm" style={mutedText}>
+                Закрепляйте ключевые материалы в избранном и используйте командную палитру (⌘K) — так вы экономите время на
+                поиск.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-2xl font-semibold">Возможности</h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {FEATURES.map(({ icon: Icon, title, text }) => (
+              <div key={title} className="card !p-5 transition-transform hover:-translate-y-0.5">
+                <div
+                  className="mb-3 inline-flex items-center gap-3 rounded-xl border px-3 py-2 text-sm font-semibold"
+                  style={linkSurface}
+                >
+                  <span
+                    className="grid h-9 w-9 place-items-center rounded-xl border"
+                    style={{ ...chipSurface, borderColor: 'transparent', color: 'var(--accent)' }}
+                  >
+                    <Icon className="h-5 w-5" aria-hidden />
+                  </span>
+                  {title}
+                </div>
+                <p className="text-sm" style={mutedText}>
+                  {text}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(240px,0.8fr)]">
+          <div className="card !p-6">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.35em]" style={mutedText}>
+              <Compass className="h-4 w-4" aria-hidden />
               <span>Рабочий ритм</span>
             </div>
-            <h2 className="mt-4 text-2xl font-semibold text-slate-50 sm:text-3xl">Как использовать портал максимально эффективно</h2>
-            <ol className="mt-6 space-y-5 text-sm text-slate-300/90">
+            <h2 className="mt-4 text-2xl font-semibold sm:text-3xl">
+              Как использовать портал максимально эффективно
+            </h2>
+            <ol className="mt-6 space-y-4 text-sm">
               {WORKFLOW.map((step, index) => (
-                <li key={step.title} className="relative rounded-2xl border border-white/10 bg-black/30 p-4">
-                  <span className="absolute -left-3 -top-3 flex h-9 w-9 items-center justify-center rounded-2xl border border-sky-300/60 bg-sky-500/20 text-base font-semibold text-sky-100 shadow-[0_10px_25px_rgba(14,165,233,0.35)]">
+                <li key={step.title} className="relative rounded-2xl border p-4" style={linkSurface}>
+                  <span
+                    className="absolute -left-3 -top-3 flex h-9 w-9 items-center justify-center rounded-2xl border text-sm font-semibold"
+                    style={{ ...chipSurface, borderColor: 'var(--accent)', color: 'var(--accent)' }}
+                  >
                     {index + 1}
                   </span>
                   <div className="pl-6">
-                    <div className="font-semibold text-slate-100">{step.title}</div>
-                    <p className="mt-1 text-xs text-slate-300/80">{step.text}</p>
+                    <div className="font-semibold">{step.title}</div>
+                    <p className="mt-1 text-xs" style={mutedText}>
+                      {step.text}
+                    </p>
                   </div>
                 </li>
               ))}
@@ -197,39 +278,39 @@ export default function HomePage() {
           </div>
 
           <div className="flex flex-col gap-4">
-            <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-sky-500/15 via-transparent to-emerald-500/20 p-6 text-sm text-slate-200 shadow-[0_20px_45px_rgba(30,64,175,0.45)]">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.4em] text-slate-200/80">
-                <Sparkles className="h-4 w-4" />
-                <span>Совет</span>
+            <div className="card !p-6">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.35em]" style={mutedText}>
+                <Sparkles className="h-4 w-4" aria-hidden />
+                <span>Фокус</span>
               </div>
-              <p className="mt-4 text-sm text-slate-100">
-                Закрепляйте ключевые материалы в избранном и используйте командную палитру (⌘K) — так вы экономите время на поиск.
+              <p className="mt-3 text-sm" style={mutedText}>
+                Сохраняйте заметки о задачах прямо в чат — команда увидит отметку в реальном времени и сможет подключиться.
               </p>
             </div>
-
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-slate-200 shadow-[0_18px_40px_rgba(14,23,42,0.45)]">
-              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">
-                <CalendarCheck className="h-4 w-4" />
+            <div className="card !p-6">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.35em]" style={mutedText}>
+                <CalendarCheck className="h-4 w-4" aria-hidden />
                 <span>Регламент</span>
               </div>
-              <p className="mt-3 text-sm text-slate-300/90">
-                Протоколы и роли всегда доступны в актуальных версиях. Смотрите вкладку «Новости», чтобы отслеживать свежие обновления и изменения политик.
+              <p className="mt-3 text-sm" style={mutedText}>
+                Протоколы и роли всегда доступны в актуальных версиях. Смотрите вкладку «Новости», чтобы отслеживать свежие
+                обновления и изменения политик.
               </p>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* CHAT */}
-      <section className="relative mx-auto max-w-6xl px-4 pb-16">
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_24px_60px_rgba(12,74,110,0.4)]">
-          <div className="mb-4 flex items-center gap-3 text-sm font-semibold uppercase tracking-[0.3em] text-sky-200/70">
-            <MessageSquare className="h-5 w-5" />
-            <span>Команда онлайн</span>
+        <section className="space-y-4 pb-4">
+          <div className="card !p-6">
+            <div className="mb-4 flex items-center gap-2">
+              <MessageSquare className="h-5 w-5" style={accentText} aria-hidden />
+              <h2 className="text-lg font-semibold">Команда онлайн</h2>
+            </div>
+            <SimpleChat room="global" className="bg-transparent" />
           </div>
-          <SimpleChat room="global" className="bg-transparent" />
-        </div>
-      </section>
+        </section>
+      </div>
     </main>
   );
 }
+
