@@ -101,6 +101,11 @@ function highlightMentions(text: string, pattern: string | null): React.ReactNod
   }
 }
 
+const EMOJI_PICKER = [
+  '😀','😁','😂','🤣','😅','😎','😍','😘','😇','🤝','👌','👍','🔥','💯','✨','⚡','🎯','🚀','🛡️','🏆','💬','📝','📌','📣','🗂️','🧠','📈',
+  '🕒','🛠️','🔒','✅','❗','⚠️','❓','🎉','🥳','🙌','🤘','🤖','👀','💡','🧭','📦','🛎️','📡','🛰️','🧪','📕','🧷','🪪','🧰','🧱','🛰','🗃️'
+] as const;
+
 const CHAT_CSS = String.raw`
 .rc-wrap{border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-2xl);overflow:hidden;font:13px/1.4 Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;box-shadow:var(--card-shadow);color:var(--text-1);}
 .rc-head{padding:12px 16px;background:var(--bg-2);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:16px;position:relative;}
@@ -140,13 +145,24 @@ const CHAT_CSS = String.raw`
 .rc-ax{font-size:11px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-1);border-radius:6px;padding:2px 6px;cursor:pointer;}
 .rc-ax:hover{background:var(--surface);}
 .rc-empty{opacity:.7;padding:12px;color:var(--text-2);}
-.rc-form{display:flex;gap:8px;padding:10px 12px;background:var(--bg-2);}
+.rc-form{display:flex;gap:8px;padding:10px 12px;background:var(--bg-2);position:relative;align-items:center;}
 .rc-input{flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text-1);border-radius:var(--radius-lg);padding:8px 10px;}
 .rc-input:focus-visible{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(59,130,246,.25);}
+.rc-emoji-btn{width:38px;height:38px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface);color:var(--text-1);display:grid;place-items:center;font-size:18px;cursor:pointer;transition:background .2s ease,border-color .2s ease,transform .2s ease,color .2s ease;}
+.rc-emoji-btn:hover{background:var(--surface-2);}
+.rc-emoji-btn:disabled{opacity:.6;cursor:not-allowed;}
+.rc-emoji-btn.open{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 2px rgba(59,130,246,.2);}
 .rc-btn{background:var(--accent);border:none;color:#fff;border-radius:var(--radius-lg);padding:0 18px;font-weight:600;cursor:pointer;transition:opacity .2s ease,transform .2s ease;}
 .rc-btn:hover{opacity:.92;}
 .rc-btn:active{transform:scale(.98);}
 .rc-btn:disabled{opacity:.6;cursor:not-allowed;}
+.rc-emoji-panel{position:absolute;bottom:56px;right:12px;width:min(320px,90vw);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-xl);box-shadow:var(--card-shadow);padding:12px;display:flex;flex-direction:column;gap:10px;z-index:60;}
+.rc-emoji-title{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-2);font-weight:600;}
+.rc-emoji-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;}
+.rc-emoji-item{height:36px;border-radius:10px;border:1px solid transparent;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;transition:background .2s ease,border-color .2s ease,transform .15s ease;}
+.rc-emoji-item:hover{background:var(--surface);border-color:var(--accent);transform:translateY(-1px);}
+.rc-emoji-item:focus-visible{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(59,130,246,.2);}
+.rc-emoji-empty{font-size:12px;color:var(--text-2);text-align:center;padding:10px 0;}
 .nick-back{position:fixed;inset:0;background:rgba(15,15,18,.55);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px;}
 .nick-card{width:min(92vw,520px);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-2xl);padding:18px;color:var(--text-1);box-shadow:var(--card-shadow);}
 .nick-row{display:flex;gap:8px;margin-top:12px;}
@@ -198,6 +214,9 @@ export default function SimpleChat({ room = 'global', className }: Props) {
   const wsRef = React.useRef<WebSocket | null>(null);
   const listRef = React.useRef<HTMLDivElement | null>(null);
   const headRef = React.useRef<HTMLDivElement | null>(null);
+  const formRef = React.useRef<HTMLFormElement | null>(null);
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const [emojiOpen, setEmojiOpen] = React.useState(false);
   const pendingRef = React.useRef<Record<string, string>>({});
 
   // === 3) name state – НЕ читаем из storage до epochReady ===
@@ -256,6 +275,14 @@ export default function SimpleChat({ room = 'global', className }: Props) {
   }, [isAdmin]);
 
   React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    (window as any).__simplechatAdminState = isAdmin;
+    try {
+      window.dispatchEvent(new CustomEvent('simplechat:admin-state', { detail: { isAdmin } }));
+    } catch {}
+  }, [isAdmin]);
+
+  React.useEffect(() => {
     if (!connected) {
       setPresenceOpen(false);
       setOnlineNames([]);
@@ -278,6 +305,23 @@ export default function SimpleChat({ room = 'global', className }: Props) {
       window.removeEventListener('keydown', handleKey);
     };
   }, [presenceOpen]);
+
+  React.useEffect(() => {
+    if (!emojiOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      const form = formRef.current;
+      if (form && !form.contains(event.target as Node)) setEmojiOpen(false);
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setEmojiOpen(false);
+    };
+    window.addEventListener('mousedown', handleClick);
+    window.addEventListener('keydown', handleKey);
+    return () => {
+      window.removeEventListener('mousedown', handleClick);
+      window.removeEventListener('keydown', handleKey);
+    };
+  }, [emojiOpen]);
 
   React.useEffect(() => {
     if (needNick) helloSentRef.current = null;
@@ -462,6 +506,35 @@ export default function SimpleChat({ room = 'global', className }: Props) {
     setInput('');
   }
 
+  const canUseInput = epochReady && connected && !!nick && !needNick;
+
+  React.useEffect(() => {
+    if (!canUseInput) setEmojiOpen(false);
+  }, [canUseInput]);
+
+  const toggleEmoji = () => {
+    if (!canUseInput) return;
+    setEmojiOpen((prev) => !prev);
+  };
+
+  const insertEmoji = (emoji: string) => {
+    setInput((prev) => `${prev}${emoji}`);
+    setEmojiOpen(false);
+    const focusBack = () => {
+      const node = inputRef.current;
+      if (node) {
+        const end = node.value.length;
+        node.focus();
+        try { node.setSelectionRange(end, end); } catch {}
+      }
+    };
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(focusBack);
+    } else {
+      setTimeout(focusBack, 0);
+    }
+  };
+
   const del = (id: string) => {
     const ws = wsRef.current;
     if (!isAdmin || !ws || ws.readyState !== WebSocket.OPEN) return;
@@ -569,16 +642,57 @@ export default function SimpleChat({ room = 'global', className }: Props) {
           )}
         </div>
 
-        <form className="rc-form" onSubmit={(e) => { e.preventDefault(); send(); }}>
+        <form
+          ref={formRef}
+          className="rc-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            send();
+          }}
+        >
+          <button
+            type="button"
+            className={`rc-emoji-btn${emojiOpen ? ' open' : ''}`}
+            onClick={toggleEmoji}
+            disabled={!canUseInput}
+            aria-label="Вставить смайлик"
+          >
+            😊
+          </button>
           <input
+            ref={inputRef}
             className="rc-input"
             placeholder="напишите сообщение…"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             maxLength={MAX_LEN}
-            disabled={!epochReady || !connected || !nick || needNick}
+            disabled={!canUseInput}
           />
-          <button type="submit" className="rc-btn" disabled={!epochReady || !connected || !nick || needNick}>▶</button>
+          <button type="submit" className="rc-btn" disabled={!canUseInput}>
+            ▶
+          </button>
+          {emojiOpen && (
+            <div className="rc-emoji-panel" role="menu" aria-label="Палитра смайликов">
+              <div className="rc-emoji-title">Смайлики</div>
+              {EMOJI_PICKER.length ? (
+                <div className="rc-emoji-grid">
+                  {EMOJI_PICKER.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      className="rc-emoji-item"
+                      onClick={() => insertEmoji(emoji)}
+                      aria-label={`Вставить ${emoji}`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="rc-emoji-empty">Ничего нет</div>
+              )}
+            </div>
+          )}
         </form>
       </div>
 
