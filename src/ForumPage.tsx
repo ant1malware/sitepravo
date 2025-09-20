@@ -161,6 +161,20 @@ type ForumAccount = {
   tagline: string;
   role: ForumRole;
   stats: ForumAccountStats;
+  inviteCode?: string | null;
+  invitedBy?: string | null;
+  isBetaTester?: boolean;
+};
+
+type InviteCode = {
+  id: string;
+  code: string;
+  createdAt: string;
+  createdBy: string;
+  note: string;
+  usageLimit: number | null;
+  usedBy: string[];
+  active: boolean;
 };
 
 type TopicTag = 'NEW' | 'PINNED' | 'LOCKED' | 'FREE' | 'PAID' | 'UPDATE';
@@ -209,6 +223,7 @@ type PasswordRule = {
 
 const STORAGE_KEY = 'forum:home-settings';
 const AUTH_ACCOUNTS_KEY = 'forum:auth:accounts';
+const INVITE_CODES_KEY = 'forum:auth:invites';
 
 const DEFAULT_SETTINGS: ForumSettings = {
   bannerTitle: 'SKY Control Forum',
@@ -599,6 +614,9 @@ function hydrateAccount(raw: any, index: number): ForumAccount | null {
     tagline: typeof raw.tagline === 'string' ? raw.tagline : '',
     role,
     stats,
+    inviteCode: typeof raw.inviteCode === 'string' ? raw.inviteCode : null,
+    invitedBy: typeof raw.invitedBy === 'string' ? raw.invitedBy : null,
+    isBetaTester: Boolean(raw.isBetaTester),
   } satisfies ForumAccount;
 }
 
@@ -684,6 +702,21 @@ function createSalt(): string {
   return `${Math.random().toString(16).slice(2)}${Math.random().toString(16).slice(2)}`;
 }
 
+function generateInviteCode(existing: InviteCode[]): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    let chunk = '';
+    for (let i = 0; i < 6; i += 1) {
+      chunk += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+    const code = `SKY-${chunk}`;
+    if (!existing.some((item) => item.code === code)) {
+      return code;
+    }
+  }
+  return `SKY-${Date.now().toString(36).toUpperCase()}`;
+}
+
 function sanitizeAnnouncements(raw: any, current: Announcement[]): Announcement[] {
   if (!Array.isArray(raw) || raw.length === 0) return current;
   return raw
@@ -700,6 +733,38 @@ function sanitizeAnnouncements(raw: any, current: Announcement[]): Announcement[
     .filter((item: Announcement) => item.title.trim().length > 0);
 }
 
+function hydrateInviteCode(raw: any): InviteCode | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const code = typeof raw.code === 'string' ? raw.code.trim().toUpperCase() : '';
+  if (!code) return null;
+  const usageLimit =
+    typeof raw.usageLimit === 'number' && Number.isFinite(raw.usageLimit) && raw.usageLimit > 0
+      ? Math.floor(raw.usageLimit)
+      : null;
+  const usedBy = Array.isArray(raw.usedBy)
+    ? raw.usedBy.filter((item: unknown) => typeof item === 'string' && item.trim())
+    : [];
+  const active = usageLimit === null ? Boolean(raw.active ?? true) : usedBy.length < usageLimit;
+  return {
+    id: typeof raw.id === 'string' && raw.id.trim() ? raw.id : `invite-${code}-${Date.now()}`,
+    code,
+    createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
+    createdBy: typeof raw.createdBy === 'string' && raw.createdBy.trim() ? raw.createdBy.trim() : 'Admin',
+    note: typeof raw.note === 'string' ? raw.note : '',
+    usageLimit,
+    usedBy,
+    active,
+  } satisfies InviteCode;
+}
+
+function formatInviteTimestamp(value: string) {
+  try {
+    return new Date(value).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
+  } catch {
+    return value;
+  }
+}
+
 export default function ForumPage() {
   const [hydrated, setHydrated] = React.useState(false);
   const [accounts, setAccounts] = React.useState<ForumAccount[]>([]);
@@ -711,6 +776,7 @@ export default function ForumPage() {
   const [registerForm, setRegisterForm] = React.useState({
     username: '',
     email: '',
+    inviteCode: '',
     password: '',
     confirm: '',
     accept: false,
@@ -735,6 +801,8 @@ export default function ForumPage() {
   const [composerError, setComposerError] = React.useState<string | null>(null);
   const [cooldown, setCooldown] = React.useState(0);
   const [chatRoster, setChatRoster] = React.useState<{ names: string[]; count: number }>({ names: [], count: 0 });
+  const [inviteCodes, setInviteCodes] = React.useState<InviteCode[]>([]);
+  const [inviteForm, setInviteForm] = React.useState<{ note: string; usageLimit: string }>({ note: '', usageLimit: '1' });
   const menuRef = React.useRef<HTMLDivElement | null>(null);
 
   const currentUser = React.useMemo(() => {
@@ -743,7 +811,11 @@ export default function ForumPage() {
   }, [accounts, session]);
 
   const currentUserRole: ForumRole = currentUser?.role ?? 'user';
-  const isModerator = currentUserRole === 'admin' || currentUserRole === 'moderator';
+  const currentUsername = currentUser?.username ?? 'Admin';
+  const isAdmin = currentUserRole === 'admin';
+  const isModerator = isAdmin || currentUserRole === 'moderator';
+  const adminPanelEnabled = isAdmin && adminMode;
+  const inviteRequired = accounts.length > 0;
 
   const isAuthenticated = Boolean(currentUser);
   const memberSince = React.useMemo(() => {
@@ -858,6 +930,17 @@ export default function ForumPage() {
     } catch {}
 
     try {
+      const rawInvites = window.localStorage.getItem(INVITE_CODES_KEY);
+      if (rawInvites) {
+        const parsed = JSON.parse(rawInvites);
+        if (Array.isArray(parsed)) {
+          const hydrated = parsed.map((item) => hydrateInviteCode(item)).filter(Boolean) as InviteCode[];
+          setInviteCodes(hydrated);
+        }
+      }
+    } catch {}
+
+    try {
       const storedSession =
         window.sessionStorage.getItem(FORUM_SESSION_STORAGE_KEY) ||
         window.localStorage.getItem(FORUM_SESSION_STORAGE_KEY);
@@ -882,6 +965,13 @@ export default function ForumPage() {
       window.localStorage.setItem(AUTH_ACCOUNTS_KEY, JSON.stringify(accounts));
     } catch {}
   }, [accounts, hydrated]);
+
+  React.useEffect(() => {
+    if (!hydrated || typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(INVITE_CODES_KEY, JSON.stringify(inviteCodes));
+    } catch {}
+  }, [inviteCodes, hydrated]);
 
   React.useEffect(() => {
     if (!hydrated || typeof window === 'undefined') return;
@@ -951,22 +1041,25 @@ export default function ForumPage() {
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
-    setAdminMode(Boolean((window as any).__simplechatAdminState));
+    const apply = (flag: boolean) => {
+      setAdminMode(isAdmin && flag);
+    };
+    apply(Boolean((window as any).__simplechatAdminState) || isAdmin);
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ isAdmin?: boolean }>).detail;
       if (detail && typeof detail.isAdmin === 'boolean') {
-        setAdminMode(detail.isAdmin);
+        apply(detail.isAdmin || isAdmin);
       }
     };
     window.addEventListener('simplechat:admin-state', handler as EventListener);
     return () => {
       window.removeEventListener('simplechat:admin-state', handler as EventListener);
     };
-  }, []);
+  }, [isAdmin]);
 
   React.useEffect(() => {
-    if (!adminMode) setPanelOpen(false);
-  }, [adminMode]);
+    if (!adminPanelEnabled) setPanelOpen(false);
+  }, [adminPanelEnabled]);
 
   React.useEffect(() => {
     if (!profileMenuOpen) return;
@@ -1002,6 +1095,24 @@ export default function ForumPage() {
     if (!emailPattern.test(email)) {
       setAuthError('Введите корректный адрес электронной почты.');
       return;
+    }
+
+    const inviteValue = registerForm.inviteCode.trim().toUpperCase();
+    let inviteMatch: InviteCode | null = null;
+    if (inviteRequired) {
+      if (!inviteValue) {
+        setAuthError('Для регистрации нужен код приглашения.');
+        return;
+      }
+      inviteMatch = inviteCodes.find((item) => item.active && item.code === inviteValue) ?? null;
+      if (!inviteMatch) {
+        setAuthError('Инвайт-код не найден или уже израсходован.');
+        return;
+      }
+      if (inviteMatch.usageLimit !== null && inviteMatch.usedBy.length >= inviteMatch.usageLimit) {
+        setAuthError('Лимит этого инвайт-кода уже исчерпан.');
+        return;
+      }
     }
 
     if (registerForm.password !== registerForm.confirm) {
@@ -1042,13 +1153,14 @@ export default function ForumPage() {
       const passwordHash = await hashPassword(registerForm.password, salt);
       const accent = pickAccent();
       const assignedRole: ForumRole = accounts.length === 0 ? 'admin' : 'newbie';
+      const timestamp = new Date().toISOString();
       const newAccount: ForumAccount = {
         id: `acc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         username,
         email,
         salt,
         passwordHash,
-        createdAt: new Date().toISOString(),
+        createdAt: timestamp,
         accentFrom: accent.from,
         accentTo: accent.to,
         tagline: accent.tagline,
@@ -1058,26 +1170,44 @@ export default function ForumPage() {
           likes: 0,
           topics: 0,
         },
+        inviteCode: inviteMatch?.code ?? null,
+        invitedBy: inviteMatch ? inviteMatch.createdBy : assignedRole === 'admin' ? 'Founder' : null,
+        isBetaTester: Boolean(inviteMatch),
       };
       setAccounts((prev) => [...prev, newAccount]);
-      setSession({ userId: newAccount.id, remember: registerForm.remember, lastLogin: new Date().toISOString() });
+      if (inviteMatch) {
+        setInviteCodes((prev) =>
+          prev.map((item) => {
+            if (item.code !== inviteMatch!.code) return item;
+            const usedBy = [...item.usedBy, username];
+            const stillActive = item.usageLimit === null ? true : usedBy.length < item.usageLimit;
+            return { ...item, usedBy, active: stillActive };
+          }),
+        );
+      }
+      setSession({ userId: newAccount.id, remember: registerForm.remember, lastLogin: timestamp });
       setRegisterForm((prev) => ({
         ...prev,
         username: '',
         email: '',
+        inviteCode: '',
         password: '',
         confirm: '',
         accept: false,
         captcha: false,
       }));
-      setAuthSuccess('Учётная запись создана. Добро пожаловать в форум!');
+      setAuthSuccess(
+        inviteMatch
+          ? 'Инвайт принят. Добро пожаловать в бета-волну!'
+          : 'Учётная запись создана. Добро пожаловать в форум!',
+      );
     } catch (error) {
       console.error(error);
       setAuthError('Не удалось сохранить регистрационные данные. Попробуйте ещё раз.');
     } finally {
       setAuthBusy(false);
     }
-  }, [accounts, authBusy, normalizeUsername, passwordRules, registerForm]);
+  }, [accounts, authBusy, inviteCodes, inviteRequired, normalizeUsername, passwordRules, registerForm]);
 
   const handleLogin = React.useCallback(async () => {
     if (authBusy) return;
@@ -1127,7 +1257,58 @@ export default function ForumPage() {
     setSession(null);
     setProfileMenuOpen(false);
     setAuthSuccess('Вы вышли из форума. Возвращайтесь скорее!');
+    setPanelOpen(false);
+    setAdminMode(false);
   }, []);
+
+  const handleCreateInvite = React.useCallback(() => {
+    if (!adminPanelEnabled) return;
+    const rawLimit = inviteForm.usageLimit.trim();
+    let usageLimit: number | null = null;
+    if (rawLimit) {
+      const parsed = Number.parseInt(rawLimit, 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        usageLimit = parsed;
+      }
+    }
+    const code = generateInviteCode(inviteCodes);
+    const newInvite: InviteCode = {
+      id: `invite-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      code,
+      createdAt: new Date().toISOString(),
+      createdBy: currentUsername,
+      note: inviteForm.note.trim(),
+      usageLimit,
+      usedBy: [],
+      active: true,
+    };
+    setInviteCodes((prev) => [...prev, newInvite]);
+    setInviteForm({ note: '', usageLimit: usageLimit ? String(usageLimit) : '1' });
+  }, [adminPanelEnabled, currentUsername, inviteCodes, inviteForm.note, inviteForm.usageLimit]);
+
+  const handleToggleInvite = React.useCallback(
+    (id: string) => {
+      if (!adminPanelEnabled) return;
+      setInviteCodes((prev) =>
+        prev.map((item) => {
+          if (item.id !== id) return item;
+          if (item.usageLimit !== null && item.usedBy.length >= item.usageLimit) {
+            return { ...item, active: false };
+          }
+          return { ...item, active: !item.active };
+        }),
+      );
+    },
+    [adminPanelEnabled],
+  );
+
+  const handleRevokeInvite = React.useCallback(
+    (id: string) => {
+      if (!adminPanelEnabled) return;
+      setInviteCodes((prev) => prev.filter((item) => item.id !== id));
+    },
+    [adminPanelEnabled],
+  );
 
   const handleTogglePin = React.useCallback(() => {
     setTopicPinned((prev) => !prev);
@@ -1488,6 +1669,19 @@ export default function ForumPage() {
                       />
                     </label>
                     <label className="block text-xs uppercase tracking-[0.3em]" style={{ color: 'var(--text-2)' }}>
+                      Инвайт-код
+                      <input
+                        className="mt-1 w-full rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2 text-sm focus:border-[color:var(--accent)] focus:outline-none focus:ring-2 focus:ring-[color:var(--accent)]/30"
+                        value={registerForm.inviteCode}
+                        onChange={(event) => setRegisterForm((prev) => ({ ...prev, inviteCode: event.target.value.toUpperCase() }))}
+                        placeholder="SKY-XXXXXX"
+                        autoComplete="one-time-code"
+                      />
+                    </label>
+                    <div className="text-[11px] uppercase tracking-[0.3em]" style={{ color: 'var(--text-2)' }}>
+                      {inviteRequired ? 'Получите код у администратора, чтобы присоединиться.' : 'Первая регистрация откроет админ-доступ.'}
+                    </div>
+                    <label className="block text-xs uppercase tracking-[0.3em]" style={{ color: 'var(--text-2)' }}>
                       Пароль
                       <input
                         className="mt-1 w-full rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2 text-sm focus:border-[color:var(--accent)] focus:outline-none focus:ring-2 focus:ring-[color:var(--accent)]/30"
@@ -1758,6 +1952,11 @@ export default function ForumPage() {
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <div className="text-2xl font-semibold">{currentUser?.username}</div>
               {currentUser && <RoleBadge role={currentUser.role} />}
+              {currentUser?.isBetaTester && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-[color:var(--accent)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.3em] text-[color:var(--accent)]">
+                  Beta tester
+                </span>
+              )}
             </div>
             <div className="text-sm" style={{ color: 'var(--text-2)' }}>
               {userNumber ? `Пользователь №${userNumber}` : 'Номер будет назначен при синхронизации.'}
@@ -1765,6 +1964,11 @@ export default function ForumPage() {
             <div className="mt-1 text-sm" style={{ color: 'var(--text-2)' }}>
               С нами с {memberSince}
             </div>
+            {currentUser?.isBetaTester && (
+              <div className="mt-1 text-[11px] uppercase tracking-[0.28em]" style={{ color: 'var(--text-2)' }}>
+                Пригласил: {currentUser.invitedBy ?? 'Admin'} • Код: {currentUser.inviteCode ?? '—'}
+              </div>
+            )}
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {STAT_BLOCKS.map((tile) => (
                 <div
@@ -2254,7 +2458,7 @@ export default function ForumPage() {
         </div>
       </div>
 
-      {adminMode && (
+      {adminPanelEnabled && (
         <div className="pointer-events-none fixed inset-0 z-40 flex items-end justify-end p-6">
           {!panelOpen && (
             <button
@@ -2269,7 +2473,7 @@ export default function ForumPage() {
         </div>
       )}
 
-      {adminMode && panelOpen && (
+      {adminPanelEnabled && panelOpen && (
         <div className="fixed inset-0 z-50 flex">
           <div className="hidden flex-1 bg-black/60 backdrop-blur-sm sm:block" onClick={() => setPanelOpen(false)} />
           <div className="h-full w-full max-w-md border-l border-[color:var(--border)] bg-[color:var(--surface)] shadow-2xl">
@@ -2393,6 +2597,110 @@ export default function ForumPage() {
                       Пока нет объявлений. Добавьте новое, чтобы оно появилось в списке.
                     </div>
                   )}
+                </div>
+                <div className="space-y-3 border-t border-[color:var(--border)] pt-5">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs uppercase tracking-[0.2em]" style={{ color: 'var(--text-2)' }}>
+                      Пригласительные коды
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-md border border-[color:var(--accent)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--accent)] transition hover:bg-[color:var(--accent)]/15"
+                      onClick={handleCreateInvite}
+                    >
+                      Сгенерировать
+                    </button>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-xs uppercase tracking-[0.2em]" style={{ color: 'var(--text-2)' }}>
+                        Комментарий
+                      </label>
+                      <input
+                        value={inviteForm.note}
+                        onChange={(event) => setInviteForm((prev) => ({ ...prev, note: event.target.value }))}
+                        className="w-full rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2 text-sm"
+                        placeholder="Например: волна бета 02"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs uppercase tracking-[0.2em]" style={{ color: 'var(--text-2)' }}>
+                        Лимит использований
+                      </label>
+                      <input
+                        value={inviteForm.usageLimit}
+                        onChange={(event) => setInviteForm((prev) => ({ ...prev, usageLimit: event.target.value.replace(/[^0-9]/g, '') }))}
+                        className="w-full rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2 text-sm"
+                        placeholder="1"
+                        inputMode="numeric"
+                      />
+                      <p className="text-[11px]" style={{ color: 'var(--text-2)' }}>
+                        Оставьте пустым — инвайт безлимитный.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {inviteCodes.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-[color:var(--border)] p-4 text-sm" style={{ color: 'var(--text-2)' }}>
+                        Пока нет активных инвайтов. Сгенерируйте код и поделитесь им лично.
+                      </div>
+                    ) : (
+                      [...inviteCodes]
+                        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+                        .map((invite) => {
+                          const limitLabel = invite.usageLimit === null ? '∞' : invite.usageLimit;
+                          const isDepleted = invite.usageLimit !== null && invite.usedBy.length >= invite.usageLimit;
+                          return (
+                            <div key={invite.id} className="rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-4 shadow-sm">
+                              <div className="flex items-center justify-between">
+                                <div className="text-sm font-semibold text-[color:var(--text-1)]">{invite.code}</div>
+                                <span
+                                  className={[
+                                    'text-[10px] uppercase tracking-[0.3em]',
+                                    invite.active && !isDepleted ? 'text-emerald-300' : 'text-amber-200',
+                                  ].join(' ')}
+                                >
+                                  {invite.active && !isDepleted ? 'Активен' : 'Заморожен'}
+                                </span>
+                              </div>
+                              <div className="mt-1 text-[11px]" style={{ color: 'var(--text-2)' }}>
+                                Создан: {formatInviteTimestamp(invite.createdAt)} • Использования: {invite.usedBy.length}/{limitLabel}
+                              </div>
+                              <div className="text-[11px]" style={{ color: 'var(--text-2)' }}>
+                                Автор: {invite.createdBy}
+                              </div>
+                              {invite.note && (
+                                <div className="mt-2 text-sm" style={{ color: 'var(--text-1)' }}>
+                                  {invite.note}
+                                </div>
+                              )}
+                              {invite.usedBy.length > 0 && (
+                                <div className="mt-2 text-[11px]" style={{ color: 'var(--text-2)' }}>
+                                  Использовали: {invite.usedBy.join(', ')}
+                                </div>
+                              )}
+                              <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.3em]">
+                                <button
+                                  type="button"
+                                  className="rounded border border-[color:var(--border)] px-3 py-1 transition hover:border-[color:var(--accent)] hover:text-[color:var(--accent)]"
+                                  onClick={() => handleToggleInvite(invite.id)}
+                                  disabled={isDepleted}
+                                >
+                                  {invite.active && !isDepleted ? 'Заморозить' : 'Активировать'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="rounded border border-[color:var(--border)] px-3 py-1 text-rose-300 transition hover:border-rose-400 hover:text-rose-200"
+                                  onClick={() => handleRevokeInvite(invite.id)}
+                                >
+                                  Удалить
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

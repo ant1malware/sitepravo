@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { BookOpen, Users, LayoutList, ClipboardList, FileText, MessageSquare, Shield, ListChecks, Info, Ghost, Home, Lock } from 'lucide-react';
+import { BookOpen, Users, LayoutList, ClipboardList, FileText, MessageSquare, Shield, ListChecks, Info, Ghost, Lock } from 'lucide-react';
 import LiquidGlass from './components/LiquidGlass';
 import { useStyleMode } from './useStyleMode';
 import { useForumSessionWatcher } from './forumSession';
@@ -12,7 +12,6 @@ type RouteNavItem = BaseNavItem & { type: 'route'; to: string };
 export type NavItem = TabNavItem | RouteNavItem;
 
 export const NAV: NavItem[] = [
-  { key: 'home',          type: 'route', label: 'Главная',       icon: <Home className="h-4 w-4" />,        to: '/home' },
   { key: 'forum',         type: 'route', label: 'Форум',         icon: <MessageSquare className="h-4 w-4" />, to: '/forum' },
   { key: 'roles',         type: 'tab',   label: 'Повышения',     icon: <Users className="h-4 w-4" />,       id: 'roles' },
   { key: 'templates',     type: 'tab',   label: 'Шаблоны',       icon: <FileText className="h-4 w-4" />,   id: 'templates' },
@@ -89,7 +88,7 @@ export default function Sidebar() {
   const sidebarContent = (
     <>
       <div className="mb-4 flex items-center justify-start">
-        <Link to="/home" className="text-sm font-semibold tracking-tight text-[color:var(--text-1)] no-underline focus:outline-none focus:ring-2 focus:ring-[color:var(--accent-600)]/60 hover:opacity-90" aria-label="Справочник SKY">
+        <Link to="/forum" className="text-sm font-semibold tracking-tight text-[color:var(--text-1)] no-underline focus:outline-none focus:ring-2 focus:ring-[color:var(--accent-600)]/60 hover:opacity-90" aria-label="Справочник SKY">
           Справочник SKY
         </Link>
       </div>
