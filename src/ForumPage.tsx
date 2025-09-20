@@ -119,13 +119,6 @@ type StatTile = {
   hint: string;
 };
 
-type OnlineEntry = {
-  name: string;
-  role: ForumRole;
-  online: boolean;
-  userNumber: number;
-};
-
 type QuickResource = {
   label: string;
   description: string;
@@ -404,13 +397,6 @@ const STAT_BLOCKS: StatTile[] = [
   { label: 'Сообщений', value: '2 764', hint: 'за последние 30 дней' },
   { label: 'Ротации', value: '12', hint: 'ежедневных брифингов' },
   { label: 'Документов', value: '86', hint: 'актуальных файлов' },
-];
-
-const ONLINE_NOW: OnlineEntry[] = [
-  { name: 'Admin', role: 'admin', online: true, userNumber: 1 },
-  { name: 'Mod Alpha', role: 'moderator', online: true, userNumber: 7 },
-  { name: 'Doc-Beta', role: 'vip', online: true, userNumber: 12 },
-  { name: 'Pulse', role: 'user', online: false, userNumber: 19 },
 ];
 
 const RESOURCES: QuickResource[] = [
@@ -748,6 +734,7 @@ export default function ForumPage() {
   const [composer, setComposer] = React.useState<TopicComposerState>({ value: '', attachments: [] });
   const [composerError, setComposerError] = React.useState<string | null>(null);
   const [cooldown, setCooldown] = React.useState(0);
+  const [chatRoster, setChatRoster] = React.useState<{ names: string[]; count: number }>({ names: [], count: 0 });
   const menuRef = React.useRef<HTMLDivElement | null>(null);
 
   const currentUser = React.useMemo(() => {
@@ -802,9 +789,38 @@ export default function ForumPage() {
   const allowLinks = currentUserRole !== 'newbie';
   const composerDisabled = !isAuthenticated || topicLocked || (currentUserRole === 'newbie' && cooldown > 0);
 
-  const onlineCount = React.useMemo(() => {
-    return ONLINE_NOW.filter((entry) => entry.online).length;
+  const neonTheme = React.useMemo(() => ({
+    '--bg-1': '#0c0d12',
+    '--bg-2': 'rgba(24,25,35,0.78)',
+    '--surface': 'rgba(22,24,34,0.76)',
+    '--surface-2': 'rgba(18,20,30,0.6)',
+    '--text-1': '#f4f5ff',
+    '--text-2': 'rgba(204,208,255,0.72)',
+    '--muted': 'rgba(140,147,201,0.7)',
+    '--accent': '#8b5cf6',
+    '--accent-600': '#7c3aed',
+    '--border': 'rgba(140,130,255,0.22)',
+    '--card-shadow': '0 24px 60px -30px rgba(53,17,117,0.55)',
+    '--ring': 'rgba(126,100,255,0.5)',
+  }) as React.CSSProperties, []);
+
+  const handleRosterChange = React.useCallback((names: string[], count: number) => {
+    setChatRoster({ names, count });
   }, []);
+
+  const chatRoleResolver = React.useCallback((author: string) => {
+    const account = accounts.find((item) => item.username === author);
+    if (!account) {
+      if (author.trim().toLowerCase() === 'admin') {
+        return { label: 'Admin', color: '#f87171', textColor: '#fee2e2' };
+      }
+      return null;
+    }
+    const meta = ROLE_META[account.role];
+    return { label: meta.label, color: meta.border, textColor: meta.text };
+  }, [accounts]);
+
+  const chatOnlineCount = chatRoster.count;
 
   const passwordRules = React.useMemo<PasswordRule[]>(() => {
     const value = registerForm.password;
@@ -1557,7 +1573,14 @@ export default function ForumPage() {
   }
 
   return (
-    <main className="relative min-h-screen pb-24" style={{ background: 'var(--bg-1)', color: 'var(--text-1)' }}>
+    <main
+      className="relative min-h-screen pb-24"
+      style={{
+        ...neonTheme,
+        background: '#0c0d12',
+        color: 'var(--text-1)',
+      }}
+    >
       <div
         className="pointer-events-none absolute inset-0 -z-10 opacity-80"
         style={{
@@ -1649,95 +1672,135 @@ export default function ForumPage() {
       </header>
 
       <div className="relative mx-auto w-full max-w-6xl px-4 pb-24 pt-10 sm:pt-14">
-        <section className="overflow-hidden rounded-3xl border border-[color:var(--border)] bg-[color:var(--surface)] shadow-2xl">
-          <div className="relative">
-            <div
-              className="pointer-events-none absolute inset-0 opacity-90"
-              style={{
-                background: `linear-gradient(135deg, ${currentUser?.accentFrom ?? 'var(--accent)'} 0%, ${currentUser?.accentTo ?? '#6366f1'} 100%)`,
-              }}
-              aria-hidden
-            />
-            <div className="relative grid gap-6 px-6 py-8 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-              <div className="space-y-4 text-white">
-                <span className="inline-flex items-center gap-2 rounded-full bg-white/20 px-3 py-1 text-[10px] uppercase tracking-[0.4em]">
-                  <Sparkles className="h-3.5 w-3.5" aria-hidden />
-                  Форум SKY
-                </span>
-                <h2 className="text-2xl font-semibold leading-snug sm:text-3xl">
-                  {settings.bannerTitle || 'Командный центр SKY'}
-                </h2>
-                <p className="text-sm leading-relaxed text-white/80">
-                  {settings.bannerSubtitle || 'Все приказы, отчёты и служебные заметки собраны в одном месте.'}
-                </p>
-                <div className="text-sm leading-relaxed text-white/85">
-                  {`Командный центр открыт, ${currentUser?.username}!`}
-                  {currentUser?.tagline && (
-                    <span className="block text-white/70">{currentUser.tagline}</span>
-                  )}
-                </div>
-                <ul className="grid gap-2 text-xs uppercase tracking-[0.3em] text-white/75 sm:grid-cols-2">
-                  <li className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-white" />
-                    Отчёты и документы
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-white" />
-                    Живой чат смены
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-white" />
-                    Настраиваемые уведомления
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-white" />
-                    Закладки и вложения
-                  </li>
-                </ul>
-                {authSuccess && (
-                  <div className="flex items-start gap-2 rounded-xl bg-white/15 px-4 py-3 text-sm text-white">
-                    <CheckCircle2 className="mt-0.5 h-4 w-4" aria-hidden />
-                    <span>{authSuccess}</span>
+        <section className="relative overflow-hidden rounded-[3rem] border border-[color:var(--border)] bg-gradient-to-br from-[rgba(36,16,85,0.82)] via-[rgba(18,20,34,0.92)] to-[rgba(26,20,46,0.88)] shadow-[0_48px_140px_-60px_rgba(76,29,149,0.65)]">
+          <div
+            className="pointer-events-none absolute inset-0 opacity-80"
+            style={{
+              background:
+                'radial-gradient(1100px 600px at 50% -20%, rgba(139,92,246,0.45), transparent 60%),' +
+                'radial-gradient(900px 520px at 50% 120%, rgba(34,211,238,0.28), transparent 65%)',
+            }}
+            aria-hidden
+          />
+          <div className="relative flex flex-col items-center gap-8 px-6 py-16 text-center sm:px-12 sm:py-20">
+            <span className="text-sm font-semibold uppercase tracking-[0.8em] text-[rgba(204,208,255,0.7)]">
+              SKY COMMUNITY
+            </span>
+            <h1
+              className="text-5xl font-black uppercase tracking-[0.65em] text-white sm:text-6xl lg:text-7xl"
+              style={{ textShadow: '0 0 40px rgba(139,92,246,0.65), 0 0 90px rgba(34,211,238,0.45)' }}
+            >
+              SKY
+            </h1>
+            <p className="max-w-3xl text-base leading-relaxed text-[rgba(204,208,255,0.78)] sm:text-lg">
+              Форум оперативного штаба SKY. Авторизация открывает уведомления, закладки, загрузки и доступ к живому неоновому
+              чату команды.
+            </p>
+            <div className="grid w-full max-w-3xl gap-3 text-xs uppercase tracking-[0.32em] text-[rgba(204,208,255,0.75)] sm:grid-cols-3">
+              <div className="rounded-2xl border border-white/15 bg-white/8 px-4 py-3 shadow-[0_30px_80px_-50px_rgba(139,92,246,0.55)]">
+                Журнал приоритетов
+              </div>
+              <div className="rounded-2xl border border-white/15 bg-white/8 px-4 py-3 shadow-[0_30px_80px_-50px_rgba(139,92,246,0.55)]">
+                Быстрые команды
+              </div>
+              <div className="rounded-2xl border border-white/15 bg-white/8 px-4 py-3 shadow-[0_30px_80px_-50px_rgba(139,92,246,0.55)]">
+                Безопасные вложения
+              </div>
+            </div>
+            {authSuccess && (
+              <div className="flex items-center gap-3 rounded-full border border-white/25 bg-white/10 px-5 py-2 text-sm text-white shadow-lg">
+                <CheckCircle2 className="h-4 w-4" aria-hidden />
+                <span>{authSuccess}</span>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="mt-10 grid gap-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+          <div className="rounded-3xl border border-[color:var(--border)] bg-[color:var(--surface)]/90 p-6 shadow-[0_35px_90px_-60px_rgba(76,29,149,0.55)] text-[color:var(--text-1)]">
+            <span className="inline-flex items-center gap-2 rounded-full bg-[color:var(--accent)]/20 px-3 py-1 text-[10px] uppercase tracking-[0.4em] text-[color:var(--accent)]">
+              <Sparkles className="h-3.5 w-3.5" aria-hidden />
+              Контрольная панель
+            </span>
+            <h2 className="mt-4 text-2xl font-semibold leading-snug sm:text-3xl">
+              {settings.bannerTitle || 'Командный центр SKY'}
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed" style={{ color: 'var(--text-2)' }}>
+              {settings.bannerSubtitle || 'Все приказы, отчёты и служебные заметки собраны в одном месте. Выберите нужный раздел, чтобы перейти к обсуждению.'}
+            </p>
+            <div className="mt-4 text-sm leading-relaxed" style={{ color: 'var(--text-2)' }}>
+              {`Приветствуем, ${currentUser?.username}!`} {currentUser?.tagline && <span className="block">{currentUser.tagline}</span>}
+            </div>
+            <ul className="mt-6 grid gap-3 text-xs uppercase tracking-[0.3em] text-[color:var(--text-2)] sm:grid-cols-2">
+              <li className="flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--accent)]" aria-hidden />
+                Оперативные указания
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--accent)]" aria-hidden />
+                Гибкая модерация
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--accent)]" aria-hidden />
+                Хранилище вложений
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--accent)]" aria-hidden />
+                Журнал действий
+              </li>
+            </ul>
+          </div>
+          <div className="rounded-3xl border border-[color:var(--border)] bg-[color:var(--surface)]/95 p-5 text-[color:var(--text-1)] shadow-[0_30px_90px_-55px_rgba(53,17,117,0.55)]">
+            <div className="flex items-center justify-between text-xs uppercase tracking-[0.28em]" style={{ color: 'var(--text-2)' }}>
+              <span>Участник</span>
+              <span>{session?.remember ? 'Запомнено' : 'Гостевая сессия'}</span>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <div className="text-2xl font-semibold">{currentUser?.username}</div>
+              {currentUser && <RoleBadge role={currentUser.role} />}
+            </div>
+            <div className="text-sm" style={{ color: 'var(--text-2)' }}>
+              {userNumber ? `Пользователь №${userNumber}` : 'Номер будет назначен при синхронизации.'}
+            </div>
+            <div className="mt-1 text-sm" style={{ color: 'var(--text-2)' }}>
+              С нами с {memberSince}
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {STAT_BLOCKS.map((tile) => (
+                <div
+                  key={tile.label}
+                  className="rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-3 text-center shadow"
+                >
+                  <div className="text-xs uppercase tracking-[0.3em]" style={{ color: 'var(--text-2)' }}>
+                    {tile.label}
                   </div>
-                )}
-              </div>
-              <div className="rounded-xl border border-white/20 bg-[color:var(--surface)]/95 p-5 text-[color:var(--text-1)] shadow-xl">
-                <div className="flex items-center justify-between text-xs uppercase tracking-[0.28em]" style={{ color: 'var(--text-2)' }}>
-                  <span>Участник</span>
-                  <span>{session?.remember ? 'Запомнено' : 'Гостевая сессия'}</span>
+                  <div className="text-xl font-semibold">{tile.value}</div>
+                  <div className="text-[11px]" style={{ color: 'var(--text-2)' }}>
+                    {tile.hint}
+                  </div>
                 </div>
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <div className="text-2xl font-semibold">{currentUser?.username}</div>
-                  {currentUser && <RoleBadge role={currentUser.role} />}
-                </div>
-                <div className="text-sm" style={{ color: 'var(--text-2)' }}>
-                  {userNumber ? `Пользователь №${userNumber}` : 'Номер будет назначен при синхронизации.'}
-                </div>
-                <div className="mt-1 text-sm" style={{ color: 'var(--text-2)' }}>
-                  С нами с {memberSince}
-                </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  {STAT_BLOCKS.map((tile) => (
-                    <div
-                      key={tile.label}
-                      className="rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-3 text-center shadow"
-                    >
-                      <div className="text-xs uppercase tracking-[0.3em]" style={{ color: 'var(--text-2)' }}>
-                        {tile.label}
-                      </div>
-                      <div className="text-xl font-semibold">{tile.value}</div>
-                      <div className="text-[11px]" style={{ color: 'var(--text-2)' }}>
-                        {tile.hint}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              ))}
             </div>
           </div>
         </section>
 
-        <div className="mt-10 grid gap-6 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+        <section className="mt-10 space-y-4">
+          <div className="flex items-center justify-between text-xs uppercase tracking-[0.32em]" style={{ color: 'var(--text-2)' }}>
+            <span>Командный чат</span>
+            <span className="flex items-center gap-2">
+              <span
+                className={chatOnlineCount > 0
+                  ? 'h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(34,197,94,0.45)]'
+                  : 'h-2.5 w-2.5 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.45)]'}
+                aria-hidden
+              />
+              <span>{chatOnlineCount}</span>
+            </span>
+          </div>
+          <SimpleChat variant="forum" onRosterChange={handleRosterChange} resolveRole={chatRoleResolver} />
+        </section>
+
+        <div className="mt-12 grid gap-6 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
           <aside className="order-first flex flex-col gap-6 lg:order-none">
             <section className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] shadow-lg">
               <div className="flex items-center justify-between border-b border-[color:var(--border)] px-4 py-3 text-xs uppercase tracking-[0.3em]" style={{ color: 'var(--text-2)' }}>
@@ -1762,54 +1825,6 @@ export default function ForumPage() {
                     </Link>
                   </li>
                 ))}
-              </ul>
-            </section>
-
-            <section className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] shadow-lg">
-              <div className="flex items-center justify-between border-b border-[color:var(--border)] px-4 py-3 text-xs uppercase tracking-[0.3em]" style={{ color: 'var(--text-2)' }}>
-                <span>Чат смены</span>
-                <span className="flex items-center gap-2">
-                  <span
-                    className={onlineCount > 0 ? 'h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(74,222,128,0.55)]' : 'h-2.5 w-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.45)]'}
-                    aria-hidden
-                  />
-                  <span>{onlineCount}</span>
-                </span>
-              </div>
-              <div className="p-4">
-                <SimpleChat />
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] shadow-lg">
-              <div className="border-b border-[color:var(--border)] px-4 py-3 text-xs uppercase tracking-[0.3em]" style={{ color: 'var(--text-2)' }}>
-                В сети ({onlineCount})
-              </div>
-              <ul className="divide-y divide-[color:var(--border)]">
-                {ONLINE_NOW.map((entry) => {
-                  return (
-                    <li key={entry.name} className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-[color:var(--text-1)]">
-                          <span className="font-semibold">{entry.name}</span>
-                          <span className="text-xs uppercase tracking-[0.28em]" style={{ color: 'var(--text-2)' }}>
-                            №{entry.userNumber}
-                          </span>
-                        </div>
-                        <RoleBadge role={entry.role} />
-                      </div>
-                      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.24em]" style={{ color: 'var(--text-2)' }}>
-                        <span
-                          className={entry.online
-                            ? 'h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(74,222,128,0.55)]'
-                            : 'h-2.5 w-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.45)]'}
-                          aria-hidden
-                        />
-                        <span>{entry.online ? 'В сети' : 'Не в сети'}</span>
-                      </div>
-                    </li>
-                  );
-                })}
               </ul>
             </section>
 

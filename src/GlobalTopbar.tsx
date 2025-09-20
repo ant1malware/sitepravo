@@ -1,73 +1,82 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Sparkles, Mail, Bell, Search, CircleUserRound, Menu } from 'lucide-react';
+import { Building2, Search, Star, Settings, MessageSquare, Menu } from 'lucide-react';
+import { getWhatsNew } from './versioning';
+import { useStyleMode } from './useStyleMode';
+import LiquidGlass from './components/LiquidGlass';
 
 export default function GlobalTopbar() {
+  const [styleMode] = useStyleMode();
   const location = useLocation();
-  const hideTopbar = location.pathname.startsWith('/forum');
+  const hasNews = React.useMemo(() => {
+    try {
+      const it = getWhatsNew()[0];
+      if (!it) return false;
+      const d = new Date(it.date + 'T00:00:00Z');
+      return (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24) <= 14;
+    } catch { return false; }
+  }, []);
 
-  if (hideTopbar) return null;
+  function openSearch() {
+    const api = (window as any).openCommandPalette;
+    if (typeof api === 'function') { try { api(); return; } catch {} }
+    const meta = navigator.platform.includes('Mac');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: !meta, metaKey: meta } as any));
+  }
+
+  const innerClasses = 'global-topbar__inner mx-auto flex max-w-6xl items-center justify-between gap-1 px-4 py-3 sm:gap-3';
+  const shellClass = styleMode === 'liquid' || styleMode === 'beta'
+    ? 'global-topbar-shell sticky top-0 z-50 border-transparent bg-transparent px-2 sm:px-4'
+    : 'global-topbar-shell sticky top-0 z-40 border-b border-zinc-200 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:border-zinc-800 dark:bg-[color:var(--surface)]/90 dark:supports-[backdrop-filter]:bg-[color:var(--surface)]/70';
+
+  const content = (
+    <>
+      <div className="flex min-w-0 items-center gap-3">
+        <button className="btn btn-secondary sm:hidden" onClick={() => (window as any).openMobileMenu?.()} aria-label="Меню">
+          <Menu className="h-4 w-4" />
+        </button>
+        <Building2 className="h-6 w-6 shrink-0" />
+        <div className="truncate text-base font-bold leading-tight sm:text-lg">Справочник SKY</div>
+      </div>
+      <div className="flex flex-wrap items-center justify-end gap-1 sm:gap-2">
+        <button className="btn btn-secondary" onClick={openSearch} aria-label="Поиск">
+          <Search className="h-4 w-4" />
+          <span className="hidden sm:inline">Поиск</span>
+        </button>
+        <Link to="/whats-new" className="btn" aria-label="Что нового">
+          <span className="hidden sm:inline">Что нового</span>
+          {hasNews && (<span className="ml-2 inline-block h-2 w-2 rounded-full bg-amber-500" />)}
+        </Link>
+        <Link to="/favorites" className="btn" aria-label="Избранное">
+          <Star className="h-4 w-4" />
+          <span className="hidden sm:inline">Избранное</span>
+        </Link>
+        <Link to="/settings" className="btn" aria-label="Настройки">
+          <Settings className="h-4 w-4" />
+          <span className="hidden sm:inline">Настройки</span>
+        </Link>
+        <a href="https://t.me/pasha_bolshoi" target="_blank" rel="noreferrer" className="btn" aria-label="Связаться в Telegram">
+          <MessageSquare className="h-4 w-4" />
+          <span className="hidden sm:inline">Связаться</span>
+        </a>
+      </div>
+    </>
+  );
+
+  if (location.pathname.startsWith('/forum')) {
+    return null;
+  }
 
   return (
-    <header className="global-topbar-shell fixed top-0 z-[70] w-full border-b border-[rgba(139,92,246,0.25)] bg-[rgba(12,13,18,0.9)]/95 backdrop-blur-2xl shadow-[0_20px_50px_rgba(32,18,66,0.55)]">
-      <div className="mx-auto flex h-[68px] max-w-6xl items-center justify-between gap-4 px-4">
-        <div className="flex min-w-0 items-center gap-5">
-          <button
-            className="btn btn-secondary sm:hidden"
-            onClick={() => (window as any).openMobileMenu?.()}
-            aria-label="Меню"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-          <div className="flex items-center gap-2 text-lg font-semibold uppercase tracking-[0.4em] text-[var(--text-2)]">
-            <Sparkles className="h-6 w-6 text-[var(--accent)]" />
-            <span>SKY</span>
-          </div>
-          <nav className="hidden items-center gap-1 text-sm font-medium text-[var(--text-2)] sm:flex">
-            {[
-              { to: '/forum', label: 'FORUMS' },
-              { to: '/workshop', label: 'WORKSHOP' },
-              { to: '/store', label: 'STORE' },
-              { to: '/support', label: 'SUPPORT' },
-            ].map((link) => (
-              <Link
-                key={link.label}
-                to={link.to}
-                className="rounded-[0.9rem] px-4 py-2 transition-all duration-[180ms] hover:bg-[rgba(139,92,246,0.18)] hover:text-white"
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            className="rounded-full border border-[rgba(139,92,246,0.28)] bg-[rgba(19,20,30,0.85)] p-2 text-[var(--text-2)] transition-colors duration-[180ms] hover:border-[rgba(139,92,246,0.6)] hover:text-white"
-            aria-label="Сообщения"
-          >
-            <Mail className="h-4 w-4" />
-          </button>
-          <button
-            className="relative rounded-full border border-[rgba(139,92,246,0.28)] bg-[rgba(19,20,30,0.85)] p-2 text-[var(--text-2)] transition-colors duration-[180ms] hover:border-[rgba(139,92,246,0.6)] hover:text-white"
-            aria-label="Уведомления"
-          >
-            <Bell className="h-4 w-4" />
-            <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[10px] font-semibold text-white">
-              3
-            </span>
-          </button>
-          <button
-            className="hidden rounded-full border border-[rgba(139,92,246,0.28)] bg-[rgba(19,20,30,0.85)] p-2 text-[var(--text-2)] transition-colors duration-[180ms] hover:border-[rgba(139,92,246,0.6)] hover:text-white sm:inline-flex"
-            aria-label="Поиск"
-          >
-            <Search className="h-4 w-4" />
-          </button>
-          <button className="flex items-center gap-2 rounded-full border border-[rgba(139,92,246,0.45)] bg-[rgba(31,21,49,0.9)] px-3 py-1.5 text-sm font-semibold text-white transition-all duration-[180ms] hover:border-[rgba(139,92,246,0.75)] hover:shadow-[0_0_22px_rgba(139,92,246,0.36)]">
-            <CircleUserRound className="h-5 w-5 text-[var(--accent)]" />
-            <span className="hidden sm:inline">Вы</span>
-          </button>
-        </div>
-      </div>
-    </header>
+    <div className={shellClass}>
+      {styleMode === 'liquid' ? (
+        <LiquidGlass className={`${innerClasses} global-topbar__glass`} blur={26} tint="16 18 34" opacity={0.24} gloss={0.65} elevation={1.2} interactive={false} animate>
+          {content}
+        </LiquidGlass>
+      ) : (
+        <div className={innerClasses}>{content}</div>
+      )}
+    </div>
   );
 }
+

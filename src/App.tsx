@@ -1,5 +1,5 @@
 ﻿import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 const GovCheatsheetSky = React.lazy(() => import('./GovCheatsheetSky'));
 const WhatsNew = React.lazy(() => import('./WhatsNew'));
 const DiffPage = React.lazy(() => import('./DiffPage'));
@@ -9,6 +9,7 @@ const RolePage = React.lazy(() => import('./RolePage'));
 const LawPage = React.lazy(() => import('./LawPage'));
 const VuPage = React.lazy(() => import('./VuPage'));
 const BuddyPlayground = React.lazy(() => import('./BuddyPlayground'));
+const HomePage = React.lazy(() => import('./HomePage'));
 const ForumPage = React.lazy(() => import('./ForumPage'));
 import RecorderPage from './RecorderPage';
 import AboutPage from './AboutPage';
@@ -78,8 +79,8 @@ export default function App() {
       <React.Suspense fallback={<div className="p-4 text-sm text-zinc-300">Загрузка…</div>}>
         <Routes>
           <Route path="/" element={<GovCheatsheetSky />} />
+          <Route path="/home" element={<HomePage />} />
           <Route path="/forum" element={<ForumPage />} />
-          <Route path="/home" element={<Navigate to="/forum" replace />} />
           <Route path="/whats-new" element={<WhatsNew />} />
           <Route path="/diff/:id" element={<DiffPage />} />
           <Route path="/print" element={<PrintSheet />} />
