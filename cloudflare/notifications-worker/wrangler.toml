@@ -11,7 +11,6 @@ bindings = [
   { name = "ROOM", class_name = "ChatRoom" }
 ]
 
-# БЫЛО: new_classes — на фри так нельзя
 # СТАЛО: new_sqlite_classes — правильно для Free
 [[migrations]]
 tag = "chat-v1"

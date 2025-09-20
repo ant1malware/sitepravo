@@ -1,11 +1,14 @@
 ﻿import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { NAV } from './Sidebar';
-import { Search, X, Star, Settings } from 'lucide-react';
+import { Search, X, Star, Settings, Lock } from 'lucide-react';
+import { useForumSessionWatcher } from './forumSession';
 
 export default function MobileMenu() {
   const [open, setOpen] = React.useState(false);
   const loc = useLocation();
+  const forumSession = useForumSessionWatcher();
+  const forumLocked = !forumSession;
 
   // Expose global opener for header button
   React.useEffect(() => {
@@ -65,6 +68,9 @@ export default function MobileMenu() {
                   >
                     {n.icon}
                     <span className="truncate">{n.label}</span>
+                    {n.key === 'forum' && forumLocked && (
+                      <Lock className="h-4 w-4 text-amber-400" aria-hidden />
+                    )}
                   </Link>
                 </li>
               );
@@ -79,4 +85,3 @@ export default function MobileMenu() {
     </div>
   );
 }
-
