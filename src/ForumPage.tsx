@@ -47,13 +47,11 @@ import {
   PinOff,
   Plus,
   RefreshCcw,
-  Rocket,
   Send,
   ShieldCheck,
   Sparkles,
   Star,
   Trash2,
-  Users,
 } from "lucide-react";
 
 const ForumDataContext = React.createContext<{
@@ -120,19 +118,22 @@ export default function ForumPage() {
   return (
     <ForumDataContext.Provider value={{ me, refresh, tick }}>
       <div className="forum-theme min-h-dvh bg-[var(--bg-1)] text-[var(--text-1)]">
-        <main className="mx-auto max-w-6xl px-4 pb-16 pt-10">
-          <ForumHero
-            account={me}
-            settings={settings}
-            onLogout={() => {
-              clearSession();
-              setMe(null);
-            }}
-          />
-          <div className="mt-8 grid gap-6 lg:grid-cols-[260px_1fr]">
-            <ForumSidebar />
-            <div className="space-y-6">
-              <Routes>
+          <main className="mx-auto max-w-6xl px-4 pb-16 pt-10">
+            <ForumHero
+              account={me}
+              settings={settings}
+              onLogout={() => {
+                clearSession();
+                setMe(null);
+              }}
+            />
+            <div className="mt-6">
+              <RetroChat />
+            </div>
+            <div className="mt-8 grid gap-6 lg:grid-cols-[260px_1fr]">
+              <ForumSidebar />
+              <div className="space-y-6">
+                <Routes>
                 <Route index element={<ForumHome />} />
                 <Route path="section/:sectionId" element={<SectionView />} />
                 <Route path="topic/:topicId" element={<TopicView />} />
@@ -155,55 +156,91 @@ function ForumHero({
   settings: ReturnType<typeof getForumSettings>;
   onLogout: () => void;
 }) {
+  const heroTitle = (settings.heroTitle || "SKY").toUpperCase();
+  const heroSubtitle =
+    settings.heroSubtitle || "Минимальный тёмный форум SKY. Только своё.";
+  const heroMessage =
+    settings.heroMessage ||
+    "Создаём темы, модерируем пространство и держим связь 24/7.";
+
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-8">
-      <div className="absolute inset-0 -z-10 opacity-60" style={{
-        background: "radial-gradient(60% 80% at 10% 20%, rgba(139,92,246,.45), transparent 70%)," +
-          "radial-gradient(70% 90% at 90% 30%, rgba(34,211,238,.35), transparent 70%)",
-      }} />
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
-        <div className="flex-1 space-y-4">
-          <div className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1 text-xs uppercase tracking-[0.3em] text-[var(--text-2)]">
-            <Sparkles className="h-3 w-3" /> SKY exclusive
-          </div>
-          <h1 className="text-4xl font-black uppercase tracking-tight md:text-5xl">
-            {settings.heroTitle || "SKY Forum"}
-          </h1>
-          <p className="max-w-2xl text-[var(--text-2)]">
-            {settings.heroSubtitle || "Экосистема идей, обсуждений и модерации SKY."}
-          </p>
-          <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--text-2)]">
-            <span className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1">
-              <Users className="h-4 w-4" /> #{account.userNumber}
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1">
-              <ShieldCheck className="h-4 w-4" /> Роль: {account.role}
-            </span>
-            <Link to={`/forum/profile/${account.username}`} className="btn btn-secondary text-xs font-semibold uppercase tracking-wide">
-              Профиль
-            </Link>
-            {account.role === "admin" || account.role === "moderator" ? (
-              <Link to="/forum/admin" className="btn btn-primary text-xs font-semibold uppercase tracking-wide">
-                Панель модерации
-              </Link>
-            ) : null}
-            <button className="btn btn-ghost text-xs" onClick={onLogout}>
-              <LogOut className="h-4 w-4" /> Выйти
-            </button>
-          </div>
+    <section className="relative overflow-hidden rounded-[32px] border border-[var(--border)] bg-[var(--surface)] px-8 py-12 text-center">
+      <div
+        className="pointer-events-none absolute inset-0 -z-10 opacity-70"
+        style={{
+          background:
+            "radial-gradient(60% 80% at 10% 20%, rgba(139,92,246,0.45), transparent 70%)," +
+            "radial-gradient(70% 90% at 90% 30%, rgba(34,211,238,0.35), transparent 70%)",
+        }}
+      />
+      <div className="relative mx-auto flex max-w-4xl flex-col items-center gap-4 text-center">
+        <span className="text-[11px] uppercase tracking-[0.6em] text-[var(--text-2)]/80">
+          sky forum access
+        </span>
+        <h1
+          className="text-5xl font-black uppercase tracking-[0.4em] text-transparent drop-shadow-[0_28px_80px_rgba(0,0,0,0.55)] md:text-6xl"
+          style={{
+            backgroundImage: "linear-gradient(90deg, #f4f5ff 0%, #a855f7 100%)",
+            WebkitBackgroundClip: "text",
+          }}
+        >
+          {heroTitle}
+        </h1>
+        <p className="max-w-2xl text-sm text-[var(--text-2)]">{heroSubtitle}</p>
+        <div className="flex flex-wrap justify-center gap-2 text-[10px] uppercase tracking-[0.35em] text-[var(--text-2)]/80">
+          <span className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-4 py-1">
+            user #{account.userNumber}
+          </span>
+          <span className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-4 py-1">
+            role {account.role}
+          </span>
+          <span className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-4 py-1">
+            topics {account.topics}
+          </span>
+          <span className="rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-4 py-1">
+            posts {account.posts}
+          </span>
         </div>
-        <div className="relative w-full max-w-sm self-stretch rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-            <Rocket className="h-4 w-4 text-[var(--accent)]" />
-            {settings.heroMessage || "Добро пожаловать домой."}
-          </div>
-          <p className="text-sm text-[var(--text-2)]">
-            Здесь собраны свежие обновления и живые обсуждения. Следи за полосой Latest, чтобы не пропустить ответы на твои темы.
+      </div>
+      <div className="relative mt-8 grid gap-3 text-left md:grid-cols-2">
+        <div className="rounded-2xl border border-[#1f3624] bg-[#0f1914] px-5 py-4 text-emerald-100 shadow-[0_24px_50px_-32px_rgba(16,185,129,0.65)]">
+          <p className="text-[10px] uppercase tracking-[0.45em] text-emerald-300/70">
+            important rate
           </p>
-          <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-            <RetroChat collapsed />
-          </div>
+          <p className="mt-3 text-sm leading-relaxed">{heroMessage}</p>
         </div>
+        <div className="rounded-2xl border border-[#3a1c1c] bg-[#190f14] px-5 py-4 text-rose-100 shadow-[0_24px_50px_-32px_rgba(244,63,94,0.55)]">
+          <p className="text-[10px] uppercase tracking-[0.45em] text-rose-300/70">
+            connection alert
+          </p>
+          <p className="mt-3 text-sm leading-relaxed">
+            Если вы заходите из регионов с Connection Failed, включите VPN или
+            прокси и обновите вкладку. Мы следим за статусом узлов и дадим апдейт
+            в Latest.
+          </p>
+        </div>
+      </div>
+      <div className="relative mt-8 flex flex-wrap justify-center gap-3 text-[11px] uppercase tracking-[0.35em] text-[var(--text-2)]">
+        <Link
+          to={`/forum/profile/${account.username}`}
+          className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] px-4 py-2 text-[var(--text-1)] transition hover:bg-[var(--surface-2)]"
+        >
+          профиль
+        </Link>
+        {(account.role === "admin" || account.role === "moderator") && (
+          <Link
+            to="/forum/admin"
+            className="inline-flex items-center gap-2 rounded-full border border-[var(--accent)] bg-[var(--accent)]/10 px-4 py-2 text-[var(--accent)] transition hover:bg-[var(--accent)]/20"
+          >
+            панель модерации
+          </Link>
+        )}
+        <button
+          className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] px-4 py-2 text-[var(--text-1)] transition hover:bg-[var(--surface-2)]"
+          onClick={onLogout}
+        >
+          <LogOut className="h-4 w-4" /> выйти
+        </button>
       </div>
     </section>
   );
@@ -231,10 +268,6 @@ function ForumSidebar() {
       </nav>
       <div className="card text-sm text-[var(--text-2)]">
         <p>Следи за порядком и поддерживай уважительную атмосферу. Нарушения караются банами без предупреждения.</p>
-      </div>
-      <div className="card flex flex-col gap-2">
-        <span className="text-xs uppercase tracking-[0.3em] text-[var(--text-2)]">Live log</span>
-        <RetroChat compact />
       </div>
       <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-2)] p-4 text-xs text-[var(--text-2)]">
         Токены темы доступны в <code>src/index.css</code>. Используйте <span className="font-semibold text-[var(--accent)]">accent gradient</span> для своих карточек.
