@@ -11,7 +11,7 @@ type ServerEvent =
   | { type: 'message'; message: ChatMessage; cid?: string }
   | { type: 'delete'; id: string }
   | { type: 'edit'; id: string; text: string }
-  | { type: 'system'; text: string; name?: string };
+  | { type: 'system'; text: string; name?: string; count?: number; names?: string[] };
 
 type Props = {
   room?: string;
@@ -33,7 +33,7 @@ const NICKS = [
 function suggestNick(): string {
   const base = NICKS[Math.floor(Math.random() * NICKS.length)];
   const suffix = Math.floor(Math.random() * 900 + 100);
-  return `${base} #${suffix}`;
+  return `${base} ${suffix}`;
 }
 
 function parseWsData(data: any): ServerEvent | null {
@@ -51,37 +51,129 @@ function hhmmss(ts: number) {
   return d.toLocaleTimeString(undefined, { hour12: false });
 }
 
-const CHAT_CSS = `
-.rc-wrap{border:1px solid #111;background:#111;border-radius:4px;overflow:hidden;font:13px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,'Helvetica Neue',Arial}
-.rc-head{padding:6px 8px;color:#c9d1d9;background:#0e0e0f;border-bottom:1px solid #0b0b0b;display:flex;justify-content:space-between;align-items:center}
-.rc-head .pill{display:inline-flex;align-items:center;gap:6px;border-radius:10px;padding:2px 8px;font-size:12px}
-.rc-pill-online{background:#193a2b;color:#7ee787;border:1px solid #2ea04344}
-.rc-pill-admin{background:#1a2438;color:#79c0ff;border:1px solid #79c0ff33}
-.rc-list{height:280px;overflow:auto;background:#1a1a1b}
-.rc-list ul{list-style:none;margin:0;padding:0}
-.rc-list li{padding:3px 8px;white-space:pre-wrap;word-break:break-word}
-.rc-list li:nth-child(odd){background:#232324}
-.rc-list li:nth-child(even){background:#1e1e1f}
-.rc-ts{color:#9da1a6;margin-right:6px}
-.rc-me{color:#a3d977;font-weight:600}
-.rc-other{color:#e06c75;font-weight:600}
-.rc-admin{color:#facc15;font-weight:700}
-.rc-form{display:flex;gap:6px;padding:6px;background:#0f0f10;border-top:1px solid #0b0b0b}
-.rc-input{flex:1;background:#0f0f10;border:1px solid #2a2a2b;color:#e5e7eb;border-radius:4px;padding:6px 8px}
-.rc-btn{background:#2b2b2c;border:1px solid #3a3a3c;color:#e5e7eb;border-radius:4px;padding:6px 10px;cursor:pointer}
-.rc-btn:disabled{opacity:.6;cursor:not-allowed}
-.rc-actions{display:flex;gap:4px;margin-left:8px}
-.rc-ax{font-size:12px;background:#2b2b2c;border:1px solid #3a3a3c;color:#ccc;border-radius:4px;padding:2px 6px;cursor:pointer}
-.rc-empty{opacity:.7;padding:6px 8px}
-.nick-back{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:1000}
-.nick-card{width:min(92vw,520px);background:#121316;border:1px solid #2a2a2b;border-radius:10px;padding:14px;color:#e5e7eb}
-.nick-row{display:flex;gap:8px;margin-top:10px}
-.nick-input{flex:1;background:#0f0f10;border:1px solid #2a2a2b;color:#e5e7eb;border-radius:6px;padding:8px}
-.nick-btn{background:#243040;border:1px solid #375a7a;color:#d6e8ff;border-radius:6px;padding:8px 12px;cursor:pointer}
-.nick-pill{display:inline-block;margin-top:8px;margin-right:6px;background:#222427;border:1px solid #303236;border-radius:999px;padding:4px 10px;cursor:pointer}
-.nick-warn{font-size:12px;color:#b3b7bf;opacity:.9;margin-top:6px}
-`;
+function escapeRegex(input: string) {
+  return input.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+}
 
+function makeMentionPattern(name: string | null | undefined): string | null {
+  if (!name) return null;
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  const escaped = escapeRegex(trimmed);
+  const flexible = escaped.replace(/\s+/g, '\\s+');
+  return `@${flexible}(?=\\b|$)`;
+}
+
+function hasMention(text: string, pattern: string | null): boolean {
+  if (!pattern) return false;
+  try {
+    return new RegExp(pattern, 'iu').test(text);
+  } catch {
+    return false;
+  }
+}
+
+function highlightMentions(text: string, pattern: string | null): React.ReactNode {
+  if (!pattern) return text;
+  try {
+    const re = new RegExp(pattern, 'giu');
+    const out: React.ReactNode[] = [];
+    let last = 0;
+    let idx = 0;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(text)) !== null) {
+      if (match.index > last) {
+        out.push(<React.Fragment key={`text-${idx++}`}>{text.slice(last, match.index)}</React.Fragment>);
+      }
+      out.push(
+        <span key={`mention-${idx++}`} className="rc-ping">
+          {match[0]}
+        </span>
+      );
+      last = re.lastIndex;
+    }
+    if (last < text.length) {
+      out.push(<React.Fragment key={`text-${idx++}`}>{text.slice(last)}</React.Fragment>);
+    }
+    return out.length ? out : text;
+  } catch {
+    return text;
+  }
+}
+
+const EMOJI_PICKER = [
+  '😀','😁','😂','🤣','😅','😎','😍','😘','😇','🤝','👌','👍','🔥','💯','✨','⚡','🎯','🚀','🛡️','🏆','💬','📝','📌','📣','🗂️','🧠','📈',
+  '🕒','🛠️','🔒','✅','❗','⚠️','❓','🎉','🥳','🙌','🤘','🤖','👀','💡','🧭','📦','🛎️','📡','🛰️','🧪','📕','🧷','🪪','🧰','🧱','🛰','🗃️'
+] as const;
+
+const CHAT_CSS = String.raw`
+.rc-wrap{border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-2xl);overflow:hidden;font:13px/1.4 Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;box-shadow:var(--card-shadow);color:var(--text-1);}
+.rc-head{padding:12px 16px;background:var(--bg-2);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:16px;position:relative;}
+.rc-head-title{font-weight:600;font-size:14px;letter-spacing:.08em;text-transform:uppercase;}
+.rc-head-meta{display:flex;align-items:center;gap:12px;}
+.rc-presence,.rc-presence-btn{display:flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.04em;}
+.rc-presence{color:var(--text-2);}
+.rc-presence-dot{width:10px;height:10px;border-radius:999px;background:#ef4444;box-shadow:0 0 8px rgba(239,68,68,.3);transition:all .25s ease;}
+.rc-presence-dot.on{background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,.35);}
+.rc-presence-count{display:flex;align-items:baseline;gap:4px;font-weight:600;color:var(--text-1);}
+.rc-presence-count span{font-size:11px;font-weight:500;color:var(--text-2);text-transform:uppercase;}
+.rc-presence-btn{border:1px solid var(--border);border-radius:999px;padding:6px 12px;background:var(--surface-2);color:var(--text-1);cursor:pointer;transition:background .2s ease,border-color .2s ease,box-shadow .2s ease,color .2s ease;}
+.rc-presence-btn:hover,.rc-presence-btn:focus-visible{background:var(--surface);border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 2px rgba(59,130,246,.2);outline:none;}
+.rc-presence-btn.open{background:var(--surface);border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 2px rgba(59,130,246,.2);}
+.rc-role-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;background:var(--surface-2);color:var(--accent);border:1px solid var(--accent);}
+.rc-presence-panel{position:absolute;top:calc(100% + 12px);right:0;width:min(260px,80vw);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-2xl);padding:14px 16px;box-shadow:var(--card-shadow);z-index:40;}
+.rc-presence-title{font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--text-2);}
+.rc-presence-panel ul{margin:10px 0 0 0;padding:0;list-style:none;max-height:220px;overflow:auto;}
+.rc-presence-panel li{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px;border-top:1px solid var(--border);}
+.rc-presence-panel li:first-child{border-top:none;padding-top:0;}
+.rc-presence-panel li:last-child{padding-bottom:0;}
+.rc-presence-panel li.self{color:var(--accent);font-weight:600;}
+.rc-presence-dot-sm{width:7px;height:7px;border-radius:999px;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,.35);}
+.rc-presence-you{margin-left:auto;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2);}
+.rc-presence-empty{font-size:12px;color:var(--text-2);margin-top:8px;}
+.rc-list{height:280px;overflow:auto;background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border);}
+.rc-list ul{list-style:none;margin:0;padding:0;}
+.rc-list li{padding:6px 12px;white-space:pre-wrap;word-break:break-word;display:flex;flex-wrap:wrap;align-items:flex-start;gap:4px;}
+.rc-list li+li{border-top:1px solid var(--border);}
+.rc-list li.rc-mention{background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--accent);border-left:3px solid var(--accent);}
+.rc-ping{display:inline-block;background:var(--accent);color:#fff;border-radius:6px;padding:0 4px;margin:0 1px;font-weight:700;letter-spacing:.02em;}
+.rc-ts{color:var(--text-2);margin-right:6px;}
+.rc-me{color:#16a34a;font-weight:600;}
+.rc-other{color:var(--text-1);font-weight:600;}
+.rc-admin{color:var(--accent);font-weight:700;}
+.rc-actions{display:flex;gap:4px;margin-left:auto;}
+.rc-ax{font-size:11px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-1);border-radius:6px;padding:2px 6px;cursor:pointer;}
+.rc-ax:hover{background:var(--surface);}
+.rc-empty{opacity:.7;padding:12px;color:var(--text-2);}
+.rc-form{display:flex;gap:8px;padding:10px 12px;background:var(--bg-2);position:relative;align-items:center;}
+.rc-input{flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text-1);border-radius:var(--radius-lg);padding:8px 10px;}
+.rc-input:focus-visible{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(59,130,246,.25);}
+.rc-emoji-btn{width:38px;height:38px;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--surface);color:var(--text-1);display:grid;place-items:center;font-size:18px;cursor:pointer;transition:background .2s ease,border-color .2s ease,transform .2s ease,color .2s ease;}
+.rc-emoji-btn:hover{background:var(--surface-2);}
+.rc-emoji-btn:disabled{opacity:.6;cursor:not-allowed;}
+.rc-emoji-btn.open{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 2px rgba(59,130,246,.2);}
+.rc-btn{background:var(--accent);border:none;color:#fff;border-radius:var(--radius-lg);padding:0 18px;font-weight:600;cursor:pointer;transition:opacity .2s ease,transform .2s ease;}
+.rc-btn:hover{opacity:.92;}
+.rc-btn:active{transform:scale(.98);}
+.rc-btn:disabled{opacity:.6;cursor:not-allowed;}
+.rc-emoji-panel{position:absolute;bottom:56px;right:12px;width:min(320px,90vw);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-xl);box-shadow:var(--card-shadow);padding:12px;display:flex;flex-direction:column;gap:10px;z-index:60;}
+.rc-emoji-title{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-2);font-weight:600;}
+.rc-emoji-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;}
+.rc-emoji-item{height:36px;border-radius:10px;border:1px solid transparent;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;transition:background .2s ease,border-color .2s ease,transform .15s ease;}
+.rc-emoji-item:hover{background:var(--surface);border-color:var(--accent);transform:translateY(-1px);}
+.rc-emoji-item:focus-visible{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(59,130,246,.2);}
+.rc-emoji-empty{font-size:12px;color:var(--text-2);text-align:center;padding:10px 0;}
+.nick-back{position:fixed;inset:0;background:rgba(15,15,18,.55);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px;}
+.nick-card{width:min(92vw,520px);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-2xl);padding:18px;color:var(--text-1);box-shadow:var(--card-shadow);}
+.nick-row{display:flex;gap:8px;margin-top:12px;}
+.nick-input{flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text-1);border-radius:var(--radius-lg);padding:8px 10px;}
+.nick-btn{background:var(--accent);border:1px solid var(--accent-600,var(--accent));color:#fff;border-radius:var(--radius-lg);padding:8px 12px;cursor:pointer;font-weight:600;}
+.nick-btn:hover{background:var(--accent-600,var(--accent));}
+.nick-pill{display:inline-flex;align-items:center;gap:6px;margin-top:10px;margin-right:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:4px 10px;cursor:pointer;font-size:12px;color:var(--text-2);}
+.nick-pill:hover{color:var(--accent);border-color:var(--accent);}
+.nick-warn{font-size:12px;color:var(--text-2);margin-top:6px;}
+
+`;
 function computeWorkerBase(wsFull: string | undefined): string {
   if (!wsFull) return '';
   try {
@@ -113,17 +205,35 @@ export default function SimpleChat({ room = 'global', className }: Props) {
 
   // === 2) chat state ===
   const [connected, setConnected] = React.useState(false);
+  const [onlineCount, setOnlineCount] = React.useState<number>(0);
+  const [onlineNames, setOnlineNames] = React.useState<string[]>([]);
+  const [presenceOpen, setPresenceOpen] = React.useState(false);
   const [isAdmin, setIsAdmin] = React.useState(false);
   const [input, setInput] = React.useState('');
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const wsRef = React.useRef<WebSocket | null>(null);
   const listRef = React.useRef<HTMLDivElement | null>(null);
+  const headRef = React.useRef<HTMLDivElement | null>(null);
+  const formRef = React.useRef<HTMLFormElement | null>(null);
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const [emojiOpen, setEmojiOpen] = React.useState(false);
   const pendingRef = React.useRef<Record<string, string>>({});
 
   // === 3) name state – НЕ читаем из storage до epochReady ===
   const [nick, setNick] = React.useState<string | null>(null);
   const [needNick, setNeedNick] = React.useState<boolean>(true);
   const [nickDraft, setNickDraft] = React.useState<string>(suggestNick());
+
+  const latestStateRef = React.useRef<{ epochReady: boolean; needNick: boolean; nick: string | null }>({
+    epochReady,
+    needNick,
+    nick,
+  });
+  const keysRef = React.useRef(keys);
+  const helloSentRef = React.useRef<string | null>(null);
+  const selfName = React.useMemo(() => (isAdmin ? 'Admin' : (nick ?? '')), [isAdmin, nick]);
+  const trimmedSelfName = React.useMemo(() => selfName.trim(), [selfName]);
+  const mentionPattern = React.useMemo(() => makeMentionPattern(trimmedSelfName || null), [trimmedSelfName]);
 
   // Подтянули epoch — теперь читаем текущие ключи и решаем, нужна ли модалка
   React.useEffect(() => {
@@ -152,6 +262,71 @@ export default function SimpleChat({ room = 'global', className }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [epochReady, keys.NAME_KEY, keys.NAME_LOCK]);
 
+  React.useEffect(() => {
+    latestStateRef.current = { epochReady, needNick, nick };
+  }, [epochReady, needNick, nick]);
+
+  React.useEffect(() => {
+    keysRef.current = keys;
+  }, [keys]);
+
+  React.useEffect(() => {
+    if (!isAdmin) setPresenceOpen(false);
+  }, [isAdmin]);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    (window as any).__simplechatAdminState = isAdmin;
+    try {
+      window.dispatchEvent(new CustomEvent('simplechat:admin-state', { detail: { isAdmin } }));
+    } catch {}
+  }, [isAdmin]);
+
+  React.useEffect(() => {
+    if (!connected) {
+      setPresenceOpen(false);
+      setOnlineNames([]);
+    }
+  }, [connected]);
+
+  React.useEffect(() => {
+    if (!presenceOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      const head = headRef.current;
+      if (head && !head.contains(event.target as Node)) setPresenceOpen(false);
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPresenceOpen(false);
+    };
+    window.addEventListener('mousedown', handleClick);
+    window.addEventListener('keydown', handleKey);
+    return () => {
+      window.removeEventListener('mousedown', handleClick);
+      window.removeEventListener('keydown', handleKey);
+    };
+  }, [presenceOpen]);
+
+  React.useEffect(() => {
+    if (!emojiOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      const form = formRef.current;
+      if (form && !form.contains(event.target as Node)) setEmojiOpen(false);
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setEmojiOpen(false);
+    };
+    window.addEventListener('mousedown', handleClick);
+    window.addEventListener('keydown', handleKey);
+    return () => {
+      window.removeEventListener('mousedown', handleClick);
+      window.removeEventListener('keydown', handleKey);
+    };
+  }, [emojiOpen]);
+
+  React.useEffect(() => {
+    if (needNick) helloSentRef.current = null;
+  }, [needNick]);
+
   // тянем epoch с воркера один раз
   React.useEffect(() => {
     let aborted = false;
@@ -177,20 +352,27 @@ export default function SimpleChat({ room = 'global', className }: Props) {
     if (!wsUrl) return;
     let stop = false;
     let retry = 0;
+    let ws: WebSocket | null = null;
 
     const connect = () => {
       if (stop) return;
+      setConnected(false);
       const url = new URL(wsUrl);
       url.searchParams.set('room', room);
-      const ws = new WebSocket(url);
+      ws = new WebSocket(url);
       wsRef.current = ws;
 
       ws.addEventListener('open', () => {
         setConnected(true);
+        pendingRef.current = {};
         retry = 0;
-        // hello ШЛЁМ ТОЛЬКО когда epoch известен и модалка закрыта
-        if (epochReady && nick && !needNick) {
-          ws.send(JSON.stringify({ type: 'hello', name: nick }));
+        setOnlineCount(0);
+        const { epochReady: ready, needNick: need, nick: currentNick } = latestStateRef.current;
+        if (ready && currentNick && !need) {
+          try {
+            ws!.send(JSON.stringify({ type: 'hello', name: currentNick }));
+            helloSentRef.current = currentNick;
+          } catch {}
         }
       });
 
@@ -228,13 +410,30 @@ export default function SimpleChat({ room = 'global', className }: Props) {
             setMessages((arr) => arr.map((m) => (m.id === parsed!.id ? { ...m, text: parsed!.text } : m)));
           } else if (parsed.type === 'system') {
             if (parsed.text === 'admin-ok') setIsAdmin(true);
-            if (parsed.text === 'hello-ok') setIsAdmin(false);
-            if (parsed.name) {
+            else if (parsed.text === 'hello-ok' && !parsed.name) setIsAdmin(false);
+
+            if (parsed.text === 'presence') {
+              const next = Number(parsed.count);
+              setOnlineCount(Number.isFinite(next) && next > 0 ? Math.round(next) : 0);
+              if (Array.isArray(parsed.names)) {
+                const list = parsed.names
+                  .map((n) => (typeof n === 'string' ? n.trim() : ''))
+                  .filter((n) => n.length > 0);
+                setOnlineNames(list);
+              } else {
+                setOnlineNames([]);
+              }
+            }
+
+            if (parsed.name && (parsed.text === 'hello-ok' || parsed.text === 'admin-ok')) {
               // сервер сообщил окончательное имя
               setNick(parsed.name);
+              setNickDraft(parsed.name);
+              helloSentRef.current = parsed.name;
               try {
-                localStorage.setItem(keys.NAME_KEY, parsed.name);
-                localStorage.setItem(keys.NAME_LOCK, '1');
+                const { NAME_KEY, NAME_LOCK } = keysRef.current;
+                localStorage.setItem(NAME_KEY, parsed.name);
+                localStorage.setItem(NAME_LOCK, '1');
               } catch {}
               setNeedNick(false); // закрываем модалку ТОЛЬКО здесь
             }
@@ -243,32 +442,52 @@ export default function SimpleChat({ room = 'global', className }: Props) {
       });
 
       const onClose = () => {
-        setConnected(false);
         if (stop) return;
+        setConnected(false);
+        setOnlineCount(0);
+        setOnlineNames([]);
+        setPresenceOpen(false);
         retry = Math.min(retry + 1, 6);
         setTimeout(connect, 400 * retry);
       };
       ws.addEventListener('close', onClose);
-      ws.addEventListener('error', () => ws.close());
+      ws.addEventListener('error', () => ws?.close());
     };
 
     connect();
     return () => {
       stop = true;
-      try { wsRef.current?.close(); } catch {}
+      try { ws?.close(); } catch {}
+      wsRef.current = null;
+      helloSentRef.current = null;
     };
-  }, [wsUrl, room, epochReady, nick, needNick, keys.NAME_KEY, keys.NAME_LOCK]);
+  }, [wsUrl, room]);
+
+  React.useEffect(() => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!epochReady || needNick || !nick) return;
+    if (helloSentRef.current === nick) return;
+    try {
+      ws.send(JSON.stringify({ type: 'hello', name: nick }));
+      helloSentRef.current = nick;
+    } catch {}
+  }, [epochReady, needNick, nick]);
 
   // действия
   function confirmNick() {
     const clean = (nickDraft || '').trim().slice(0, 80);
-    const finalName = (clean || suggestNick()).replace(/[^\p{L}\p{N}_# -]+/gu, '');
+    const finalName = (clean || suggestNick()).replace(/[^\p{L}\p{N}_ -]+/gu, '');
     setNick(finalName);
+    setNickDraft(finalName);
     try { localStorage.setItem(keys.NAME_KEY, finalName); } catch {}
 
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'hello', name: finalName }));
+      try {
+        ws.send(JSON.stringify({ type: 'hello', name: finalName }));
+        helloSentRef.current = finalName;
+      } catch {}
     }
     // модалку НЕ закрываем — дождёмся system.name от сервера
   }
@@ -286,6 +505,35 @@ export default function SimpleChat({ room = 'global', className }: Props) {
     ws.send(JSON.stringify({ type: 'message', text: text.slice(0, MAX_LEN), cid }));
     setInput('');
   }
+
+  const canUseInput = epochReady && connected && !!nick && !needNick;
+
+  React.useEffect(() => {
+    if (!canUseInput) setEmojiOpen(false);
+  }, [canUseInput]);
+
+  const toggleEmoji = () => {
+    if (!canUseInput) return;
+    setEmojiOpen((prev) => !prev);
+  };
+
+  const insertEmoji = (emoji: string) => {
+    setInput((prev) => `${prev}${emoji}`);
+    setEmojiOpen(false);
+    const focusBack = () => {
+      const node = inputRef.current;
+      if (node) {
+        const end = node.value.length;
+        node.focus();
+        try { node.setSelectionRange(end, end); } catch {}
+      }
+    };
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(focusBack);
+    } else {
+      setTimeout(focusBack, 0);
+    }
+  };
 
   const del = (id: string) => {
     const ws = wsRef.current;
@@ -310,14 +558,53 @@ export default function SimpleChat({ room = 'global', className }: Props) {
       <style dangerouslySetInnerHTML={{ __html: CHAT_CSS }} />
 
       <div className="rc-wrap" aria-busy={!epochReady}>
-        <div className="rc-head">
-          <div>Chat</div>
-          <div>
-            <span className={`pill ${connected ? 'rc-pill-online' : ''}`}>
-              {connected ? 'online' : (epochReady ? 'offline' : '…')}
-            </span>
-            {isAdmin && <span className="pill rc-pill-admin" style={{ marginLeft: 6 }}>Admin</span>}
+        <div ref={headRef} className="rc-head">
+          <div className="rc-head-title">Командный чат</div>
+          <div className="rc-head-meta">
+            {isAdmin ? (
+              <button
+                type="button"
+                className={`rc-presence rc-presence-btn${presenceOpen ? ' open' : ''}`}
+                onClick={() => setPresenceOpen((prev) => !prev)}
+                aria-expanded={presenceOpen}
+                aria-controls="rc-presence-panel"
+                aria-label="Кто сейчас в сети"
+              >
+                <span className={`rc-presence-dot ${connected ? 'on' : ''}`} aria-hidden />
+                <span className="rc-presence-count" aria-live="polite">
+                  {connected ? Math.max(onlineCount, 0) : 0}
+                  <span>в сети</span>
+                </span>
+              </button>
+            ) : (
+              <div className="rc-presence" role="status" aria-live="polite">
+                <span className={`rc-presence-dot ${connected ? 'on' : ''}`} aria-hidden />
+                <span className="rc-presence-count">
+                  {connected ? Math.max(onlineCount, 0) : 0}
+                  <span>в сети</span>
+                </span>
+              </div>
+            )}
+            {isAdmin && <span className="rc-role-pill">ADMIN</span>}
           </div>
+          {isAdmin && presenceOpen && (
+            <div id="rc-presence-panel" className="rc-presence-panel" role="dialog" aria-label="Список кто в сети">
+              <div className="rc-presence-title">Сейчас в сети</div>
+              {onlineNames.length ? (
+                <ul>
+                  {onlineNames.map((name) => (
+                    <li key={name} className={name === trimmedSelfName ? 'self' : undefined}>
+                      <span className="rc-presence-dot-sm" aria-hidden />
+                      <span>{name}</span>
+                      {name === trimmedSelfName && <span className="rc-presence-you">вы</span>}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="rc-presence-empty">Никого нет</div>
+              )}
+            </div>
+          )}
         </div>
 
         <div ref={listRef} className="rc-list">
@@ -327,34 +614,85 @@ export default function SimpleChat({ room = 'global', className }: Props) {
             <div className="rc-empty">…</div>
           ) : (
             <ul>
-              {messages.map((m) => (
-                <li key={m.id}>
-                  <span className="rc-ts">[{hhmmss(m.ts)}]</span>
-                  <span className={nickClass(m.author)}>{m.author}</span>
-                  <span>: </span>
-                  <span>{m.text}</span>
-                  {isAdmin && (
-                    <span className="rc-actions">
-                      <button className="rc-ax" onClick={() => edit(m.id, m.text)}>Ред.</button>
-                      <button className="rc-ax" onClick={() => del(m.id)}>Удал.</button>
-                    </span>
-                  )}
-                </li>
-              ))}
+              {messages.map((m) => {
+                const isSelfAuthor = trimmedSelfName ? m.author.trim() === trimmedSelfName : false;
+                const mentionForMe = Boolean(
+                  mentionPattern &&
+                    trimmedSelfName &&
+                    !isSelfAuthor &&
+                    hasMention(m.text, mentionPattern)
+                );
+                const body = mentionForMe ? highlightMentions(m.text, mentionPattern) : m.text;
+                return (
+                  <li key={m.id} className={mentionForMe ? 'rc-mention' : undefined}>
+                    <span className="rc-ts">[{hhmmss(m.ts)}]</span>
+                    <span className={nickClass(m.author)}>{m.author}</span>
+                    <span>: </span>
+                    <span className="rc-msg">{body}</span>
+                    {isAdmin && (
+                      <span className="rc-actions">
+                        <button className="rc-ax" onClick={() => edit(m.id, m.text)}>Ред.</button>
+                        <button className="rc-ax" onClick={() => del(m.id)}>Удал.</button>
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
 
-        <form className="rc-form" onSubmit={(e) => { e.preventDefault(); send(); }}>
+        <form
+          ref={formRef}
+          className="rc-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            send();
+          }}
+        >
+          <button
+            type="button"
+            className={`rc-emoji-btn${emojiOpen ? ' open' : ''}`}
+            onClick={toggleEmoji}
+            disabled={!canUseInput}
+            aria-label="Вставить смайлик"
+          >
+            😊
+          </button>
           <input
+            ref={inputRef}
             className="rc-input"
             placeholder="напишите сообщение…"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             maxLength={MAX_LEN}
-            disabled={!epochReady || !connected || !nick || needNick}
+            disabled={!canUseInput}
           />
-          <button type="submit" className="rc-btn" disabled={!epochReady || !connected || !nick || needNick}>▶</button>
+          <button type="submit" className="rc-btn" disabled={!canUseInput}>
+            ▶
+          </button>
+          {emojiOpen && (
+            <div className="rc-emoji-panel" role="menu" aria-label="Палитра смайликов">
+              <div className="rc-emoji-title">Смайлики</div>
+              {EMOJI_PICKER.length ? (
+                <div className="rc-emoji-grid">
+                  {EMOJI_PICKER.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      className="rc-emoji-item"
+                      onClick={() => insertEmoji(emoji)}
+                      aria-label={`Вставить ${emoji}`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="rc-emoji-empty">Ничего нет</div>
+              )}
+            </div>
+          )}
         </form>
       </div>
 
