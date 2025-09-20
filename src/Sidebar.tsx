@@ -1,8 +1,9 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { BookOpen, Users, LayoutList, ClipboardList, FileText, MessageSquare, Shield, ListChecks, Info, Ghost, Home } from 'lucide-react';
+import { BookOpen, Users, LayoutList, ClipboardList, FileText, MessageSquare, Shield, ListChecks, Info, Ghost, Lock } from 'lucide-react';
 import LiquidGlass from './components/LiquidGlass';
 import { useStyleMode } from './useStyleMode';
+import { useForumSessionWatcher } from './forumSession';
 
 type BaseNavItem = { key: string; label: string; icon: React.ReactNode };
 type TabNavItem = BaseNavItem & { type: 'tab'; id: string };
@@ -11,7 +12,7 @@ type RouteNavItem = BaseNavItem & { type: 'route'; to: string };
 export type NavItem = TabNavItem | RouteNavItem;
 
 export const NAV: NavItem[] = [
-  { key: 'home',          type: 'route', label: 'Главная',       icon: <Home className="h-4 w-4" />,        to: '/home' },
+  { key: 'forum',         type: 'route', label: 'Форум',         icon: <MessageSquare className="h-4 w-4" />, to: '/forum' },
   { key: 'roles',         type: 'tab',   label: 'Повышения',     icon: <Users className="h-4 w-4" />,       id: 'roles' },
   { key: 'templates',     type: 'tab',   label: 'Шаблоны',       icon: <FileText className="h-4 w-4" />,   id: 'templates' },
   { key: 'posts',         type: 'tab',   label: 'Посты',         icon: <LayoutList className="h-4 w-4" />, id: 'posts' },
@@ -27,6 +28,8 @@ export default function Sidebar() {
   const [open, setOpen] = React.useState<boolean>(() => (typeof window !== 'undefined' ? window.innerWidth >= 1024 : true));
   const loc = useLocation();
   const [styleMode] = useStyleMode();
+  const forumSession = useForumSessionWatcher();
+  const forumLocked = !forumSession;
 
   const isHashRouter = React.useMemo(() => typeof window !== 'undefined' && window.location.hash.startsWith('#/'), []);
 
@@ -85,7 +88,7 @@ export default function Sidebar() {
   const sidebarContent = (
     <>
       <div className="mb-4 flex items-center justify-start">
-        <Link to="/home" className="text-sm font-semibold tracking-tight text-[color:var(--text-1)] no-underline focus:outline-none focus:ring-2 focus:ring-[color:var(--accent-600)]/60 hover:opacity-90" aria-label="Справочник SKY">
+        <Link to="/forum" className="text-sm font-semibold tracking-tight text-[color:var(--text-1)] no-underline focus:outline-none focus:ring-2 focus:ring-[color:var(--accent-600)]/60 hover:opacity-90" aria-label="Справочник SKY">
           Справочник SKY
         </Link>
       </div>
@@ -106,6 +109,9 @@ export default function Sidebar() {
                 >
                   {n.icon}
                   <span className="truncate">{n.label}</span>
+                  {n.key === 'forum' && forumLocked && (
+                    <Lock className="h-3.5 w-3.5 text-amber-400" aria-hidden />
+                  )}
                 </Link>
               </li>
             );

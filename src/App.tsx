@@ -10,6 +10,7 @@ const LawPage = React.lazy(() => import('./LawPage'));
 const VuPage = React.lazy(() => import('./VuPage'));
 const BuddyPlayground = React.lazy(() => import('./BuddyPlayground'));
 const HomePage = React.lazy(() => import('./HomePage'));
+const ForumPage = React.lazy(() => import('./ForumPage'));
 import RecorderPage from './RecorderPage';
 import AboutPage from './AboutPage';
 import CommandPalette from "./CommandPalette";
@@ -79,6 +80,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<GovCheatsheetSky />} />
           <Route path="/home" element={<HomePage />} />
+          <Route path="/forum" element={<ForumPage />} />
           <Route path="/whats-new" element={<WhatsNew />} />
           <Route path="/diff/:id" element={<DiffPage />} />
           <Route path="/print" element={<PrintSheet />} />

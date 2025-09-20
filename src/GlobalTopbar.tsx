@@ -1,12 +1,13 @@
-﻿import React from 'react';
-import { Link } from 'react-router-dom';
-import { Building2, Search, Star, Settings, MessageSquare, Menu, Ghost } from 'lucide-react';
+import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { Building2, Search, Star, Settings, MessageSquare, Menu } from 'lucide-react';
 import { getWhatsNew } from './versioning';
 import { useStyleMode } from './useStyleMode';
 import LiquidGlass from './components/LiquidGlass';
 
 export default function GlobalTopbar() {
   const [styleMode] = useStyleMode();
+  const location = useLocation();
   const hasNews = React.useMemo(() => {
     try {
       const it = getWhatsNew()[0];
@@ -61,6 +62,10 @@ export default function GlobalTopbar() {
       </div>
     </>
   );
+
+  if (location.pathname.startsWith('/forum')) {
+    return null;
+  }
 
   return (
     <div className={shellClass}>

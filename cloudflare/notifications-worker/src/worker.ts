@@ -158,8 +158,9 @@ export default {
     if (req.method === 'POST' && url.pathname === '/admin/nick-epoch/bump') {
       if (!adminAuthorized(req, env)) return text(req, 'Unauthorized', { status: 401 })
       const cur = await readNickEpoch(env)
-      await writeNickEpoch(env, cur + 1)
-      return text(req, 'ok')
+      const next = cur + 1
+      await writeNickEpoch(env, next)
+      return json(req, { epoch: next })
     }
     if (req.method === 'POST' && url.pathname === '/admin/nick-epoch/set') {
       if (!adminAuthorized(req, env)) return text(req, 'Unauthorized', { status: 401 })
@@ -307,19 +308,51 @@ export class ChatRoom {
     try {
       const history: ChatMessage[] = (await this.state.storage.get<ChatMessage[]>('history')) || []
       ws.send(JSON.stringify({ type: 'history', messages: history }))
-      ws.send(JSON.stringify({ type: 'system', text: isAdminInitial ? 'admin-ok' : 'hello-ok', name: session.name }))
+      ws.send(JSON.stringify({ type: 'system', text: isAdminInitial ? 'admin-ok' : 'hello-ok' }))
     } catch (e) {
       console.error('do:history send failed', e)
     }
+
+    this.broadcastPresence()
 
     const keepAlive = setInterval(() => {
       try { ws.send(JSON.stringify({ type: 'system', text: 'ping' })) } catch {}
     }, 30_000)
 
     ws.addEventListener('message', (ev) => this.onMessage(session, ev.data))
-    const cleanup = () => { clearInterval(keepAlive); this.sessions.delete(session); console.log('do:close', { sessions: this.sessions.size }) }
+    const cleanup = () => {
+      clearInterval(keepAlive)
+      this.sessions.delete(session)
+      console.log('do:close', { sessions: this.sessions.size })
+      this.broadcastPresence()
+    }
     ws.addEventListener('close', cleanup)
     ws.addEventListener('error', () => { try { ws.close() } catch {} cleanup() })
+  }
+
+  broadcastPresence() {
+    if (!this.sessions.size) return
+    const seen = new Set<string>()
+    const names: string[] = []
+    for (const sess of this.sessions) {
+      const name = (sess.isAdmin ? 'Admin' : sess.name || '').trim()
+      if (!name) continue
+      const key = name.toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      names.push(name)
+    }
+    names.sort((a, b) => a.localeCompare(b, 'ru'))
+
+    const payload = JSON.stringify({ type: 'system', text: 'presence', count: this.sessions.size, names })
+    for (const sess of this.sessions) {
+      try {
+        sess.ws.send(payload)
+      } catch (err) {
+        console.warn('do:presence send failed', err)
+        try { sess.ws.close() } catch {}
+      }
+    }
   }
 
   async onMessage(session: Session, data: any) {
@@ -351,6 +384,7 @@ export class ChatRoom {
           name: session.name, // итоговое имя
         }))
       } catch {}
+      this.broadcastPresence()
       return
     }
 
