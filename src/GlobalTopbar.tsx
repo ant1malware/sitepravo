@@ -1,11 +1,13 @@
 ﻿import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Building2, Search, Star, Settings, MessageSquare, Menu, Ghost } from 'lucide-react';
 import { getWhatsNew } from './versioning';
 import { useStyleMode } from './useStyleMode';
 import LiquidGlass from './components/LiquidGlass';
 
 export default function GlobalTopbar() {
+  const location = useLocation();
+  const hideTopbar = location.pathname.startsWith('/forum');
   const [styleMode] = useStyleMode();
   const hasNews = React.useMemo(() => {
     try {
@@ -62,6 +64,8 @@ export default function GlobalTopbar() {
     </>
   );
 
+  if (hideTopbar) return null;
+
   return (
     <div className={shellClass}>
       {styleMode === 'liquid' ? (
@@ -74,4 +78,3 @@ export default function GlobalTopbar() {
     </div>
   );
 }
-
