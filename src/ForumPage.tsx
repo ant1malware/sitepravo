@@ -125,6 +125,29 @@ type QuickResource = {
   to: string;
 };
 
+type ImportantNotice = {
+  title: string;
+  message: string;
+  highlights: string[];
+};
+
+type LatestPost = {
+  id: string;
+  title: string;
+  author: string;
+  board: string;
+  timestamp: string;
+  href: string;
+};
+
+type RolePrivilegeCard = {
+  role: ForumRole;
+  title: string;
+  description: string;
+  abilities: string[];
+  icon: React.ComponentType<{ className?: string }>;
+};
+
 type SectionTile = {
   id: string;
   title: string;
@@ -414,10 +437,114 @@ const STAT_BLOCKS: StatTile[] = [
   { label: 'Документов', value: '86', hint: 'актуальных файлов' },
 ];
 
+const IMPORTANT_NOTICE: ImportantNotice = {
+  title: 'Important note',
+  message:
+    'Если вы подключаетесь из защищённых сетей, активируйте режим SKY Shield и используйте корпоративный VPN. Это требование обязательно для админов и модераторов.',
+  highlights: [
+    'Кодовое слово сменяется каждый вторник — следите за каналом #announcements.',
+    'Служба поддержки доступна круглосуточно: /support.',
+    'При нарушении регламента действует автоматический аудит действий.',
+  ],
+};
+
 const RESOURCES: QuickResource[] = [
   { label: 'Панель задач', description: 'Отслеживайте выполнение дежурств и приоритетов по ролям.', to: '/tasks' },
   { label: 'Журнал инцидентов', description: 'Ведите единый лог происшествий и действий команды.', to: '/incidents' },
   { label: 'Справка по API', description: 'Документация по интеграции и автоматизации процессов.', to: '/api' },
+];
+
+const LATEST_POSTS: LatestPost[] = [
+  {
+    id: 'lp-1',
+    title: 'Итоги ночного патруля',
+    author: 'Mod Vega',
+    board: 'Incident Desk',
+    timestamp: '10 мин назад',
+    href: '/incidents/night-shift',
+  },
+  {
+    id: 'lp-2',
+    title: 'Актуальные пропуска к дата-центру',
+    author: 'Admin',
+    board: 'Announcements & Alerts',
+    timestamp: '27 мин назад',
+    href: '/news/passes',
+  },
+  {
+    id: 'lp-3',
+    title: 'Схема реагирования на жалобы',
+    author: 'Pulse',
+    board: 'Helpdesk & Support',
+    timestamp: '42 мин назад',
+    href: '/support/escalation',
+  },
+  {
+    id: 'lp-4',
+    title: 'Гайд по новой панели мониторинга',
+    author: 'Doc-Beta',
+    board: 'Playbook & SOP',
+    timestamp: 'Час назад',
+    href: '/guides/monitoring',
+  },
+];
+
+const PRIVILEGE_CARDS: RolePrivilegeCard[] = [
+  {
+    role: 'admin',
+    title: 'Администрация',
+    description: 'Полный контроль над форумом и безопасностью платформы.',
+    abilities: [
+      'Управление настройками разделов и правами доступа',
+      'Выдача инвайтов, повышение ролей и аудит действий',
+      'Публикация системных уведомлений и объявлений',
+    ],
+    icon: Crown,
+  },
+  {
+    role: 'moderator',
+    title: 'Модерация',
+    description: 'Следят за порядком и помогают команде оставаться в тонусе.',
+    abilities: [
+      'Закрепление, перенос и закрытие обсуждений',
+      'Мгновенная модерация сообщений и чата',
+      'Отчёты по нарушениям и контроль эскалаций',
+    ],
+    icon: Shield,
+  },
+  {
+    role: 'vip',
+    title: 'VIP / Совет',
+    description: 'Доступ к приватным веткам и ранним анонсам.',
+    abilities: [
+      'Приоритетная публикация предложений и голосований',
+      'Расширенные вложения и приватные файлы',
+      'Ранний доступ к обновлениям и бета-функциям',
+    ],
+    icon: Sparkles,
+  },
+  {
+    role: 'user',
+    title: 'Участники',
+    description: 'Основной костяк сообщества и исполнители задач.',
+    abilities: [
+      'Создание тем и участие в большинстве разделов',
+      'Голосование, отметки «нравится», подписки',
+      'Отправка вложений после подтверждения профиля',
+    ],
+    icon: Users,
+  },
+  {
+    role: 'newbie',
+    title: 'Новички',
+    description: 'Проходят адаптацию и подтверждение учётной записи.',
+    abilities: [
+      'Чтение открытых категорий и базовых гайдов',
+      'Лимитированные ответы без ссылок и файлов',
+      'Получение статуса после подтверждения модератором',
+    ],
+    icon: HelpCircle,
+  },
 ];
 
 const SECTION_TILES: SectionTile[] = [
@@ -1910,6 +2037,39 @@ export default function ForumPage() {
           </div>
         </section>
 
+        <section className="mt-8">
+          <div
+            className="rounded-3xl border border-amber-400/40 bg-[rgba(234,179,8,0.12)] px-6 py-5 text-sm text-amber-100 shadow-[0_36px_120px_-60px_rgba(234,179,8,0.55)]"
+          >
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-1 items-start gap-3">
+                <AlertCircle className="mt-1 h-5 w-5" aria-hidden />
+                <div>
+                  <div className="text-xs uppercase tracking-[0.4em] text-amber-200/90">{IMPORTANT_NOTICE.title}</div>
+                  <p className="mt-1 text-sm leading-relaxed text-amber-100/90">{IMPORTANT_NOTICE.message}</p>
+                </div>
+              </div>
+              {isAdmin && (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-full border border-amber-300/60 bg-amber-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.32em] text-amber-200 transition hover:bg-amber-300/20"
+                  onClick={() => setPanelOpen(true)}
+                >
+                  Управлять баннером
+                </button>
+              )}
+            </div>
+            <ul className="mt-4 grid gap-2 text-[11px] uppercase tracking-[0.32em] text-amber-200/80 sm:grid-cols-3">
+              {IMPORTANT_NOTICE.highlights.map((item) => (
+                <li key={item} className="flex items-start gap-2">
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 text-amber-300" aria-hidden />
+                  <span className="leading-relaxed">{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
         <section className="mt-10 grid gap-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
           <div className="rounded-3xl border border-[color:var(--border)] bg-[color:var(--surface)]/90 p-6 shadow-[0_35px_90px_-60px_rgba(76,29,149,0.55)] text-[color:var(--text-1)]">
             <span className="inline-flex items-center gap-2 rounded-full bg-[color:var(--accent)]/20 px-3 py-1 text-[10px] uppercase tracking-[0.4em] text-[color:var(--accent)]">
@@ -1988,6 +2148,85 @@ export default function ForumPage() {
           </div>
         </section>
 
+        <section className="mt-10 rounded-3xl border border-[color:var(--border)] bg-[color:var(--surface)]/90 p-6 shadow-[0_40px_120px_-70px_rgba(99,102,241,0.65)]">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <span className="inline-flex items-center gap-2 rounded-full bg-[color:var(--accent)]/15 px-3 py-1 text-[10px] uppercase tracking-[0.4em] text-[color:var(--accent)]">
+                <Shield className="h-3.5 w-3.5" aria-hidden />
+                Права доступа
+              </span>
+              <h3 className="mt-3 text-2xl font-semibold leading-snug sm:text-3xl">Матрица привилегий SKY</h3>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed" style={{ color: 'var(--text-2)' }}>
+                Каждый уровень определяет возможности на форуме: от чтения новостей до управления всем контуром. Следите за
+                повышением роли — активность и дисциплина ускоряют рост.
+              </p>
+            </div>
+            <div className="flex flex-col items-start gap-2 text-xs uppercase tracking-[0.3em]" style={{ color: 'var(--text-2)' }}>
+              <span className="flex items-center gap-2">
+                Текущая роль:
+                {currentUser && <RoleBadge role={currentUser.role} />}
+              </span>
+              {isModerator ? (
+                <span className="rounded-full border border-[color:var(--accent)] px-3 py-1 text-[10px] font-semibold text-[color:var(--accent)]">
+                  Модерация активна
+                </span>
+              ) : (
+                <span className="rounded-full border border-[color:var(--border)] px-3 py-1 text-[10px]" style={{ color: 'var(--text-2)' }}>
+                  Управление доступно после повышения
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {PRIVILEGE_CARDS.map((card) => {
+              const Icon = card.icon;
+              const meta = ROLE_META[card.role];
+              const active = currentUserRole === card.role || (card.role === 'moderator' && isModerator) || (card.role === 'admin' && isAdmin);
+              return (
+                <div
+                  key={card.role}
+                  className={
+                    'rounded-2xl border px-4 py-4 transition hover:-translate-y-1 hover:border-[color:var(--accent)] hover:shadow-[0_24px_80px_-60px_rgba(99,102,241,0.8)]' +
+                    (active ? ' ring-2 ring-[color:var(--accent)]/40 shadow-[0_30px_90px_-55px_rgba(99,102,241,0.75)]' : '')
+                  }
+                  style={{
+                    background: `linear-gradient(135deg, ${meta.bg}, rgba(12,13,18,0.92))`,
+                    borderColor: active ? meta.border : 'var(--border)',
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[color:var(--surface)]/80 text-[color:var(--accent)] shadow">
+                        <Icon className="h-5 w-5" aria-hidden />
+                      </span>
+                      <div>
+                        <div className="text-sm font-semibold text-[color:var(--text-1)]">{card.title}</div>
+                        <RoleBadge role={card.role} />
+                      </div>
+                    </div>
+                    {active && (
+                      <span className="rounded-full border border-[color:var(--accent)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.32em] text-[color:var(--accent)]">
+                        Вы здесь
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-3 text-sm leading-relaxed" style={{ color: 'var(--text-2)' }}>
+                    {card.description}
+                  </p>
+                  <ul className="mt-3 space-y-2 text-sm" style={{ color: 'var(--text-2)' }}>
+                    {card.abilities.map((ability) => (
+                      <li key={ability} className="flex items-start gap-2">
+                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 text-[color:var(--accent)]" aria-hidden />
+                        <span className="leading-relaxed">{ability}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
         <section className="mt-10 space-y-4">
           <div className="flex items-center justify-between text-xs uppercase tracking-[0.32em]" style={{ color: 'var(--text-2)' }}>
             <span>Командный чат</span>
@@ -2026,6 +2265,35 @@ export default function ForumPage() {
                       <span className="text-[11px] uppercase tracking-[0.3em]" style={{ color: 'var(--text-2)' }}>
                         {topic.updatedAt}
                       </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <section className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] shadow-lg">
+              <div className="flex items-center justify-between border-b border-[color:var(--border)] px-4 py-3 text-xs uppercase tracking-[0.3em]" style={{ color: 'var(--text-2)' }}>
+                <span className="inline-flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4" aria-hidden />
+                  Последние посты
+                </span>
+                <span>{LATEST_POSTS.length}</span>
+              </div>
+              <ul className="divide-y divide-[color:var(--border)]">
+                {LATEST_POSTS.map((entry) => (
+                  <li key={entry.id} className="px-4 py-3">
+                    <Link
+                      to={entry.href}
+                      className="flex flex-col gap-1 rounded-lg transition hover:bg-[color:var(--accent)]/10"
+                    >
+                      <span className="text-sm font-semibold text-[color:var(--text-1)]">{entry.title}</span>
+                      <div className="text-xs uppercase tracking-[0.24em]" style={{ color: 'var(--text-2)' }}>
+                        {entry.board}
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em]" style={{ color: 'var(--text-2)' }}>
+                        <span>{entry.author}</span>
+                        <span>{entry.timestamp}</span>
+                      </div>
                     </Link>
                   </li>
                 ))}
