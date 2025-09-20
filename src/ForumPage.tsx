@@ -74,7 +74,10 @@ export default function ForumPage() {
   const session = useForumSessionWatcher();
   const [tick, setTick] = React.useState(0);
   const [me, setMe] = React.useState<Account | null>(() => getSessionAccount());
-  const refresh = React.useCallback(() => setTick((t) => t + 1), []);
+  const refresh = React.useCallback(() => {
+    setTick((t) => t + 1);
+    setMe(getSessionAccount());
+  }, []);
 
   React.useEffect(() => {
     if (session?.userId) {
@@ -729,6 +732,7 @@ function ForumGate({ onSuccess, settings }: { onSuccess: () => void; settings: R
   const [remember, setRemember] = React.useState(true);
   const [username, setUsername] = React.useState("");
   const [email, setEmail] = React.useState("");
+  const [invite, setInvite] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
 
@@ -742,7 +746,7 @@ function ForumGate({ onSuccess, settings }: { onSuccess: () => void; settings: R
           onSuccess();
         }
       } else {
-        const { account } = registerAccount({ username, email, remember });
+        const { account } = registerAccount({ username, email, remember, inviteCode: invite });
         if (account) {
           onSuccess();
         }
@@ -766,7 +770,7 @@ function ForumGate({ onSuccess, settings }: { onSuccess: () => void; settings: R
             {settings.heroSubtitle || "Доступ только для зарегистрированных пользователей."}
           </p>
           <p className="mt-6 text-sm text-[var(--text-2)]">
-            Форум закрыт для гостей. Вход доступен по логину или e-mail. Регистрация только с английским ником.
+            Форум закрыт для гостей. Вход доступен по логину или e-mail. Регистрация только с английским ником и активным инвайт-кодом.
           </p>
         </div>
         <div className="w-full max-w-lg rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-6">
@@ -798,6 +802,21 @@ function ForumGate({ onSuccess, settings }: { onSuccess: () => void; settings: R
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 type="email"
+              />
+            ) : null}
+            {mode === "register" ? (
+              <input
+                className="input"
+                placeholder="Инвайт-код (16 символов)"
+                value={invite}
+                onChange={(e) =>
+                  setInvite(
+                    e.target.value
+                      .toUpperCase()
+                      .replace(/[^A-Z0-9]/g, "")
+                      .slice(0, 16),
+                  )
+                }
               />
             ) : null}
             <label className="flex items-center gap-2 text-xs text-[var(--text-2)]">

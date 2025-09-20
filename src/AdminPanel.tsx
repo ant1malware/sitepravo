@@ -2,14 +2,17 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Account,
+  InviteCode,
   Section,
   Topic,
   applyBan,
   applyMute,
   createSection,
   findAccountById,
+  generateInviteCodes,
   getForumSettings,
   listAccounts,
+  listInviteCodes,
   listModerationLog,
   listSections,
   listTopics,
@@ -27,6 +30,7 @@ import {
   ClipboardList,
   Crown,
   FolderKanban,
+  KeySquare,
   Lock,
   LockOpen,
   Pin,
@@ -43,6 +47,7 @@ import {
 
 const tabs = [
   { id: "users", label: "Пользователи", icon: Users },
+  { id: "invites", label: "Инвайты", icon: KeySquare },
   { id: "sections", label: "Разделы", icon: FolderKanban },
   { id: "topics", label: "Темы", icon: ClipboardList },
   { id: "settings", label: "Настройки", icon: Settings },
@@ -77,6 +82,7 @@ export default function AdminPanel() {
 
   const settings = React.useMemo(() => getForumSettings(), [tick]);
   const accounts = React.useMemo(() => listAccounts(), [tick]);
+  const invites = React.useMemo(() => listInviteCodes(), [tick]);
   const sections = React.useMemo(() => listSections(), [tick]);
   const topics = React.useMemo(() => listTopics(), [tick]);
   const logs = React.useMemo(() => listModerationLog(50), [tick]);
@@ -129,6 +135,9 @@ export default function AdminPanel() {
               isAdmin={isAdmin}
               canModerate={canModerate}
             />
+          )}
+          {active === "invites" && (
+            <InvitesTab invites={invites} me={me} refresh={refresh} accounts={accounts} />
           )}
           {active === "sections" && (
             <SectionsTab
@@ -194,6 +203,218 @@ function UsersTab({ accounts, me, refresh, isAdmin, canModerate }: UsersTabProps
             refresh={refresh}
           />
         ))}
+      </div>
+    </section>
+  );
+}
+
+type InvitesTabProps = {
+  invites: InviteCode[];
+  me: Account;
+  refresh: () => void;
+  accounts: Account[];
+};
+
+function InvitesTab({ invites, me, refresh, accounts }: InvitesTabProps) {
+  const [count, setCount] = React.useState("1");
+  const [note, setNote] = React.useState("");
+  const [error, setError] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const [recent, setRecent] = React.useState<InviteCode[]>([]);
+  const [copiedCode, setCopiedCode] = React.useState<string | null>(null);
+
+  const unusedCount = React.useMemo(() => invites.filter((invite) => !invite.usedBy).length, [invites]);
+  const canGenerate = me.role === "admin";
+
+  const handleGenerate = () => {
+    if (!canGenerate) {
+      setError("Создавать инвайты может только администратор.");
+      return;
+    }
+    try {
+      setBusy(true);
+      setError(null);
+      const parsed = Number.parseInt(count, 10);
+      const created = generateInviteCodes({
+        count: Number.isFinite(parsed) ? parsed : 1,
+        createdBy: me.id,
+        note,
+      });
+      setRecent(created);
+      setNote("");
+      refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось создать инвайты");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCopy = async (code: string) => {
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(code);
+      }
+      setCopiedCode(code);
+      const clear = () => {
+        setCopiedCode((current) => (current === code ? null : current));
+      };
+      if (typeof window !== "undefined") {
+        window.setTimeout(clear, 1800);
+      } else {
+        setTimeout(clear, 1800);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось скопировать код");
+    }
+  };
+
+  const displayInvites = invites.slice(0, 40);
+
+  const getAccountName = React.useCallback(
+    (id?: string | null) => {
+      if (!id) return "—";
+      const found = accounts.find((account) => account.id === id);
+      return found ? found.username : "—";
+    },
+    [accounts],
+  );
+
+  return (
+    <section className="card space-y-5">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Инвайт-коды</h2>
+          <p className="text-sm text-[var(--text-2)]">Генерируйте доступ и следите за использованием.</p>
+        </div>
+        <KeySquare className="h-5 w-5 text-[var(--accent)]" />
+      </header>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-3 text-sm">
+          <div className="text-[var(--text-2)]">Всего кодов</div>
+          <div className="mt-1 text-2xl font-semibold text-[var(--text-1)]">{invites.length}</div>
+        </div>
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-3 text-sm">
+          <div className="text-[var(--text-2)]">Свободно</div>
+          <div className="mt-1 text-2xl font-semibold text-emerald-300">{unusedCount}</div>
+        </div>
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-3 text-sm">
+          <div className="text-[var(--text-2)]">Использовано</div>
+          <div className="mt-1 text-2xl font-semibold text-amber-300">{invites.length - unusedCount}</div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col text-sm">
+            <span className="text-[var(--text-2)]">Количество</span>
+            <input
+              className="input mt-1 w-24"
+              type="number"
+              min={1}
+              max={20}
+              value={count}
+              onChange={(e) => setCount(e.target.value.replace(/[^0-9]/g, ""))}
+            />
+          </label>
+          <label className="flex-1 text-sm">
+            <span className="text-[var(--text-2)]">Заметка (опционально)</span>
+            <input
+              className="input mt-1"
+              placeholder="Например: блогеры, тестеры"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              maxLength={80}
+            />
+          </label>
+          <button className="btn btn-primary" onClick={handleGenerate} disabled={busy || !canGenerate}>
+            <Plus className="h-4 w-4" /> Создать
+          </button>
+        </div>
+        {!canGenerate ? (
+          <p className="mt-2 text-xs text-[var(--text-2)]">
+            Только администраторы могут выпускать новые инвайт-коды.
+          </p>
+        ) : null}
+        {error ? (
+          <div className="mt-3 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">{error}</div>
+        ) : null}
+        {recent.length > 0 ? (
+          <div className="mt-4 rounded-xl border border-[var(--accent)]/40 bg-[var(--accent)]/10 p-3">
+            <div className="text-xs uppercase tracking-[0.2em] text-[var(--accent)]">Новые коды</div>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {recent.map((invite) => (
+                <button
+                  type="button"
+                  key={invite.code}
+                  className="w-full rounded-xl bg-[var(--surface)] px-3 py-2 text-left font-mono text-sm text-[var(--text-1)] transition hover:bg-[var(--surface-2)]"
+                  onClick={() => handleCopy(invite.code)}
+                >
+                  {invite.code}
+                  {copiedCode === invite.code ? (
+                    <span className="ml-2 text-[var(--accent)]">скопировано</span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-[var(--text-2)]">Нажмите на код, чтобы скопировать его в буфер обмена.</p>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="space-y-3">
+        {displayInvites.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-2)] p-6 text-center text-sm text-[var(--text-2)]">
+            Список инвайтов пуст. Сгенерируйте коды, чтобы начать приглашать пользователей.
+          </div>
+        ) : null}
+        {displayInvites.map((invite) => {
+          const isRecent = recent.some((code) => code.code === invite.code);
+          const createdLabel = new Date(invite.createdAt).toLocaleString("ru-RU");
+          const usedLabel = invite.usedAt ? new Date(invite.usedAt).toLocaleString("ru-RU") : null;
+          return (
+            <div
+              key={invite.code}
+              className={`rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] p-4 transition ${
+                isRecent ? "ring-1 ring-[var(--accent)]/50" : ""
+              }`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="font-mono text-base text-[var(--text-1)]">{invite.code}</div>
+                  <div className="mt-1 text-xs text-[var(--text-2)]">
+                    Создан: {createdLabel} — {getAccountName(invite.createdBy)}
+                    {invite.note ? ` • ${invite.note}` : ""}
+                  </div>
+                </div>
+                <div className="text-right text-xs text-[var(--text-2)]">
+                  {invite.usedBy ? (
+                    <div className="rounded-full bg-amber-500/10 px-3 py-1 text-amber-200">
+                      Активирован {usedLabel ? `(${usedLabel})` : ""}
+                      <br />
+                      {getAccountName(invite.usedBy)}
+                    </div>
+                  ) : (
+                    <div className="rounded-full bg-emerald-500/10 px-3 py-1 text-emerald-200">Свободен</div>
+                  )}
+                  <button
+                    type="button"
+                    className="mt-2 text-[var(--accent)] underline-offset-4 hover:underline"
+                    onClick={() => handleCopy(invite.code)}
+                  >
+                    {copiedCode === invite.code ? "Скопировано" : "Скопировать"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {invites.length > displayInvites.length ? (
+          <p className="text-center text-xs text-[var(--text-2)]">
+            Показаны последние {displayInvites.length} инвайтов. Используйте фильтры позже для поиска старых записей.
+          </p>
+        ) : null}
       </div>
     </section>
   );

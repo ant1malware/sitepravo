@@ -14,6 +14,7 @@ type StorageKey =
   | "forum:settings"
   | "forum:logs"
   | "forum:counters"
+  | "forum:invites"
   | "forum:initialized";
 
 export type Role = "admin" | "moderator" | "vip" | "user" | "newbie";
@@ -43,6 +44,15 @@ export type Account = {
   profile: AccountProfile;
   bans?: { until?: string; reason?: string } | null;
   mutes?: { until?: string; reason?: string } | null;
+};
+
+export type InviteCode = {
+  code: string;
+  createdAt: string;
+  createdBy: string;
+  note?: string;
+  usedBy?: string | null;
+  usedAt?: string | null;
 };
 
 export type Section = {
@@ -176,6 +186,33 @@ function clearSessionFrom(storage: StorageTarget) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function randomInviteCode(length = 16) {
+  const fallbackAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  if (typeof crypto !== "undefined") {
+    if (typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID().replace(/-/g, "").slice(0, length).toUpperCase();
+    }
+    if (typeof crypto.getRandomValues === "function") {
+      const values = new Uint32Array(length);
+      crypto.getRandomValues(values);
+      let code = "";
+      for (let i = 0; i < length; i += 1) {
+        code += fallbackAlphabet[values[i] % fallbackAlphabet.length];
+      }
+      return code;
+    }
+  }
+  let result = "";
+  for (let i = 0; i < length; i += 1) {
+    result += fallbackAlphabet[Math.floor(Math.random() * fallbackAlphabet.length)];
+  }
+  return result;
+}
+
+function normalizeInviteCode(code: string): string {
+  return code.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
 }
 
 function isRestrictionActive(restriction?: { until?: string | null }): boolean {
@@ -423,6 +460,26 @@ function seedDemoData() {
   const counters: ForumCounters = { nextUserNumber: 4 };
   writeStorage("forum:counters", counters);
 
+  const invites: InviteCode[] = [
+    {
+      code: "SKYACCESSCODE000",
+      createdAt,
+      createdBy: admin.id,
+      note: "Демо приглашение",
+      usedBy: mod.id,
+      usedAt: createdAt,
+    },
+    {
+      code: "SKYACCESSCODE001",
+      createdAt,
+      createdBy: admin.id,
+      note: "Запас для теста",
+      usedBy: null,
+      usedAt: null,
+    },
+  ];
+  writeStorage("forum:invites", invites);
+
   const logEntry: ModerationLogEntry = {
     id: crypto.randomUUID(),
     createdAt,
@@ -504,6 +561,15 @@ function saveLogs(logs: ModerationLogEntry[]) {
   writeStorage("forum:logs", logs);
 }
 
+function readInvites(): InviteCode[] {
+  ensureInitialized();
+  return readStorage<InviteCode[]>("forum:invites", []);
+}
+
+function saveInvites(invites: InviteCode[]) {
+  writeStorage("forum:invites", invites);
+}
+
 function recordLog(entry: Omit<ModerationLogEntry, "id" | "createdAt">) {
   const logs = readLogs();
   const newEntry: ModerationLogEntry = {
@@ -547,6 +613,10 @@ export function listAccounts(): Account[] {
   return readAccounts();
 }
 
+export function listInviteCodes(): InviteCode[] {
+  return readInvites().slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+}
+
 export function findAccountById(id: string): Account | null {
   return readAccounts().find((a) => a.id === id) || null;
 }
@@ -555,14 +625,50 @@ export function findAccountByUsername(username: string): Account | null {
   return readAccounts().find((a) => a.username.toLowerCase() === username.toLowerCase()) || null;
 }
 
+function requireInviteForRegistration(inviteCode: string) {
+  const normalized = normalizeInviteCode(inviteCode);
+  if (!normalized) {
+    throw new Error("Введите инвайт-код.");
+  }
+  if (normalized.length !== 16) {
+    throw new Error("Инвайт-код должен содержать 16 символов.");
+  }
+  const invites = readInvites();
+  const invite = invites.find((item) => normalizeInviteCode(item.code) === normalized);
+  if (!invite) {
+    throw new Error("Инвайт-код не найден или устарел.");
+  }
+  if (invite.usedBy) {
+    throw new Error("Инвайт-код уже использован.");
+  }
+  return { invite, invites, normalized } as const;
+}
+
+function markInviteUsed(invites: InviteCode[], invite: InviteCode, userId: string) {
+  const updated = invites.map((item) =>
+    item.code === invite.code
+      ? { ...item, usedBy: userId, usedAt: nowIso() }
+      : item,
+  );
+  saveInvites(updated);
+  recordLog({
+    actorId: userId,
+    action: "invite_use",
+    targetType: "settings",
+    notes: invite.code,
+  });
+}
+
 export function registerAccount({
   username,
   email,
   remember,
+  inviteCode,
 }: {
   username: string;
   email: string;
   remember: boolean;
+  inviteCode: string;
 }): { account: Account } {
   const settings = readSettings();
   if (!settings.registrationOpen) {
@@ -571,6 +677,7 @@ export function registerAccount({
   if (settings.requireEnglishNick) {
     assertAsciiUsername(username);
   }
+  const { invite, invites, normalized } = requireInviteForRegistration(inviteCode);
   if (!email.includes("@")) {
     throw new Error("Введите корректный e-mail.");
   }
@@ -606,12 +713,13 @@ export function registerAccount({
   saveAccounts(accounts);
   counters.nextUserNumber += 1;
   saveCounters(counters);
+  markInviteUsed(invites, invite, account.id);
   recordLog({
     actorId: account.id,
     action: "register",
     targetType: "account",
     targetId: account.id,
-    notes: `Новый пользователь ${username}`,
+    notes: `Новый пользователь ${username} по инвайту ${normalized}`,
   });
   setSession(account.id, remember);
   return { account };
@@ -1120,6 +1228,53 @@ export function listModerationLog(limit = 100) {
   return readLogs().slice(0, limit);
 }
 
+export function generateInviteCodes({
+  count,
+  createdBy,
+  note,
+}: {
+  count: number;
+  createdBy: string;
+  note?: string;
+}): InviteCode[] {
+  const invites = readInvites();
+  const created: InviteCode[] = [];
+  const normalizedNote = note?.trim() || undefined;
+  const safeCount = Math.min(Math.max(Math.floor(count) || 0, 1), 20);
+  const existingCodes = new Set(invites.map((existing) => normalizeInviteCode(existing.code)));
+  const createdCodes = new Set<string>();
+  for (let i = 0; i < safeCount; i += 1) {
+    let attempt = 0;
+    let code: string;
+    do {
+      code = normalizeInviteCode(randomInviteCode(16));
+      attempt += 1;
+      if (attempt > 10) {
+        throw new Error("Не удалось сгенерировать уникальный инвайт-код.");
+      }
+    } while (existingCodes.has(code) || createdCodes.has(code));
+    createdCodes.add(code);
+    const invite: InviteCode = {
+      code,
+      createdAt: nowIso(),
+      createdBy,
+      note: normalizedNote,
+      usedBy: null,
+      usedAt: null,
+    };
+    created.push(invite);
+  }
+  const updated = [...created, ...invites];
+  saveInvites(updated);
+  recordLog({
+    actorId: createdBy,
+    action: "invite_generate",
+    targetType: "settings",
+    notes: `${created.length} приглашений${normalizedNote ? ` (${normalizedNote})` : ""}`,
+  });
+  return created;
+}
+
 export function updateForumSettings(settings: Partial<ForumSettings>, actorId: string) {
   const current = readSettings();
   const updated = { ...current, ...settings };
@@ -1144,6 +1299,7 @@ export function resetForumData() {
   removeStorage("forum:settings");
   removeStorage("forum:counters");
   removeStorage("forum:logs");
+  removeStorage("forum:invites");
   writeStorage("forum:initialized", false);
   initialized = false;
   ensureInitialized();
