@@ -32,6 +32,7 @@ export async function createSection(input: { title: string; description?: string
 export async function updateSection(id: string, patch: Partial<Section>): Promise<Section> {
   const { section } = await api(`/sections/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }); return section as Section;
 }
+export async function deleteSection(id: string): Promise<void> { await api(`/sections/${encodeURIComponent(id)}`, { method: 'DELETE' }); }
 
 export async function listTopics(sectionId?: string): Promise<Topic[]> {
   const qs = sectionId ? `?sectionId=${encodeURIComponent(sectionId)}` : '';
@@ -46,6 +47,7 @@ export async function updateTopic(id: string, patch: Partial<Topic>): Promise<To
 export async function moveTopic(id: string, to: string): Promise<Topic> {
   const { topic } = await api(`/topics/${id}/move`, { method: 'POST', body: JSON.stringify({ to }) }); return topic as Topic;
 }
+export async function deleteTopic(id: string): Promise<void> { await api(`/topics/${encodeURIComponent(id)}`, { method: 'DELETE' }); }
 
 export async function listPosts(topicId: string): Promise<Post[]> { const { posts } = await api(`/posts?topicId=${encodeURIComponent(topicId)}`); return posts as Post[]; }
 export async function createPost(input: { topicId: string; content: string }): Promise<Post> { const { post } = await api('/posts', { method: 'POST', body: JSON.stringify(input) }); return post as Post; }

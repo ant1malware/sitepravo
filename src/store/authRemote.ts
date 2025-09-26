@@ -20,6 +20,7 @@ export type RemoteUser = {
 };
 
 export type Invite = { code: string; createdAt: string; createdBy: string; note?: string; usedBy?: string|null; usedAt?: string|null };
+export type ServerSettings = { registrationMode?: 'invite'|'open'; allowGuestRead?: boolean };
 
 function saveToken(token: string, remember = true) {
   const store = remember ? localStorage : sessionStorage;
@@ -154,6 +155,18 @@ export async function listInvites(): Promise<Invite[]> {
 export async function generateInvites(count = 5, note?: string): Promise<Invite[]> {
   const { invites } = await api(`/invites`, { method: "POST", body: JSON.stringify({ count, note }) });
   return invites as Invite[];
+}
+
+export async function deleteInvite(code: string): Promise<void> {
+  await api(`/invites/${encodeURIComponent(code)}`, { method: "DELETE" });
+}
+
+// Forum settings
+export async function getServerSettings(): Promise<ServerSettings> {
+  const { settings } = await api(`/settings`); return settings as ServerSettings;
+}
+export async function updateServerSettings(patch: ServerSettings): Promise<ServerSettings> {
+  const { settings } = await api(`/settings`, { method: 'PATCH', body: JSON.stringify(patch) }); return settings as ServerSettings;
 }
 
 // Bootstrap Pavel (one-time). Requires ADMIN_KEY via query param; call from browser/curl.

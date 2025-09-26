@@ -235,6 +235,19 @@ async function getInvite(env: Env, code: string): Promise<Invite|null> { const r
 async function listInvitesKV(env: Env): Promise<Invite[]> { const out: Invite[]=[]; let cursor: string|undefined=undefined; do{ const page=await env.AUTH_KV!.list({prefix:'auth:invite:',cursor}); for(const k of page.keys){ const raw=await env.AUTH_KV!.get(k.name); if(!raw) continue; out.push(JSON.parse(raw) as Invite) } cursor = page.list_complete? undefined : page.cursor } while(cursor); out.sort((a,b)=> (b.createdAt||'').localeCompare(a.createdAt||'')); return out }
 async function markInviteUsed(env: Env, code: string, userId: string) { const inv = await getInvite(env, code); if (!inv) throw new Error('invite not found'); inv.usedBy=userId; inv.usedAt=new Date().toISOString(); await putInvite(env, inv) }
 
+// Forum global settings
+type ForumCfg = { registrationMode?: 'invite'|'open'; allowGuestRead?: boolean }
+const CFG = 'forum:cfg'
+async function readForumCfg(env: Env): Promise<ForumCfg> {
+  const raw = await env.AUTH_KV!.get(CFG)
+  if (!raw) return { registrationMode: 'invite', allowGuestRead: false }
+  try {
+    const cfg = JSON.parse(raw) as ForumCfg
+    return { registrationMode: cfg.registrationMode || 'invite', allowGuestRead: !!cfg.allowGuestRead }
+  } catch { return { registrationMode: 'invite', allowGuestRead: false } }
+}
+async function writeForumCfg(env: Env, cfg: ForumCfg) { await env.AUTH_KV!.put(CFG, JSON.stringify(cfg)) }
+
 /* ===================== Forum: Sections/Topics/Posts in KV ===================== */
 
 type Section = { id: string; title: string; description?: string; icon?: string; createdAt: string; order: number; moderatorIds: string[]; topicCount: number; postCount: number }
@@ -311,6 +324,30 @@ async function listPostsKV(env: Env, topicId: string, limit=200): Promise<Post[]
 async function putPostKV(env: Env, p: Post) { await env.AUTH_KV!.put(F_POS(p.id), JSON.stringify(p)); await env.AUTH_KV!.put(IDX_P_T(p.topicId, p.id), '1') }
 async function deletePostKV(env: Env, p: Post) { await env.AUTH_KV!.delete(F_POS(p.id)); await env.AUTH_KV!.delete(IDX_P_T(p.topicId, p.id)) }
 
+async function deleteTopicDeep(env: Env, t: Topic): Promise<number> {
+  // returns number of posts removed
+  let removed = 0
+  const prefix = `forum:idx:posts:topic:${t.id}:`
+  let cursor: string | undefined = undefined
+  do {
+    const page = await env.AUTH_KV!.list({ prefix, cursor })
+    for (const k of page.keys) {
+      const id = k.name.slice(prefix.length)
+      const raw = await env.AUTH_KV!.get(F_POS(id))
+      if (raw) {
+        const p = JSON.parse(raw) as Post
+        await deletePostKV(env, p)
+        removed += 1
+      } else {
+        await env.AUTH_KV!.delete(k.name)
+      }
+    }
+    cursor = page.list_complete ? undefined : page.cursor
+  } while (cursor)
+  await deleteTopicKV(env, t)
+  return removed
+}
+
 // Durable Object: глобальный счётчик userNumber
 export class UserCounter {
   constructor(private state: DurableObjectState) {}
@@ -370,7 +407,8 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
       if (!password || String(password).length < 4) return json(req, { error:'bad password' }, { status: 400 })
       // тут можно проверить inviteCode, если нужно
 
-      {
+      const cfg = await readForumCfg(env)
+      if ((cfg.registrationMode || 'invite') === 'invite') {
         const norm = normalizeInvite(String(inviteCode||''))
         if (norm.length !== 16) return json(req, { error:'invite required' }, { status: 400 })
         const inv = await getInvite(env, norm)
@@ -595,6 +633,88 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
       const limit = Math.min(50, Math.max(1, parseInt(new URL(req.url).searchParams.get('limit') || '8', 10)))
       all.sort((a,b)=> new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       return json(req, { posts: all.slice(0, limit) })
+    }
+
+    // GET /settings
+    if (sub === '/settings' && method === 'GET') {
+      const cfg = await readForumCfg(env)
+      return json(req, { settings: cfg })
+    }
+    // PATCH /settings (admin/dev)
+    if (sub === '/settings' && method === 'PATCH') {
+      const s = await readSession(env, req)
+      if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
+      const me = await getUserByIdKV(env, s.userId)
+      if (!me || !(me.role==='admin'||me.role==='developer')) return json(req, { error:'forbidden' }, { status: 403 })
+      const body = await req.json().catch(()=> ({}))
+      const cur = await readForumCfg(env)
+      const next: ForumCfg = { ...cur }
+      if (body.registrationMode === 'invite' || body.registrationMode === 'open') next.registrationMode = body.registrationMode
+      if (typeof body.allowGuestRead === 'boolean') next.allowGuestRead = !!body.allowGuestRead
+      await writeForumCfg(env, next)
+      return json(req, { settings: next })
+    }
+
+    // DELETE /invites/:code (admin/dev)
+    {
+      const m = sub.match(/^\/invites\/([^/]+)$/)
+      if (m && method === 'DELETE') {
+        const s = await readSession(env, req)
+        if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
+        const me = await getUserByIdKV(env, s.userId)
+        if (!me || !(me.role==='admin'||me.role==='developer')) return json(req, { error:'forbidden' }, { status: 403 })
+        const code = normalizeInvite(m[1])
+        await env.AUTH_KV!.delete(INV(code))
+        return json(req, { ok: true })
+      }
+    }
+
+    // DELETE /sections/:id (admin/dev)
+    {
+      const m = sub.match(/^\/sections\/([^/]+)$/)
+      if (m && method === 'DELETE') {
+        const s = await readSession(env, req)
+        if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
+        const me = await getUserByIdKV(env, s.userId)
+        if (!me || !(me.role==='admin'||me.role==='developer')) return json(req, { error:'forbidden' }, { status: 403 })
+        const id = m[1]
+        const sec = await getSectionKV(env, id)
+        if (!sec) return json(req, { error:'not found' }, { status: 404 })
+        // delete topics + posts
+        const prefix = `forum:idx:topics:section:${id}:`
+        let cursor: string | undefined = undefined
+        do {
+          const page = await env.AUTH_KV!.list({ prefix, cursor })
+          for (const k of page.keys) {
+            const tid = k.name.slice(prefix.length)
+            const raw = await env.AUTH_KV!.get(F_TOP(tid)); if (!raw) { await env.AUTH_KV!.delete(k.name); continue }
+            const t = JSON.parse(raw) as Topic
+            await deleteTopicDeep(env, t)
+          }
+          cursor = page.list_complete ? undefined : page.cursor
+        } while (cursor)
+        await deleteSectionKV(env, id)
+        return json(req, { ok: true })
+      }
+    }
+
+    // DELETE /topics/:id (auth)
+    {
+      const m = sub.match(/^\/topics\/([^/]+)$/)
+      if (m && method === 'DELETE') {
+        const s = await readSession(env, req)
+        if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
+        const me = await getUserByIdKV(env, s.userId)
+        if (!me) return json(req, { error:'unauthorized' }, { status: 401 })
+        const id = m[1]
+        const raw = await env.AUTH_KV!.get(F_TOP(id))
+        if (!raw) return json(req, { error:'not found' }, { status: 404 })
+        const t = JSON.parse(raw) as Topic
+        const postsRemoved = await deleteTopicDeep(env, t)
+        const sec = await getSectionKV(env, t.sectionId)
+        if (sec) { sec.topicCount = Math.max(0, sec.topicCount - 1); sec.postCount = Math.max(0, sec.postCount - postsRemoved); await putSectionKV(env, sec) }
+        return json(req, { ok: true })
+      }
     }
 
     // GET /invites (admin/dev)

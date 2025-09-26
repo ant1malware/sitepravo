@@ -1,21 +1,8 @@
-// src/AdminPanel2.tsx
+﻿// src/AdminPanel2.tsx
 import React from "react";
 import { applyMute, applyBan, resetForumEmpty } from "./store/forumStore";
-import {
-  listSections,
-  createSection,
-  updateSection,
-  listTopics,
-  updateTopic,
-  moveTopic,
-} from "./store/forumRemote";
-import {
-  listAccounts,
-  setRole,
-  listInvites,
-  generateInvites,
-  type Role,
-} from "./store/authRemote";
+import { listSections, createSection, updateSection, listTopics, updateTopic, moveTopic, deleteSection, deleteTopic } from "./store/forumRemote";
+import { listAccounts, setRole, listInvites, generateInvites, deleteInvite, type Role } from "./store/authRemote";
 
 function getActorId(): string {
   try {
@@ -89,7 +76,7 @@ function UsersTab() {
     applyMute(
       id,
       { until, reason: `Muted ${mins}m` },
-      getActorId() // локальный чат-стор
+      getActorId() // Р В»Р С•Р С”Р В°Р В»РЎРЉР Р…РЎвЂ№Р в„– РЎвЂЎР В°РЎвЂљ-РЎРѓРЎвЂљР С•РЎР‚
     );
   };
 
@@ -108,7 +95,7 @@ function UsersTab() {
   return (
     <div className="card p-4">
       <div className="mb-3 text-sm opacity-70">
-        Пользователи (через Worker API). Мут/бан локальны для чата.
+        Р СџР С•Р В»РЎРЉР В·Р С•Р Р†Р В°РЎвЂљР ВµР В»Р С‘ (РЎвЂЎР ВµРЎР‚Р ВµР В· Worker API). Р СљРЎС“РЎвЂљ/Р В±Р В°Р Р… Р В»Р С•Р С”Р В°Р В»РЎРЉР Р…РЎвЂ№ Р Т‘Р В»РЎРЏ РЎвЂЎР В°РЎвЂљР В°.
       </div>
       <div className="grid gap-2">
         {rows.map((u) => (
@@ -148,7 +135,7 @@ function UsersTab() {
             </div>
           </div>
         ))}
-        {!rows.length && <div className="text-sm opacity-70">Пусто</div>}
+        {!rows.length && <div className="text-sm opacity-70">Р СџРЎС“РЎРѓРЎвЂљР С•</div>}
       </div>
     </div>
   );
@@ -188,7 +175,7 @@ function SectionsTab() {
     }
   };
 
-  // updateSection ожидает 2 аргумента: (id, patch)
+  // updateSection Р С•Р В¶Р С‘Р Т‘Р В°Р ВµРЎвЂљ 2 Р В°РЎР‚Р С–РЎС“Р СР ВµР Р…РЎвЂљР В°: (id, patch)
   const edit = async (
     id: string,
     field: "title" | "description",
@@ -208,7 +195,7 @@ function SectionsTab() {
   return (
     <div className="grid gap-4">
       <div className="card p-4">
-        <div className="mb-2 font-semibold">Создать раздел</div>
+        <div className="mb-2 font-semibold">Р РЋР С•Р В·Р Т‘Р В°РЎвЂљРЎРЉ РЎР‚Р В°Р В·Р Т‘Р ВµР В»</div>
         <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
           <input
             className="input"
@@ -228,7 +215,7 @@ function SectionsTab() {
         </div>
       </div>
       <div className="card p-4">
-        <div className="mb-2 font-semibold">Разделы</div>
+        <div className="mb-2 font-semibold">Р В Р В°Р В·Р Т‘Р ВµР В»РЎвЂ№</div>
         <div className="grid gap-2">
           {rows.map((s) => (
             <div
@@ -236,7 +223,7 @@ function SectionsTab() {
               className="grid grid-cols-[160px_1fr] items-center gap-2 rounded-xl border px-3 py-2"
               style={{ borderColor: "var(--border)" }}
             >
-              <div className="text-xs opacity-70">{s.id.slice(0, 8)}…</div>
+              <div className="text-xs opacity-70">{s.id.slice(0, 8)}РІР‚В¦</div>
               <div className="grid gap-2 sm:grid-cols-2">
                 <input
                   className="input"
@@ -250,8 +237,11 @@ function SectionsTab() {
                 />
               </div>
             </div>
+              <div className="text-right">
+                <button className="btn" onClick={async()=>{ if(confirm("Удалить раздел?")){ try { await deleteSection(s.id); reload(); } catch(e){ alert((e as any)?.message||"Failed"); } } }}>Delete</button>
+              </div>
           ))}
-          {!rows.length && <div className="text-sm opacity-70">Пусто</div>}
+          {!rows.length && <div className="text-sm opacity-70">Р СџРЎС“РЎРѓРЎвЂљР С•</div>}
         </div>
       </div>
     </div>
@@ -274,7 +264,7 @@ function TopicsTab() {
     reload();
   }, [reload]);
 
-  // updateTopic ожидает 2 аргумента: (id, patch)
+  // updateTopic Р С•Р В¶Р С‘Р Т‘Р В°Р ВµРЎвЂљ 2 Р В°РЎР‚Р С–РЎС“Р СР ВµР Р…РЎвЂљР В°: (id, patch)
   const pin = async (id: string, v: boolean) => {
     try {
       await updateTopic(id, { pinned: v, actorId: getActorId() } as any);
@@ -293,7 +283,7 @@ function TopicsTab() {
     }
   };
 
-  // moveTopic ожидает 2 аргумента: (topicId, toSectionId)
+  // moveTopic Р С•Р В¶Р С‘Р Т‘Р В°Р ВµРЎвЂљ 2 Р В°РЎР‚Р С–РЎС“Р СР ВµР Р…РЎвЂљР В°: (topicId, toSectionId)
   const move = async (id: string, to: string) => {
     const toTrim = to.trim();
     if (!toTrim) return;
@@ -305,9 +295,14 @@ function TopicsTab() {
     }
   };
 
+  const remove = async (id: string) => {
+    if (!confirm('Удалить тему?')) return;
+    try { await deleteTopic(id); reload(); } catch (e:any) { alert(e?.message || 'Failed to delete'); }
+  };
+
   return (
     <div className="card p-4">
-      <div className="mb-2 font-semibold">Темы</div>
+      <div className="mb-2 font-semibold">Р СћР ВµР СРЎвЂ№</div>
       <div className="grid gap-2">
         {rows.map((t) => (
           <div
@@ -318,7 +313,7 @@ function TopicsTab() {
             <div>
               <div className="font-semibold">{t.title}</div>
               <div className="text-xs opacity-70">
-                id: {t.id.slice(0, 8)}… • section: {t.sectionId.slice(0, 8)}…
+                id: {t.id.slice(0, 8)}РІР‚В¦ РІР‚Сћ section: {t.sectionId.slice(0, 8)}РІР‚В¦
               </div>
             </div>
             <label className="flex items-center gap-2 text-sm">
@@ -360,10 +355,11 @@ function TopicsTab() {
               >
                 Move
               </button>
+              <button className="btn" onClick={()=>remove(t.id)}>Delete</button>
             </div>
           </div>
         ))}
-        {!rows.length && <div className="text-sm opacity-70">Пусто</div>}
+        {!rows.length && <div className="text-sm opacity-70">Р СџРЎС“РЎРѓРЎвЂљР С•</div>}
       </div>
     </div>
   );
@@ -401,7 +397,7 @@ function InvitesTab() {
 
   return (
     <div className="card p-4">
-      <div className="mb-3 font-semibold">Генерация инвайтов</div>
+      <div className="mb-3 font-semibold">Р вЂњР ВµР Р…Р ВµРЎР‚Р В°РЎвЂ Р С‘РЎРЏ Р С‘Р Р…Р Р†Р В°Р в„–РЎвЂљР С•Р Р†</div>
       <div className="mb-4 grid gap-2 sm:grid-cols-[120px_1fr_auto]">
         <input
           className="input"
@@ -441,8 +437,11 @@ function InvitesTab() {
               )}
             </div>
           </div>
+            <div className="text-right">
+              <button className="btn" onClick={async()=>{ if(!confirm("Удалить инвайт?")) return; try { await deleteInvite(i.code); reload(); } catch(e){ alert((e as any)?.message||"Failed"); } }}>Delete</button>
+            </div>
         ))}
-        {!rows.length && <div className="text-sm opacity-70">Пусто</div>}
+        {!rows.length && <div className="text-sm opacity-70">Р СџРЎС“РЎРѓРЎвЂљР С•</div>}
       </div>
     </div>
   );
@@ -450,16 +449,16 @@ function InvitesTab() {
 
 function MaintenanceTab() {
   const reset = () => {
-    if (!confirm("Очистить форум (пустой старт)?")) return;
+    if (!confirm("Р С›РЎвЂЎР С‘РЎРѓРЎвЂљР С‘РЎвЂљРЎРЉ РЎвЂћР С•РЎР‚РЎС“Р С (Р С—РЎС“РЎРѓРЎвЂљР С•Р в„– РЎРѓРЎвЂљР В°РЎР‚РЎвЂљ)?")) return;
     resetForumEmpty(getActorId());
-    alert("Ок. Форум очищен.");
+    alert("Р С›Р С”. Р В¤Р С•РЎР‚РЎС“Р С Р С•РЎвЂЎР С‘РЎвЂ°Р ВµР Р….");
     location.reload();
   };
   return (
     <div className="card p-4">
-      <div className="mb-2 font-semibold">Обслуживание</div>
+      <div className="mb-2 font-semibold">Р С›Р В±РЎРѓР В»РЎС“Р В¶Р С‘Р Р†Р В°Р Р…Р С‘Р Вµ</div>
       <p className="text-sm opacity-70 mb-3">
-        Очистить локальные разделы/темы/сообщения без демо-данных.
+        Р С›РЎвЂЎР С‘РЎРѓРЎвЂљР С‘РЎвЂљРЎРЉ Р В»Р С•Р С”Р В°Р В»РЎРЉР Р…РЎвЂ№Р Вµ РЎР‚Р В°Р В·Р Т‘Р ВµР В»РЎвЂ№/РЎвЂљР ВµР СРЎвЂ№/РЎРѓР С•Р С•Р В±РЎвЂ°Р ВµР Р…Р С‘РЎРЏ Р В±Р ВµР В· Р Т‘Р ВµР СР С•-Р Т‘Р В°Р Р…Р Р…РЎвЂ№РЎвЂ¦.
       </p>
       <button className="btn btn-primary" onClick={reset}>
         Reset forum (empty)
