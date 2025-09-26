@@ -98,6 +98,8 @@ function Header({ me, onLogout }: { me: RemoteUser; onLogout: () => void }) {
 export default function ForumPage() {
   const [, force] = React.useReducer((x) => x + 1, 0);
   const [me, setMe] = React.useState<RemoteUser | null | undefined>(undefined);
+  const [sectionsState, setSectionsState] = React.useState<any[]>([]);
+  const [latestPosts, setLatestPosts] = React.useState<any[]>([]);
   React.useEffect(() => {
     let alive = true; const read = async () => { try { const u = await getSessionAccount(); if (alive) setMe(u); } catch { if (alive) setMe(null); } };
     read(); const h = () => read(); window.addEventListener("forum:session", h as any); window.addEventListener("storage", h as any);
@@ -106,8 +108,6 @@ export default function ForumPage() {
   if (me === undefined) return <div style={{ minHeight: "100vh", background: "#0c0d12" }} />;
   if (!me) return (<><AuthGate onDone={()=>force()} /><div style={{ minHeight: "100vh", background: "#0c0d12" }} /></>);
 
-  const [sectionsState, setSectionsState] = React.useState<any[]>([]);
-  const [latestPosts, setLatestPosts] = React.useState<any[]>([]);
   React.useEffect(() => { (async () => { try { setSectionsState(await listSections()); setLatestPosts(await listLatestPosts(8)); } catch {} })(); }, []);
 
   const settings = getForumSettings(); // оставлено для будущих баннеров/настроек
