@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 const GovCheatsheetSky = React.lazy(() => import('./GovCheatsheetSky'));
 const WhatsNew = React.lazy(() => import('./WhatsNew'));
@@ -12,7 +12,7 @@ const BuddyPlayground = React.lazy(() => import('./BuddyPlayground'));
 const HomePage = React.lazy(() => import('./HomePage'));
 const ForumPage = React.lazy(() => import('./ForumPage'));
 const ProfilePage = React.lazy(() => import('./ProfilePage'));
-const AdminPanel = React.lazy(() => import('./AdminPanel'));
+const AdminPanel = React.lazy(() => import('./AdminPanel2'));
 import RecorderPage from './RecorderPage';
 import AboutPage from './AboutPage';
 import CommandPalette from "./CommandPalette";
@@ -103,6 +103,7 @@ export default function App() {
   </div>
 );
 }
+
 
 
 

@@ -17,7 +17,7 @@ type StorageKey =
   | "forum:invites"
   | "forum:initialized";
 
-export type Role = "admin" | "moderator" | "vip" | "user" | "newbie";
+export type Role = "developer" | "admin" | "moderator" | "vip" | "user" | "newbie";
 
 export type AccountProfile = {
   avatarData?: string;
@@ -237,10 +237,10 @@ function seedDemoData() {
   const createdAt = nowIso();
   const admin: Account = {
     id: crypto.randomUUID(),
-    username: "skyadmin",
-    email: "sky@forum.local",
+    username: "Pavel",
+    email: "pavel@forum.local",
     createdAt,
-    role: "admin",
+    role: "developer",
     userNumber: 1,
     posts: 3,
     likes: 6,
@@ -1303,6 +1303,37 @@ export function resetForumData() {
   writeStorage("forum:initialized", false);
   initialized = false;
   ensureInitialized();
+}
+
+// Reset forum but keep it empty (no demo filler). Useful before publishing.
+export function resetForumEmpty(actorId?: string) {
+  removeStorage("forum:accounts");
+  removeStorage("forum:sections");
+  removeStorage("forum:topics");
+  removeStorage("forum:posts");
+  removeStorage("forum:logs");
+  removeStorage("forum:invites");
+  // Minimal settings
+  const settings: ForumSettings = {
+    heroTitle: "SKY Forum",
+    heroSubtitle: "",
+    heroMessage: "",
+    registrationOpen: true,
+    requireEnglishNick: true,
+    allowGuestRead: false,
+  };
+  writeStorage("forum:settings", settings);
+  writeStorage("forum:counters", { nextUserNumber: 1 } as ForumCounters);
+  writeStorage("forum:sections", [] as Section[]);
+  writeStorage("forum:topics", [] as Topic[]);
+  writeStorage("forum:posts", [] as Post[]);
+  writeStorage("forum:accounts", [] as Account[]);
+  writeStorage("forum:logs", [] as ModerationLogEntry[]);
+  writeStorage("forum:invites", [] as InviteCode[]);
+  writeStorage("forum:initialized", true);
+  initialized = true;
+  if (actorId) recordLog({ actorId, action: "reset_empty", targetType: "settings" });
+  dispatchForumSessionEvent();
 }
 
 export function isMuted(account: Account | null): boolean {

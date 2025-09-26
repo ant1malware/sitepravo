@@ -4,6 +4,7 @@
 // Исправлено: модалка появляется/не пропадает до подтверждения сервером.
 
 import React from 'react';
+import { getSessionAccount, isMuted } from '../store/forumStore';
 
 type ChatMessage = { id: string; author: string; text: string; ts: number };
 type ServerEvent =
@@ -621,11 +622,14 @@ export default function SimpleChat({
     // модалку НЕ закрываем — дождёмся system.name от сервера
   }
 
+  const me = React.useMemo(() => { try { return getSessionAccount(); } catch { return null; } }, []);
+  const muted = React.useMemo(() => isMuted(me as any), [me]);
+
   function send() {
     const raw = input.replace(/\r/g, '');
     const text = raw.trim();
     const ws = wsRef.current;
-    if (!epochReady || !nick || needNick || !text || !ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!epochReady || !nick || needNick || !text || !ws || ws.readyState !== WebSocket.OPEN || muted) return;
 
     const cid = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const tempId = `loc_${cid}`;
@@ -637,7 +641,7 @@ export default function SimpleChat({
     adjustTextareaHeight();
   }
 
-  const canUseInput = epochReady && connected && !!nick && !needNick;
+  const canUseInput = epochReady && connected && !!nick && !needNick && !muted;
 
   const handleTextareaKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
