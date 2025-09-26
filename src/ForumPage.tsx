@@ -105,10 +105,40 @@ export default function ForumPage() {
     read(); const h = () => read(); window.addEventListener("forum:session", h as any); window.addEventListener("storage", h as any);
     return () => { alive = false; window.removeEventListener("forum:session", h as any); window.removeEventListener("storage", h as any); };
   }, []);
+
+  React.useEffect(() => {
+    if (!me) {
+      return;
+    }
+
+    let alive = true;
+
+    (async () => {
+      try {
+        const [sections, posts] = await Promise.all([
+          listSections(),
+          listLatestPosts(8),
+        ]);
+
+        if (alive) {
+          setSectionsState(sections);
+          setLatestPosts(posts);
+        }
+      } catch {
+        if (alive) {
+          setSectionsState([]);
+          setLatestPosts([]);
+        }
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [me]);
+
   if (me === undefined) return <div style={{ minHeight: "100vh", background: "#0c0d12" }} />;
   if (!me) return (<><AuthGate onDone={()=>force()} /><div style={{ minHeight: "100vh", background: "#0c0d12" }} /></>);
-
-  React.useEffect(() => { (async () => { try { setSectionsState(await listSections()); setLatestPosts(await listLatestPosts(8)); } catch {} })(); }, []);
 
   const settings = getForumSettings(); // оставлено для будущих баннеров/настроек
 
