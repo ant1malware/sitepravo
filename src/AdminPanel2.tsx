@@ -24,7 +24,18 @@ import {
   updateServerSettings,
   getSessionAccount,
   type Role,
+  type RemoteUser,
 } from "./store/authRemote";
+
+type TabKey = "users" | "sections" | "topics" | "invites" | "maintenance";
+
+const TAB_LABELS: Record<TabKey, string> = {
+  users: "Users",
+  sections: "Sections",
+  topics: "Topics",
+  invites: "Invites",
+  maintenance: "Maintenance",
+};
 
 function getActorId(): string {
   try {
@@ -39,9 +50,6 @@ function getActorId(): string {
 }
 
 export default function AdminPanel2() {
-  const [tab, setTab] = React.useState<
-    "users" | "sections" | "topics" | "invites" | "maintenance"
-  >("users");
   const [me, setMe] = React.useState<any | null>(null);
 
   React.useEffect(() => {
@@ -54,8 +62,8 @@ export default function AdminPanel2() {
     })();
   }, []);
 
-  const role = me?.role as string | undefined;
-  const tabs: Array<typeof tab> = (() => {
+  const role = me?.role as Role | undefined;
+  const availableTabs = React.useMemo<TabKey[]>(() => {
     if (role === "developer") {
       return ["users", "sections", "topics", "invites", "maintenance"];
     }
@@ -66,18 +74,25 @@ export default function AdminPanel2() {
       return ["users"];
     }
     return ["topics"];
-  })();
+  }, [role]);
+  const [tab, setTab] = React.useState<TabKey>(() => availableTabs[0] ?? "topics");
+
+  React.useEffect(() => {
+    if (!availableTabs.includes(tab)) {
+      setTab(availableTabs[0] ?? "topics");
+    }
+  }, [availableTabs, tab]);
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6">
       <div className="mb-4 flex gap-2">
-        {tabs.map((t) => (
+        {availableTabs.map((t) => (
           <button
             key={t}
             className={`btn ${tab === t ? "btn-primary" : ""}`}
             onClick={() => setTab(t)}
           >
-            {t}
+            {TAB_LABELS[t]}
           </button>
         ))}
       </div>
@@ -91,8 +106,8 @@ export default function AdminPanel2() {
 }
 
 /* ===== Users ===== */
-function UsersTab({ meRole }: { meRole?: string }) {
-  const [rows, setRows] = React.useState<any[]>([]);
+function UsersTab({ meRole }: { meRole?: Role }) {
+  const [rows, setRows] = React.useState<RemoteUser[]>([]);
 
   const load = React.useCallback(async () => {
     try {
@@ -197,10 +212,44 @@ function UsersTab({ meRole }: { meRole?: string }) {
             );
           }
 
+          const statusBadges: React.ReactNode[] = [];
+          if (u.bannedUntil) {
+            statusBadges.push(
+              <span
+                key="banned"
+                className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-rose-300"
+                title={`Banned until ${new Date(u.bannedUntil).toLocaleString()}`}
+              >
+                Banned
+              </span>
+            );
+          }
+          if (u.mutedUntil) {
+            statusBadges.push(
+              <span
+                key="muted"
+                className="rounded-full bg-amber-400/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-200"
+                title={`Muted until ${new Date(u.mutedUntil).toLocaleString()}`}
+              >
+                Muted
+              </span>
+            );
+          }
+          if (!statusBadges.length) {
+            statusBadges.push(
+              <span
+                key="active"
+                className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.28em] text-white/60"
+              >
+                Active
+              </span>
+            );
+          }
+
           return (
             <div
               key={u.id}
-              className="grid grid-cols-1 items-center gap-3 rounded-xl border px-3 py-2 sm:grid-cols-[80px_1fr_1fr_220px_auto]"
+              className="grid grid-cols-1 items-center gap-3 rounded-xl border px-3 py-3 sm:grid-cols-[80px_1fr_1fr_200px_160px_auto]"
               style={{ borderColor: "var(--border)" }}
             >
               <div className="text-xs opacity-70">#{u.userNumber}</div>
@@ -209,6 +258,7 @@ function UsersTab({ meRole }: { meRole?: string }) {
               <div className="text-xs opacity-70">
                 {u.invitedByName ? `invited by: ${u.invitedByName}` : ""}
               </div>
+              <div className="flex flex-wrap items-center gap-2">{statusBadges}</div>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 {canManageRoles ? (
                   <select
@@ -325,7 +375,8 @@ function SectionsTab() {
               className="grid grid-cols-1 items-center gap-2 rounded-xl border px-3 py-2 sm:grid-cols-[160px_1fr_1fr_auto]"
               style={{ borderColor: "var(--border)" }}
             >
-              <div className="text-xs opacity-70">{s.id.slice(0, 8)}…</div>
+              <div className="text-xs opacity-70">{s.id.slice(0, 8)}â€¦</div>
+function TopicsTab({ meRole }: { meRole?: Role }) {
               <input
                 className="input"
                 value={s.title}
@@ -443,7 +494,7 @@ function TopicsTab({ meRole }: { meRole?: string }) {
               </label>
             );
           }
-          if (canMove) {
+                  id: {t.id.slice(0, 8)}â€¦ section: {t.sectionId.slice(0, 8)}â€¦
             controls.push(
               <button key="move" className="btn" onClick={() => move(t.id)}>
                 Move
@@ -467,7 +518,7 @@ function TopicsTab({ meRole }: { meRole?: string }) {
               <div>
                 <div className="font-semibold">{t.title}</div>
                 <div className="text-xs opacity-70">
-                  id: {t.id.slice(0, 8)}… section: {t.sectionId.slice(0, 8)}…
+                  id: {t.id.slice(0, 8)}Â… section: {t.sectionId.slice(0, 8)}Â…
                 </div>
                 {(t.pinned || t.locked) && (
                   <div className="mt-1 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.2em] opacity-70">

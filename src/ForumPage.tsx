@@ -1,6 +1,7 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import SimpleChat from "./components/SimpleChat";
+import WorkshopShowcase from "./components/WorkshopShowcase";
 import {
   registerAccount,
   authenticateAccount,
@@ -10,7 +11,7 @@ import {
   type RemoteUser,
 } from "./store/authRemote";
 import { getForumSettings } from "./store/forumStore";
-import { listSections, listLatestPosts } from "./store/forumRemote";
+import { listSections, listLatestPosts, type Section } from "./store/forumRemote";
 import { Shield, Search, Bell, ChevronRight, Lock } from "lucide-react";
 
 function Badge({ role }: { role: Role }) {
@@ -164,7 +165,33 @@ function AuthGate({ onDone }: { onDone: () => void }) {
   );
 }
 
-function Header({ me, onLogout }: { me: RemoteUser; onLogout: () => void }) {
+function Header({ me, onLogout, workshopSectionId }: { me: RemoteUser; onLogout: () => void; workshopSectionId?: string | null }) {
+  const location = useLocation();
+  const path = location.pathname || "";
+  const navItems: Array<{ to: string; label: string; active: boolean }> = [
+    {
+      to: "/forum",
+      label: "Forum",
+      active: path === "/forum" || path === "/forum/",
+    },
+    {
+      to: "/forum/members",
+      label: "Members",
+      active: path.startsWith("/forum/members"),
+    },
+  ];
+  if (workshopSectionId) {
+    navItems.push({
+      to: `/forum/section/${workshopSectionId}`,
+      label: "Workshop",
+      active: path.startsWith(`/forum/section/${workshopSectionId}`),
+    });
+  }
+
+  const navLinkBase = "rounded-full px-3 py-1 transition-colors duration-150";
+  const navLinkActive = "bg-white/15 text-white";
+  const navLinkIdle = "text-zinc-400 hover:text-white";
+
   return (
     <header
       className="sticky top-0 z-50 border-b backdrop-blur"
@@ -185,9 +212,20 @@ function Header({ me, onLogout }: { me: RemoteUser; onLogout: () => void }) {
             <div className="text-sm font-semibold">Правительство</div>
           </div>
         </Link>
-        <div className="mx-4 hidden flex-1 items-center justify-center sm:flex">
+        <div className="mx-4 hidden flex-1 items-center gap-6 sm:flex">
+          <nav className="flex items-center gap-3 text-[11px] uppercase tracking-[0.32em] text-zinc-400">
+            {navItems.map((item) => (
+              <Link
+                key={item.label}
+                to={item.to}
+                className={`${navLinkBase} ${item.active ? navLinkActive : navLinkIdle}`}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
           <label
-            className="relative flex w-full max-w-xl items-center gap-2 rounded-full border px-4 py-2 text-sm shadow-sm"
+            className="relative flex flex-1 items-center gap-2 rounded-full border px-4 py-2 text-sm shadow-sm"
             style={{ borderColor: "var(--border)" }}
           >
             <Search size={16} />
@@ -197,6 +235,16 @@ function Header({ me, onLogout }: { me: RemoteUser; onLogout: () => void }) {
               style={{ color: "var(--text-1)" }}
             />
           </label>
+        </div>
+        <div className="ml-auto flex items-center gap-2 sm:hidden">
+          <Link to="/forum/members" className="btn">
+            Members
+          </Link>
+          {workshopSectionId ? (
+            <Link to={`/forum/section/${workshopSectionId}`} className="btn">
+              Workshop
+            </Link>
+          ) : null}
         </div>
         <button
           className="relative grid h-10 w-10 place-items-center rounded-xl border card"
@@ -229,8 +277,9 @@ function Header({ me, onLogout }: { me: RemoteUser; onLogout: () => void }) {
 export default function ForumPage() {
   const [, force] = React.useReducer((x) => x + 1, 0);
   const [me, setMe] = React.useState<RemoteUser | null | undefined>(undefined);
-  const [sectionsState, setSectionsState] = React.useState<any[]>([]);
+  const [sectionsState, setSectionsState] = React.useState<Section[]>([]);
   const [latestPosts, setLatestPosts] = React.useState<any[]>([]);
+  const [workshopSection, setWorkshopSection] = React.useState<Section | null>(null);
 
   // session
   React.useEffect(() => {
@@ -256,7 +305,12 @@ export default function ForumPage() {
 
   // data
   React.useEffect(() => {
-    if (!me) return;
+    if (!me) {
+      setSectionsState([]);
+      setLatestPosts([]);
+      setWorkshopSection(null);
+      return;
+    }
     let alive = true;
     (async () => {
       try {
@@ -265,13 +319,21 @@ export default function ForumPage() {
           listLatestPosts(8),
         ]);
         if (alive) {
-          setSectionsState(Array.isArray(sections) ? sections : []);
+          const safeSections = Array.isArray(sections) ? (sections as Section[]) : [];
+          setSectionsState(safeSections);
+          const spotlight =
+            safeSections.find((section) =>
+              typeof section.title === "string" &&
+              section.title.toLowerCase() === "workshop"
+            ) || null;
+          setWorkshopSection(spotlight);
           setLatestPosts(Array.isArray(posts) ? posts : []);
         }
       } catch {
         if (alive) {
           setSectionsState([]);
           setLatestPosts([]);
+          setWorkshopSection(null);
         }
       }
     })();
@@ -308,6 +370,7 @@ export default function ForumPage() {
           clearSession();
           force();
         }}
+        workshopSectionId={workshopSection?.id}
       />
 
       <div className="mx-auto w-full max-w-6xl px-4 py-6">
@@ -348,27 +411,30 @@ export default function ForumPage() {
               SECTIONS
             </div>
 
-            {(Array.isArray(sectionsState) ? sectionsState : []).map(
-              (s: any) => (
-                <Link
-                  key={s.id}
-                  to={`/forum/section/${s.id}`}
-                  className="card p-4"
-                >
-                  <div className="font-semibold flex items-center gap-2">
-                    <ChevronRight size={16} />
-                    {s.title}
-                  </div>
-                  {s.description && (
-                    <div className="text-sm opacity-70 mt-1">
-                      {s.description}
-                    </div>
-                  )}
-                </Link>
-              )
+            {workshopSection && (
+              <WorkshopShowcase sectionId={workshopSection.id} />
             )}
+            {sectionsState.map((s) => (
+              <Link
+                key={s.id}
+                to={`/forum/section/${s.id}`}
+                className="card p-4"
+              >
+                <div className="font-semibold flex items-center gap-2">
+                  <ChevronRight size={16} />
+                  {s.title}
+                </div>
+                {s.description ? (
+                  <div className="mt-1 text-sm opacity-70">{s.description}</div>
+                ) : null}
+                <div className="mt-3 flex items-center gap-4 text-[11px] uppercase tracking-[0.28em] opacity-60">
+                  <span>Topics {s.topicCount}</span>
+                  <span>Posts {s.postCount}</span>
+                </div>
+              </Link>
+            ))}
 
-            {!Array.isArray(sectionsState) || sectionsState.length === 0 ? (
+            {!sectionsState.length ? (
               <div className="card p-4 text-sm opacity-70">Нет разделов</div>
             ) : null}
           </div>
