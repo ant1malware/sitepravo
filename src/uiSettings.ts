@@ -13,13 +13,33 @@ export type Density = 'standard' | 'compact';
 export type Shadow = 'none' | 'soft' | 'strong';
 export type Radius = 'subtle' | 'standard' | 'rounded';
 
+function safeGet(key: string): string | null {
+  try {
+    return typeof window !== 'undefined' ? window.localStorage.getItem(key) : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeSet(key: string, value: string) {
+  try {
+    if (typeof window !== 'undefined') window.localStorage.setItem(key, value);
+  } catch {}
+}
+
+function safeRemove(key: string) {
+  try {
+    if (typeof window !== 'undefined') window.localStorage.removeItem(key);
+  } catch {}
+}
+
 export function applyDensity(d: Density) {
   document.documentElement.style.setProperty('--density', d === 'compact' ? '0.85' : '1');
-  localStorage.setItem(DENSITY_KEY, d);
+  safeSet(DENSITY_KEY, d);
 }
 
 export function getDensity(): Density {
-  const v = localStorage.getItem(DENSITY_KEY);
+  const v = safeGet(DENSITY_KEY);
   return v === 'compact' ? 'compact' : 'standard';
 }
 
@@ -27,11 +47,12 @@ export function applyFontScale(k: number) {
   const clamped = Math.max(0.9, Math.min(1.3, k));
   const base = 16 * clamped;
   document.documentElement.style.setProperty('--font-size', `${base}px`);
-  localStorage.setItem(FONT_KEY, String(clamped));
+  safeSet(FONT_KEY, String(clamped));
 }
 
 export function getFontScale(): number {
-  const v = parseFloat(localStorage.getItem(FONT_KEY) || '1');
+  const raw = safeGet(FONT_KEY);
+  const v = parseFloat(raw || '1');
   if (isFinite(v) && v > 0.6 && v < 2) return v; return 1;
 }
 
@@ -40,7 +61,7 @@ type FeatureFlags = { [k: string]: boolean };
 export function setFeature(key: string, on: boolean) {
   const f = getFeatures();
   f[key] = on;
-  localStorage.setItem(FEATURES_KEY, JSON.stringify(f));
+  safeSet(FEATURES_KEY, JSON.stringify(f));
 }
 
 export function isFeatureOn(key: string, def = true): boolean {
@@ -50,7 +71,7 @@ export function isFeatureOn(key: string, def = true): boolean {
 
 export function getFeatures(): FeatureFlags {
   try {
-    const raw = localStorage.getItem(FEATURES_KEY);
+    const raw = safeGet(FEATURES_KEY);
     return raw ? JSON.parse(raw) as FeatureFlags : {};
   } catch { return {}; }
 }
@@ -62,7 +83,7 @@ export function exportSettings(): string {
     'telemetry_disabled', 'cp_filter', 'recent:items', 'ui:features'
   ];
   const out: Record<string, string|null> = {};
-  for (const k of keys) out[k] = localStorage.getItem(k);
+  for (const k of keys) out[k] = safeGet(k);
   return JSON.stringify(out, null, 2);
 }
 
@@ -70,7 +91,7 @@ export function importSettings(json: string) {
   const data = JSON.parse(json) as Record<string, string|null>;
   for (const k in data) {
     const v = data[k];
-    if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v);
+    if (v == null) safeRemove(k); else safeSet(k, v);
   }
 }
 
@@ -80,10 +101,10 @@ export function applyShadow(s: Shadow) {
   if (s === 'soft') v = '0 10px 30px -12px rgba(0,0,0,0.25)';
   if (s === 'strong') v = '0 20px 60px -24px rgba(0,0,0,0.35)';
   document.documentElement.style.setProperty('--card-shadow', v);
-  localStorage.setItem(SHADOW_KEY, s);
+  safeSet(SHADOW_KEY, s);
 }
 export function getShadow(): Shadow {
-  const v = localStorage.getItem(SHADOW_KEY) as Shadow | null;
+  const v = safeGet(SHADOW_KEY) as Shadow | null;
   return v === 'none' || v === 'soft' || v === 'strong' ? v : 'soft';
 }
 
@@ -94,30 +115,32 @@ export function applyRadius(r: Radius) {
   document.documentElement.style.setProperty('--radius-lg', lg + 'px');
   document.documentElement.style.setProperty('--radius-2xl', xl + 'px');
   document.documentElement.style.setProperty('--radius-3xl', xxl + 'px');
-  localStorage.setItem(RADIUS_KEY, r);
+  safeSet(RADIUS_KEY, r);
 }
 export function getRadius(): Radius {
-  const v = localStorage.getItem(RADIUS_KEY) as Radius | null;
+  const v = safeGet(RADIUS_KEY) as Radius | null;
   return v === 'subtle' || v === 'rounded' ? v : 'standard';
 }
 
 export function applyGlass(px: number) {
   const v = Math.max(0, Math.min(16, Math.round(px)));
   document.documentElement.style.setProperty('--glass-blur', v + 'px');
-  localStorage.setItem(GLASS_KEY, String(v));
+  safeSet(GLASS_KEY, String(v));
 }
 export function getGlass(): number {
-  const v = parseInt(localStorage.getItem(GLASS_KEY) || '6', 10);
+  const raw = safeGet(GLASS_KEY);
+  const v = parseInt(raw || '6', 10);
   return isFinite(v) ? v : 6;
 }
 
 export function applyReadingWidth(ch: number) {
   const v = Math.max(60, Math.min(96, Math.round(ch)));
   document.documentElement.style.setProperty('--reading-w', v + 'ch');
-  localStorage.setItem(READW_KEY, String(v));
+  safeSet(READW_KEY, String(v));
 }
 export function getReadingWidth(): number {
-  const v = parseInt(localStorage.getItem(READW_KEY) || '78', 10);
+  const raw = safeGet(READW_KEY);
+  const v = parseInt(raw || '78', 10);
   return isFinite(v) ? v : 78;
 }
 
@@ -137,8 +160,8 @@ export function initUi() {
 export function applyAnimations(on: boolean) {
   const root = document.documentElement;
   root.classList.toggle('anim-off', !on);
-  try { localStorage.setItem(ANIM_KEY, on ? '1' : '0'); } catch {}
+  safeSet(ANIM_KEY, on ? '1' : '0');
 }
 export function getAnimationsOn(): boolean {
-  try { return localStorage.getItem(ANIM_KEY) !== '0'; } catch { return true; }
+  try { return safeGet(ANIM_KEY) !== '0'; } catch { return true; }
 }

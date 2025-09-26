@@ -37,6 +37,27 @@ import ContextText from "./ContextText";
 import ImportantRecordingBlock from "./components/ImportantRecordingBlock";
 
 
+function safeGet(key: string): string | null {
+  try {
+    return typeof window !== 'undefined' ? window.localStorage.getItem(key) : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeSet(key: string, value: string) {
+  try {
+    if (typeof window !== 'undefined') window.localStorage.setItem(key, value);
+  } catch {}
+}
+
+function safeRemove(key: string) {
+  try {
+    if (typeof window !== 'undefined') window.localStorage.removeItem(key);
+  } catch {}
+}
+
+
 // Keeps main tab state in sync with URL (?tab=... and #...)
 const VALID_TABS_SET = new Set<string>();
 function pickTabFromLocationAll(loc: Location, fallback: string) {
@@ -234,7 +255,11 @@ const FeedbackButton: React.FC = () => {
           </a>
           <div className="mt-2 flex items-center justify-between text-xs">
             <label className="flex items-center gap-2">
-              <input type="checkbox" defaultChecked={localStorage.getItem('telemetry_disabled')==='1'} onChange={(e)=>localStorage.setItem('telemetry_disabled', e.currentTarget.checked?'1':'0')} />
+              <input
+                type="checkbox"
+                defaultChecked={safeGet('telemetry_disabled') === '1'}
+                onChange={(e) => safeSet('telemetry_disabled', e.currentTarget.checked ? '1' : '0')}
+              />
               Отключить анонимную телеметрию
             </label>
           </div>
@@ -256,7 +281,7 @@ const PromoChecklist: React.FC<{ roleId: string; dept: string; items: string[] }
 
   const [checked, setChecked] = useState<Set<number>>(() => {
     try {
-      const raw = localStorage.getItem(storageKey);
+      const raw = safeGet(storageKey);
       const arr = raw ? (JSON.parse(raw) as number[]) : [];
       return new Set(arr);
     } catch {
@@ -266,7 +291,7 @@ const PromoChecklist: React.FC<{ roleId: string; dept: string; items: string[] }
 
   const [shots, setShots] = useState<Record<number, string[]>>(() => {
     try {
-      const raw = localStorage.getItem(shotsKey);
+      const raw = safeGet(shotsKey);
       return raw ? (JSON.parse(raw) as Record<number, string[]>) : {};
     } catch { return {}; }
   });
@@ -275,11 +300,14 @@ const PromoChecklist: React.FC<{ roleId: string; dept: string; items: string[] }
   const [errors, setErrors] = useState<Record<number, string | undefined>>({});
 
   useEffect(() => {
-    try { localStorage.setItem(storageKey, JSON.stringify([...checked])); } catch {}
+    try { safeSet(storageKey, JSON.stringify([...checked])); } catch {}
   }, [checked, storageKey]);
 
   useEffect(() => {
-    try { localStorage.setItem(shotsKey, JSON.stringify(shots)); } catch {}
+    try {
+      if (Object.keys(shots).length) safeSet(shotsKey, JSON.stringify(shots));
+      else safeRemove(shotsKey);
+    } catch {}
   }, [shots, shotsKey]);
 
   function toggle(i: number) {
