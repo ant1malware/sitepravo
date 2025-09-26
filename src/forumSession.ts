@@ -1,77 +1,76 @@
-import React from 'react';
+import * as React from "react";
 
 export type ForumSession = {
   userId: string;
-  remember: boolean;
+  remember?: boolean;
   lastLogin: string;
 };
 
-export const FORUM_SESSION_STORAGE_KEY = 'forum:auth:session';
-export const FORUM_SESSION_EVENT = 'forum:session-change';
+export const FORUM_SESSION_STORAGE_KEY = "forum:session";
 
-function parseSession(raw: string | null): ForumSession | null {
-  if (!raw) return null;
+/** Прочитать текущую сессию из storage */
+export function readForumSession(): ForumSession | null {
   try {
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return null;
-    const userId = typeof parsed.userId === 'string' ? parsed.userId : '';
-    if (!userId) return null;
-    const remember = Boolean((parsed as any).remember);
-    const lastLogin = typeof parsed.lastLogin === 'string' && parsed.lastLogin
-      ? parsed.lastLogin
-      : new Date().toISOString();
-    return { userId, remember, lastLogin };
+    const raw =
+      sessionStorage.getItem(FORUM_SESSION_STORAGE_KEY) ??
+      localStorage.getItem(FORUM_SESSION_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as ForumSession) : null;
   } catch {
     return null;
   }
 }
 
-export function readForumSession(): ForumSession | null {
-  if (typeof window === 'undefined') return null;
-  const localRaw = window.localStorage.getItem(FORUM_SESSION_STORAGE_KEY);
-  const sessionRaw = window.sessionStorage.getItem(FORUM_SESSION_STORAGE_KEY);
-  return parseSession(localRaw) ?? parseSession(sessionRaw);
-}
-
-export function dispatchForumSessionEvent(session: ForumSession | null) {
-  if (typeof window === 'undefined') return;
+/** Записать сессию и оповестить слушателей */
+export function writeForumSession(s: ForumSession) {
   try {
-    window.dispatchEvent(
-      new CustomEvent(FORUM_SESSION_EVENT, {
-        detail: { session },
-      }),
-    );
-  } catch {
-    // noop
-  }
+    const target = s.remember ? localStorage : sessionStorage;
+    target.setItem(FORUM_SESSION_STORAGE_KEY, JSON.stringify(s));
+    dispatchForumSessionEvent();
+  } catch {}
 }
 
-export function useForumSessionWatcher(): ForumSession | null {
-  const [session, setSession] = React.useState<ForumSession | null>(() => {
+/** Очистить сессию и оповестить слушателей */
+export function clearForumSession() {
+  try {
+    localStorage.removeItem(FORUM_SESSION_STORAGE_KEY);
+    sessionStorage.removeItem(FORUM_SESSION_STORAGE_KEY);
+    dispatchForumSessionEvent();
+  } catch {}
+}
+
+/** Событие для всех вкладок/компонентов — допускает аргумент (store иногда передаёт) */
+export function dispatchForumSessionEvent(_?: any) {
+  try {
+    window.dispatchEvent(new Event("forum:session"));
+  } catch {}
+}
+
+/** Хук-слушатель изменений сессии (используется в Sidebar/MobileMenu) */
+export function useForumSessionWatcher() {
+  const readNow = () => {
     try {
-      return readForumSession();
+      const raw =
+        sessionStorage.getItem(FORUM_SESSION_STORAGE_KEY) ??
+        localStorage.getItem(FORUM_SESSION_STORAGE_KEY);
+      return raw ? (JSON.parse(raw) as ForumSession) : null;
     } catch {
       return null;
     }
-  });
+  };
+
+  const [s, setS] = React.useState<ForumSession | null>(readNow());
 
   React.useEffect(() => {
-    const update = () => {
-      try {
-        setSession(readForumSession());
-      } catch {
-        setSession(null);
-      }
-    };
-
-    window.addEventListener('storage', update);
-    window.addEventListener(FORUM_SESSION_EVENT, update as EventListener);
-
+    const on = () => setS(readNow());
+    window.addEventListener("storage", on);
+    window.addEventListener("forum:session", on as any);
+    window.addEventListener("forum:changed", on as any);
     return () => {
-      window.removeEventListener('storage', update);
-      window.removeEventListener(FORUM_SESSION_EVENT, update as EventListener);
+      window.removeEventListener("storage", on);
+      window.removeEventListener("forum:session", on as any);
+      window.removeEventListener("forum:changed", on as any);
     };
   }, []);
 
-  return session;
+  return s;
 }

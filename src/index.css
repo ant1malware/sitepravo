@@ -39,6 +39,17 @@
   --reading-w: 78ch;
 }
 
+.forum-theme {
+  --bg-1: #0c0d12;
+  --surface: rgba(22,24,34,0.76);
+  --surface-2: rgba(22,24,34,0.58);
+  --text-1: #f4f5ff;
+  --text-2: rgba(204,208,255,0.72);
+  --accent: #8b5cf6;
+  --border: rgba(140,130,255,0.22);
+  --card-shadow: 0 24px 60px -30px rgba(53,17,117,0.55);
+}
+
 /* Slightly denser UI on small screens */
 @media (max-width: 640px) {
   :root { --density: 0.9; }
@@ -138,6 +149,21 @@ header.sticky.top-0,
   .input:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--accent); border-color: var(--accent-600); }
   .tab { @apply rounded-lg px-3 py-1.5 text-sm; border-radius: var(--radius-lg); }
   .tab-active { @apply bg-zinc-100 dark:bg-zinc-800; }
+}
+
+.forum-theme .card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--card-shadow);
+}
+
+.forum-theme .striped {
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.04) 0 22px,
+    transparent 22px 44px
+  );
 }
 
 /* Print helpers */

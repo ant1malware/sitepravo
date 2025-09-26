@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import { writeFileSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-// кладём docs/.nojekyll (чтобы Pages не включал Jekyll)
+// РєР»Р°РґС‘Рј docs/.nojekyll (С‡С‚РѕР±С‹ Pages РЅРµ РІРєР»СЋС‡Р°Р» Jekyll)
 function noJekyllPlugin(enable: boolean) {
   return {
     name: 'nojekyll',
@@ -16,7 +16,7 @@ function noJekyllPlugin(enable: boolean) {
   }
 }
 
-// копируем index.html -> 404.html (SPA-fallback для любых путей)
+// РєРѕРїРёСЂСѓРµРј index.html -> 404.html (SPA-fallback РґР»СЏ Р»СЋР±С‹С… РїСѓС‚РµР№)
 function copy404Plugin(outDir: string | null) {
   return {
     name: 'copy-404',
@@ -46,8 +46,8 @@ export default defineConfig(({ mode }) => {
       noJekyllPlugin(isGh),
       copy404Plugin(outDir),
     ],
-    // имя репозитория на GitHub Pages:
-    base: isGh ? '/betatestik/' : '/',
+    // РёРјСЏ СЂРµРїРѕР·РёС‚РѕСЂРёСЏ РЅР° GitHub Pages:
+    base: (process.env.VITE_BASE || (isGh ? '/' : '/')),
     define: { __APP_VERSION__: JSON.stringify(version) },
     build: {
       outDir,

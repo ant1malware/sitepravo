@@ -10,10 +10,113 @@ import {
   Bug,
   Users,
   Rocket,
+  Gamepad2,
+  Palette,
+  Sparkles,
+  MessageSquare,
+  Lock,
+  KeyRound,
+  Clock,
 } from 'lucide-react';
+
+/* =========================
+   helpers: theme switch
+========================= */
+
+type ThemeName = 'liquid' | 'gradient';
+
+function setTheme(name: ThemeName) {
+  try {
+    const root = document.documentElement;
+    root.classList.remove('theme-liquid', 'theme-gradient');
+    if (name === 'liquid') root.classList.add('theme-liquid');
+    if (name === 'gradient') root.classList.add('theme-gradient');
+    localStorage.setItem('site:theme', name);
+  } catch {}
+}
+
+function getSavedTheme(): ThemeName | null {
+  try {
+    const s = localStorage.getItem('site:theme') as ThemeName | null;
+    return s ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/* =========================
+   Presentational bits
+========================= */
+
+const ThemeTile: React.FC<{
+  name: ThemeName;
+  title: string;
+  desc: string;
+  active: boolean;
+  onPick: (n: ThemeName) => void;
+}> = ({ name, title, desc, active, onPick }) => {
+  const isLiquid = name === 'liquid';
+  return (
+    <div
+      className={`relative overflow-hidden rounded-2xl border transition
+                  ${active ? 'border-violet-400/50 ring-2 ring-violet-300/30' : 'border-white/10'}
+                  bg-white/70 dark:bg-zinc-900/50`}
+    >
+      {/* demo preview */}
+      <div
+        className="h-28 md:h-32 w-full"
+        style={
+          isLiquid
+            ? {
+                backdropFilter: 'saturate(140%) blur(10px)',
+                background:
+                  'radial-gradient(120% 120% at 10% 0%, rgba(138,113,255,.35), transparent 60%), radial-gradient(120% 120% at 90% 30%, rgba(70,200,255,.28), transparent 60%), linear-gradient(180deg, rgba(255,255,255,.35), rgba(255,255,255,.05))',
+              }
+            : {
+                background:
+                  'linear-gradient(135deg, #c2bbff 0%, #8ec5ff 34%, #7bd3f7 58%, #ffa9d1 100%)',
+              }
+        }
+      />
+      <div className="p-4">
+        <div className="mb-1 flex items-center gap-2 font-semibold">
+          <Palette className="h-4 w-4" />
+          {title}
+          {active && <span className="badge !ml-2">Выбрано</span>}
+        </div>
+        <p className="text-sm opacity-80">{desc}</p>
+        <div className="mt-3">
+          <button
+            className={`btn ${active ? 'btn-primary' : ''}`}
+            onClick={() => onPick(name)}
+          >
+            Применить тему
+          </button>
+        </div>
+      </div>
+
+      <Sparkles
+        aria-hidden
+        className="absolute right-3 top-3 h-5 w-5 opacity-80"
+      />
+    </div>
+  );
+};
 
 export default function WhatsNew() {
   const items = getWhatsNew();
+  const [currentTheme, setCurrentTheme] = React.useState<ThemeName | null>(
+    getSavedTheme()
+  );
+
+  React.useEffect(() => {
+    if (currentTheme) setTheme(currentTheme);
+  }, [currentTheme]);
+
+  function pickTheme(n: ThemeName) {
+    setTheme(n);
+    setCurrentTheme(n);
+  }
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 text-zinc-900 dark:text-zinc-100">
@@ -26,82 +129,194 @@ export default function WhatsNew() {
         <Link to="/" className="btn">На главную</Link>
       </div>
 
-      {/* HERO */}
+      {/* HERO – новинка: игра + темы */}
       <section className="card hero-card p-6 md:p-8 mb-8 overflow-hidden relative">
-        <div aria-hidden className="hero-spotlight" />
+        <div
+          aria-hidden
+          className="hero-spotlight absolute -inset-10 opacity-70 blur-3xl pointer-events-none"
+          style={{
+            background:
+              'radial-gradient(40% 40% at 20% 0%, rgba(130,120,255,.22), transparent 60%), radial-gradient(35% 35% at 80% 20%, rgba(70,210,255,.18), transparent 60%)',
+          }}
+        />
+
         <div className="mb-5 flex flex-wrap items-center gap-2">
           <span className="badge">
             <PartyPopper className="h-4 w-4" />
-            Официальный релиз — вышли из беты
+            Игровое обновление
           </span>
           <span className="badge">
-            v1.0 <CalendarDays className="h-4 w-4" /> 11.09.2025
+            v1.1 <CalendarDays className="h-4 w-4" /> 26.09.2025
           </span>
           <span className="badge">
             <Users className="h-4 w-4" />
-            Для всего Правительства
+            Для всех разделов
           </span>
         </div>
 
         <h2 className="display-hero font-black leading-tight mb-4">
-          Правительство — <span className="accent-text">Памятка (SKY)</span>
+          На сайте появилась <span className="accent-text">мини-игра «Чебзик»</span>
           <br className="hidden sm:block" />
-          теперь в проде
+          и две новые темы: <span className="accent-text">Жидкое стекло</span> и{' '}
+          <span className="accent-text">Градиент</span>
         </h2>
 
         <div className="text-base md:text-xl leading-relaxed space-y-3">
-          <p>
-            Сайт собран мной с нуля — роли, посты, процедуры, законы, интерфейс.
-            Темп был бешеный, и честно: <strong>я выгорел</strong>. Поэтому дальше двигаемся без гонки и ночных заливок —
-            в устойчивом ритме, где качество и стабильность важнее скорости.
+          <p className="inline-flex items-start gap-2">
+            <Gamepad2 className="mt-1 h-5 w-5 shrink-0 opacity-80" />
+            <span>
+              Быстрый «Блик», классическая «Змейка», уровни, монеты, гардероб и уютная комната — прямо в браузере. Всё работает на тёмной теме, со звуками и эффектами.
+            </span>
+          </p>
+          <p className="inline-flex items-start gap-2">
+            <Palette className="mt-1 h-5 w-5 shrink-0 opacity-80" />
+            <span>
+              Оформление теперь на выбор: кристальный эффект <strong>«Жидкое стекло»</strong> или
+              сочный <strong>«Градиент»</strong>. Переключается в один клик ниже.
+            </span>
           </p>
           <p className="inline-flex items-start gap-2">
             <Bug className="mt-1 h-5 w-5 shrink-0 opacity-80" />
             <span>
-              <strong>Я здесь один — и разработчик, и тестировщик.</strong> Могу что-то пропустить.
-              Если видите баг или шероховатость — напишите, чиню и улучшаю постепенно.
+              Если что-то ведёт себя странно — напишите. Исправляю постепенно, без гонки.
             </span>
           </p>
-          <p>
-            За эстетику благодарность: <strong>дизайн фонового изображения — Katalia Rose</strong>.
-          </p>
-        </div>
-
-        <div className="mt-5 flex flex-wrap gap-2">
-          <span className="badge">Ключевые фичи релиза: поиск по законам</span>
-          <span className="badge">законы</span>
-          <span className="badge">новый дизайн</span>
         </div>
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
+          <Link to="/buddy" className="btn btn-primary btn-lg">
+            Играть <Gamepad2 className="h-5 w-5" />
+          </Link>
           <a
             href="https://t.me/pasha_bolshoi"
             target="_blank"
             rel="noreferrer"
-            className="btn btn-primary btn-lg"
+            className="btn btn-lg"
           >
             Сообщить о баге
           </a>
         </div>
 
+        {/* Превью и переключатель тем */}
+        <div className="mt-7 grid gap-3 md:grid-cols-2">
+          <ThemeTile
+            name="liquid"
+            title="Жидкое стекло"
+            desc="Полупрозрачные карточки, мягкие блики и стеклянный объём. Визуально лёгкая и современная тема."
+            active={currentTheme === 'liquid'}
+            onPick={pickTheme}
+          />
+          <ThemeTile
+            name="gradient"
+            title="Градиент"
+            desc="Живые переливы и яркие переходы. Отлично подчёркивает акценты и разделы."
+            active={currentTheme === 'gradient'}
+            onPick={pickTheme}
+          />
+        </div>
+
         {/* Что дальше */}
-        <div className="mt-7 rounded-xl border border-zinc-200/70 bg-white/65 p-4 text-sm md:text-base text-zinc-800
-                        dark:border-zinc-800/70 dark:bg-zinc-900/55 dark:text-zinc-200">
+        <div
+          className="mt-7 rounded-xl border border-zinc-200/70 bg-white/65 p-4 text-sm md:text-base text-zinc-800
+                      dark:border-zinc-800/70 dark:bg-zinc-900/55 dark:text-zinc-200"
+        >
           <div className="mb-2 flex items-center gap-2 font-semibold">
             <Rocket className="h-4 w-4" />
             Что дальше
           </div>
           <ul className="ml-4 list-disc space-y-1">
-            <li>Добавить ИИ для разбора РП-ситуаций по законам.</li>
-            <li>Полный набор законов и всех внутренних уставов.</li>
-            <li>Больше фоновых тем.</li>
-            <li>Список руководителей/заместителей департаментов, губернатора и вице-губернаторов.</li>
-            <li>Автоподача заявлений в нужные темы на форуме (со скриншотами пользователя).</li>
+            <li>Ещё мини-игры и маленькие сезонные ивенты.</li>
+            <li>Расширенный гардероб, палитры и коллекции предметов.</li>
+            <li>Больше фоновых тем и тонкая настройка интерфейса.</li>
+            <li>Небольшие анимации и улучшения производительности.</li>
           </ul>
         </div>
       </section>
 
-      {/* История изменений */}
+      {/* Форум — объяснение и инвайты */}
+      <section className="card p-6 md:p-8 mb-8">
+        <header className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="badge">
+            <MessageSquare className="h-4 w-4" />
+            Форум
+          </span>
+          <span className="badge">
+            <Lock className="h-4 w-4" />
+            Закрытый бета-тест
+          </span>
+          <span className="badge">
+            <KeyRound className="h-4 w-4" />
+            По инвайтам
+          </span>
+          <span className="badge">
+            <Clock className="h-4 w-4" />
+            Открытие скоро
+          </span>
+        </header>
+
+        <h3 className="text-2xl md:text-3xl font-bold tracking-tight mb-3">
+          «Что за кнопка <span className="accent-text">Форум</span>?»
+        </h3>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-3 text-base leading-relaxed">
+            <p>
+              В шапке сайта вы уже видите кнопку <strong>«Форум»</strong>. Мы часто получаем вопрос —
+              куда она ведёт и почему пока серенькая. Отвечаем красиво и честно:
+            </p>
+            <ul className="ml-4 list-disc">
+              <li>
+                <strong>Что это будет:</strong> раздел обсуждений, гайды, баг-репорты, заявки,
+                идеи по развитию и прозрачная дорожная карта.
+              </li>
+              <li>
+                <strong>Зачем бета:</strong> хотим стартовать без мусора и флуда, с хорошим модераторским
+                опытом и удобными шаблонами тем.
+              </li>
+              <li>
+                <strong>Статус:</strong> сейчас Форум проходит <em>закрытый бета-тест по инвайтам</em>.
+              </li>
+            </ul>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-white/60 p-4 text-zinc-800
+                          dark:bg-zinc-900/60 dark:text-zinc-200">
+            <div className="mb-2 font-semibold">Как попасть сейчас</div>
+            <ol className="ml-4 list-decimal space-y-1 text-sm md:text-base">
+              <li>Помогаете тестировать сайт или игру — получаете приоритетный инвайт.</li>
+              <li>
+                Можете <a href="https://t.me/pasha_bolshoi" target="_blank" rel="noreferrer" className="underline hover:no-underline">написать мне в Telegram</a> и оставить заявку.
+              </li>
+              <li>После открытого релиза все смогут войти без приглашения.</li>
+            </ol>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <a
+                href="https://t.me/pasha_bolshoi"
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-primary"
+              >
+                Запросить инвайт
+              </a>
+              {/* декоративная «неактивная» кнопка */}
+              <span
+                className="btn opacity-60 pointer-events-none cursor-not-allowed"
+                aria-disabled="true"
+                title="Скоро"
+              >
+                Форум (скоро)
+              </span>
+            </div>
+
+            <p className="mt-3 text-xs opacity-70">
+              Примечание: доступ расширяем волнами. Если не ответил сразу — не теряйтесь, очередь живая.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* История изменений (из versioning) */}
       <div className="grid gap-4">
         {items.map((it) => (
           <article key={`${it.id}-${it.version}`} className="card transition hover:shadow-softLg">

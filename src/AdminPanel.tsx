@@ -1,101 +1,359 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+
+// ⚠️ из forumStore берём ТОЛЬКО вещи про секции/топики
 import {
-  createSection, listSections, createTopic,
-  listAccounts, setRole, listTopics
-} from "../store/forumStore";
-import { Shield, PlusCircle } from "lucide-react";
-import { getSession } from "../utils/session";
-import { findAccountById } from "../store/forumStore";
+  listSections,
+  createSection,
+  updateSection,
+  listTopics,
+  updateTopic,
+  moveTopic,
+} from "./store/forumStore";
+
+// ✅ а пользователей/роли — ТОЛЬКО из удалённого API (воркер)
+// Remote users from Worker; invites remote too
+import { listAccounts, setRole, type Role, listInvites, generateInvites } from "./store/authRemote";
+// Forum local moderation helpers (mute/ban affect chat UI locally)
+import { applyMute, applyBan } from "./store/forumStore";
+
+// Role is imported from forumStore
+
+function getActorId(): string {
+  try {
+    const raw =
+      localStorage.getItem("forum:session") ??
+      sessionStorage.getItem("forum:session");
+    if (!raw) return "unknown";
+    const s = JSON.parse(raw);
+    return s?.userId || "unknown";
+  } catch {
+    return "unknown";
+  }
+}
 
 export default function AdminPanel() {
-  const nav = useNavigate();
-  const ses = getSession();
-  const me = ses ? findAccountById(ses.userId) : null;
+  const [tab, setTab] = React.useState<"users" | "sections" | "topics" | "invites">("users");
+
+  return (
+    <div className="mx-auto w-full max-w-5xl px-4 py-6">
+      <div className="mb-4 flex gap-2">
+        <button
+          className={`btn ${tab === "users" ? "btn-primary" : ""}`}
+          onClick={() => setTab("users")}
+        >
+          Users
+        </button>
+        <button
+          className={`btn ${tab === "sections" ? "btn-primary" : ""}`}
+          onClick={() => setTab("sections")}
+        >
+          Sections
+        </button>
+        <button
+          className={`btn ${tab === "topics" ? "btn-primary" : ""}`}
+          onClick={() => setTab("topics")}
+        >
+          Topics
+        </button>
+        <button
+          className={`btn ${tab === "invites" ? "btn-primary" : ""}`}
+          onClick={() => setTab("invites")}
+        >
+          Invites
+        </button>
+      </div>
+
+      {tab === "users" && <UsersTab />}
+      {tab === "sections" && <SectionsTab />}
+      {tab === "topics" && <TopicsTab />}
+      {tab === "invites" && <InvitesTab />}
+    </div>
+  );
+}
+
+/* ----------------------- Users ----------------------- */
+
+function UsersTab() {
+  const [rows, setRows] = React.useState<
+    { id: string; username: string; email: string; userNumber: number; role: Role }[]
+  >([]);
+
+  const load = async () => { try { const list = await listAccounts(); setRows(list); } catch (e:any) { alert((e as any)?.message || "Failed to load users"); } };
 
   React.useEffect(() => {
-    if (!me || (me.role !== "admin" && me.role !== "moderator")) {
-      nav("/forum"); // нет доступа
-    }
-  }, [me, nav]);
+    load();
+  }, []);
 
-  const [sections, setSections] = React.useState(listSections());
-  const [accounts, setAccounts] = React.useState(listAccounts());
+  const changeRole = async (id: string, role: Role) => { try { await setRole(id, role); load(); } catch (e:any) { alert((e as any)?.message || "Failed to set role"); } };
 
-  const [secTitle, setSecTitle] = React.useState("");
-  const [secDesc, setSecDesc] = React.useState("");
+  return (
+    <div className="card p-4">
+      <div className="mb-3 text-sm opacity-70">���������� �������������� (����� Worker API).</div>
+      <div className="grid gap-2">
+        {rows.map((u) => (
+          <div
+            key={u.id}
+            className="grid grid-cols-[80px_1fr_1fr_180px] items-center gap-3 rounded-xl border px-3 py-2"
+            style={{ borderColor: "var(--border)" }}
+          >
+            <div className="text-xs opacity-70">#{u.userNumber}</div>
+            <div className="font-semibold">{u.username}</div>
+            <div className="text-sm opacity-80">{u.email}</div>
+            <div className="flex items-center gap-2">
+              <select
+                className="input"
+                value={u.role}
+                onChange={(e) => changeRole(u.id, e.target.value as Role)}
+              >
+                <option value="developer">developer</option>
+                <option value="admin">admin</option>
+                <option value="moderator">moderator</option>
+                <option value="vip">vip</option>
+                <option value="user">user</option>
+                <option value="newbie">newbie</option>
+              </select>
+            </div>
+          </div>
+        ))}
+        {!rows.length && (
+          <div className="text-sm opacity-70">Нет пользователей</div>
+        )}
+      </div>
+    </div>
+  );
+}
 
-  const [topicTitle, setTopicTitle] = React.useState("");
-  const [topicSection, setTopicSection] = React.useState<string>(sections[0]?.id || "");
+/* ----------------------- Sections ----------------------- */
 
-  const createSec = () => {
-    if (!secTitle.trim()) return;
-    createSection(secTitle.trim(), secDesc.trim());
-    setSecTitle(""); setSecDesc("");
-    setSections(listSections());
+function SectionsTab() {
+  const [rows, setRows] = React.useState<
+    { id: string; title: string; description?: string; icon?: string }[]
+  >([]);
+  const [title, setTitle] = React.useState("");
+  const [desc, setDesc] = React.useState("");
+
+  const reload = () => setRows(listSections());
+
+  React.useEffect(() => {
+    reload();
+  }, []);
+
+  const add = () => {
+    if (!title.trim()) return;
+    // createSection в твоём store принимает 1 аргумент
+    createSection({ title: title.trim(), description: desc.trim() } as any);
+    setTitle("");
+    setDesc("");
+    reload();
   };
-  const createTop = () => {
-    if (!topicTitle.trim() || !topicSection) return;
-    if (!me) return;
-    createTopic(topicSection, topicTitle.trim(), me.id);
-    setTopicTitle("");
-  };
-  const changeRole = (id: string, role: "admin"|"moderator"|"vip"|"user"|"newbie") => {
-    setRole(id, role);
-    setAccounts(listAccounts());
+
+  const edit = (id: string, field: "title" | "description", value: string) => {
+    const actor = getActorId();
+    updateSection(id, { [field]: value } as any, actor);
+    reload();
   };
 
   return (
-    <main className="mx-auto max-w-5xl p-4">
-      <header className="mb-4 flex items-center gap-2">
-        <Shield className="h-6 w-6 text-[color:var(--accent)]" />
-        <h1 className="text-2xl font-bold">Admin panel</h1>
-      </header>
-
-      {/* создание раздела */}
-      <section className="rounded-2xl border p-4" style={{background:"var(--surface)",borderColor:"var(--border)"}}>
-        <h2 className="mb-2 text-lg font-semibold">Создать раздел</h2>
+    <div className="grid gap-4">
+      <div className="card p-4">
+        <div className="mb-2 font-semibold">Создать раздел</div>
         <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-          <input className="input" placeholder="Название" value={secTitle} onChange={e=>setSecTitle(e.target.value)} />
-          <input className="input" placeholder="Описание" value={secDesc} onChange={e=>setSecDesc(e.target.value)} />
-          <button className="btn btn-primary flex items-center gap-2"
-                  onClick={createSec}><PlusCircle className="h-4 w-4"/>Добавить</button>
+          <input
+            className="input"
+            placeholder="Title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <input
+            className="input"
+            placeholder="Description"
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+          />
+          <button className="btn btn-primary" onClick={add}>
+            Add
+          </button>
         </div>
-      </section>
+      </div>
 
-      {/* создание темы */}
-      <section className="mt-4 rounded-2xl border p-4" style={{background:"var(--surface)",borderColor:"var(--border)"}}>
-        <h2 className="mb-2 text-lg font-semibold">Создать тему</h2>
-        <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
-          <input className="input" placeholder="Заголовок темы" value={topicTitle} onChange={e=>setTopicTitle(e.target.value)} />
-          <select className="input" value={topicSection} onChange={e=>setTopicSection(e.target.value)}>
-            {sections.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
-          </select>
-          <button className="btn btn-primary" onClick={createTop}>Создать</button>
-        </div>
-      </section>
-
-      {/* роли */}
-      <section className="mt-4 rounded-2xl border p-4" style={{background:"var(--surface)",borderColor:"var(--border)"}}>
-        <h2 className="mb-2 text-lg font-semibold">Роли и доступ</h2>
+      <div className="card p-4">
+        <div className="mb-2 font-semibold">Список разделов</div>
         <div className="grid gap-2">
-          {accounts.map(a=>(
-            <div key={a.id} className="flex items-center justify-between rounded-xl border p-2"
-                 style={{borderColor:"var(--border)"}}>
-              <div className="text-sm"><b>{a.username}</b> • #{a.userNumber}</div>
-              <div className="flex items-center gap-2">
-                <select className="input" value={a.role} onChange={e=>changeRole(a.id, e.target.value as any)}>
-                  <option value="admin">admin</option>
-                  <option value="moderator">moderator</option>
-                  <option value="vip">vip</option>
-                  <option value="user">user</option>
-                  <option value="newbie">newbie</option>
-                </select>
+          {rows.map((s) => (
+            <div
+              key={s.id}
+              className="grid grid-cols-[140px_1fr] items-center gap-2 rounded-xl border px-3 py-2"
+              style={{ borderColor: "var(--border)" }}
+            >
+              <div className="text-sm opacity-70">{s.id.slice(0, 8)}…</div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input
+                  className="input"
+                  value={s.title}
+                  onChange={(e) => edit(s.id, "title", e.target.value)}
+                />
+                <input
+                  className="input"
+                  value={s.description || ""}
+                  onChange={(e) => edit(s.id, "description", e.target.value)}
+                />
               </div>
             </div>
           ))}
+          {!rows.length && (
+            <div className="text-sm opacity-70">Пока нет разделов</div>
+          )}
         </div>
-      </section>
-    </main>
+      </div>
+    </div>
   );
 }
+
+/* ----------------------- Topics ----------------------- */
+
+function TopicsTab() {
+  const [rows, setRows] = React.useState<
+    {
+      id: string;
+      title: string;
+      sectionId: string;
+      pinned?: boolean;
+      locked?: boolean;
+    }[]
+  >([]);
+
+  const reload = () => setRows(listTopics());
+
+  React.useEffect(() => {
+    reload();
+  }, []);
+
+  const pin = (id: string, v: boolean) => {
+    const actor = getActorId();
+    updateTopic(id, { pinned: v } as any, actor);
+    reload();
+  };
+
+  const lock = (id: string, v: boolean) => {
+    const actor = getActorId();
+    updateTopic(id, { locked: v } as any, actor);
+    reload();
+  };
+
+  const move = (id: string, to: string) => {
+    const actor = getActorId();
+    if (!to.trim()) return;
+    moveTopic(id, to.trim(), actor);
+    reload();
+  };
+
+  return (
+    <div className="card p-4">
+      <div className="mb-2 font-semibold">Темы</div>
+      <div className="grid gap-2">
+        {rows.map((t) => (
+          <div
+            key={t.id}
+            className="grid grid-cols-1 items-center gap-3 rounded-xl border px-3 py-3 sm:grid-cols-[1fr_auto_auto_auto]"
+            style={{ borderColor: "var(--border)" }}
+          >
+            <div>
+              <div className="font-semibold">{t.title}</div>
+              <div className="text-xs opacity-70">
+                id: {t.id.slice(0, 8)}… • section: {t.sectionId.slice(0, 8)}…
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={!!t.pinned}
+                onChange={(e) => pin(t.id, e.target.checked)}
+              />
+              pinned
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={!!t.locked}
+                onChange={(e) => lock(t.id, e.target.checked)}
+              />
+              locked
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                className="input"
+                placeholder="to sectionId"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const target = (e.target as HTMLInputElement).value;
+                    move(t.id, target);
+                    (e.target as HTMLInputElement).value = "";
+                  }
+                }}
+              />
+              <button
+                className="btn"
+                onClick={(e) => {
+                  const input = (e.currentTarget
+                    .previousElementSibling as HTMLInputElement)!;
+                  move(t.id, input.value);
+                  input.value = "";
+                }}
+              >
+                Move
+              </button>
+            </div>
+          </div>
+        ))}
+        {!rows.length && (
+          <div className="text-sm opacity-70">Пока нет тем</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ----------------------- Invites ----------------------- */
+
+function InvitesTab() {
+  const [rows, setRows] = React.useState<any[]>([]);
+  const [count, setCount] = React.useState(5);
+  const [note, setNote] = React.useState("");
+
+  const reload = async () => {
+    try { setRows(await listInvites()); } catch (e:any) { alert(e?.message||'Failed'); }
+  };
+
+  React.useEffect(() => { reload(); }, []);
+
+  const generate = async () => {
+    try { await generateInvites(Math.max(1, Math.min(20, count)), note); setNote(""); reload(); } catch (e:any) { alert(e?.message||'Failed to generate'); }
+  };
+
+  return (
+    <div className="card p-4">
+      <div className="mb-3 font-semibold">Генерация инвайт-кодов</div>
+      <div className="mb-4 grid gap-2 sm:grid-cols-[120px_1fr_auto]">
+        <input className="input" type="number" min={1} max={20} value={count} onChange={(e) => setCount(parseInt(e.target.value || "1", 10))} />
+        <input className="input" placeholder="note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
+        <button className="btn btn-primary" onClick={generate}>Generate</button>
+      </div>
+
+      <div className="mb-2 text-sm opacity-70">Последние коды (однократные):</div>
+      <div className="grid gap-2">
+        {rows.map((i) => (
+          <div key={`${i.code}-${i.createdAt}`} className="grid grid-cols-1 items-center gap-2 rounded-xl border px-3 py-2 sm:grid-cols-[160px_1fr_1fr_1fr]" style={{ borderColor: "var(--border)" }}>
+            <div className="font-mono text-sm">{i.code}</div>
+            <div className="text-xs opacity-70">created: {new Date(i.createdAt).toLocaleString()}</div>
+            <div className="text-xs">{i.note || ""}</div>
+            <div className="text-xs">
+              {i.usedBy ? <span className="text-emerald-400">used</span> : <span className="opacity-70">unused</span>}
+            </div>
+          </div>
+        ))}
+        {!rows.length && <div className="text-sm opacity-70">Список пуст</div>}
+      </div>
+    </div>
+  );
+}
+
