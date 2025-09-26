@@ -2,11 +2,19 @@ import React from 'react';
 import { ThumbsUp, ThumbsDown } from 'lucide-react';
 import { markVisible, setStatsListener, removeStatsListener, vote, type Totals } from './vote';
 
+function safeGet(key: string): string | null {
+  try {
+    return typeof window !== 'undefined' ? window.localStorage.getItem(key) : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function VoteWidget({ cardId }: { cardId: string }) {
   const [totals, setTotals] = React.useState<Totals>({ up: 0, down: 0 });
   const [busy, setBusy] = React.useState(false);
-  const voted = typeof window !== 'undefined' && !!localStorage.getItem(`voted:${cardId}`);
-  const disabled = busy || voted || localStorage.getItem('telemetry_disabled') === '1';
+  const voted = !!safeGet(`voted:${cardId}`);
+  const disabled = busy || voted || safeGet('telemetry_disabled') === '1';
 
   React.useEffect(() => {
     markVisible(cardId);
@@ -23,7 +31,7 @@ export default function VoteWidget({ cardId }: { cardId: string }) {
     setBusy(false);
   }
 
-  if (localStorage.getItem('telemetry_disabled') === '1') return null;
+  if (safeGet('telemetry_disabled') === '1') return null;
 
   return (
     <div className="mt-2 flex items-center gap-2 text-xs">

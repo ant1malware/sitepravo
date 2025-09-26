@@ -6,6 +6,29 @@ const visibleBatch: Set<string> = new Set();
 let batchTimer: any = null;
 const listeners: Map<string, (t: Totals)=>void> = new Map();
 
+function getStorage(): Storage | null {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) return window.localStorage;
+  } catch {}
+  return null;
+}
+
+function safeGet(key: string): string | null {
+  const store = getStorage();
+  try {
+    return store ? store.getItem(key) : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeSet(key: string, value: string) {
+  const store = getStorage();
+  try {
+    store?.setItem(key, value);
+  } catch {}
+}
+
 export function setStatsListener(id: string, cb: (t: Totals)=>void) {
   listeners.set(id, cb);
 }
@@ -31,16 +54,16 @@ export function markVisible(id: string) {
 
 export function getAnonUID() {
   const k = 'anon_uid';
-  let v = localStorage.getItem(k);
-  if (!v) { v = crypto.randomUUID(); localStorage.setItem(k, v); }
+  let v = safeGet(k);
+  if (!v) { v = crypto.randomUUID(); safeSet(k, v); }
   return v;
 }
 
 export async function vote(cardId: string, v: 1 | -1): Promise<Totals | null> {
-  if (localStorage.getItem(`telemetry_disabled`) === '1') return null;
+  if (safeGet('telemetry_disabled') === '1') return null;
   const key = `voted:${cardId}`;
-  if (localStorage.getItem(key)) return null;
-  localStorage.setItem(key, '1');
+  if (safeGet(key)) return null;
+  safeSet(key, '1');
   try {
     const resp = await fetch(`${API}/api/vote`, {
       method: 'POST', headers: { 'content-type': 'application/json' },

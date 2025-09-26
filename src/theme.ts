@@ -15,6 +15,26 @@ const STYLE_MODE_KEY = 'ui:style-mode';
 const LIQUID_PREV_THEME_KEY = 'ui:liquid:prev-theme';
 const LIQUID_TONE_KEY = 'ui:liquid:tone';
 
+function safeGet(key: string): string | null {
+  try {
+    return typeof window !== 'undefined' ? window.localStorage.getItem(key) : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeSet(key: string, value: string) {
+  try {
+    if (typeof window !== 'undefined') window.localStorage.setItem(key, value);
+  } catch {}
+}
+
+function safeRemove(key: string) {
+  try {
+    if (typeof window !== 'undefined') window.localStorage.removeItem(key);
+  } catch {}
+}
+
 export const ACCENTS: Record<Exclude<Accent, 'custom'>, { 500: string; 600: string }> = {
   indigo: { 500: '#6366F1', 600: '#4F46E5' },
   violet: { 500: '#8B5CF6', 600: '#7C3AED' },
@@ -38,43 +58,43 @@ export const BACKGROUNDS: Record<'bg1' | 'bg2' | 'bg3' | 'bg4' | 'bg5', string> 
 };
 
 export function getStoredTheme(): Theme | null {
-  const v = localStorage.getItem(STORAGE_KEY);
+  const v = safeGet(STORAGE_KEY);
   return v === 'light' || v === 'dark' ? v : null;
 }
 
 export function getStoredAccent(): Accent | null {
-  const v = localStorage.getItem(ACCENT_KEY) as Accent | null;
+  const v = safeGet(ACCENT_KEY) as Accent | null;
   if (!v) return null;
   if (v === 'custom') return 'custom';
   return (v in ACCENTS) ? v : null;
 }
 
 export function getStoredCustomAccent(): string | null {
-  return localStorage.getItem(ACCENT_CUSTOM_KEY);
+  return safeGet(ACCENT_CUSTOM_KEY);
 }
 
 export function getStoredBackground(): Background | null {
-const v = localStorage.getItem(BG_KEY);
+  const v = safeGet(BG_KEY);
 
   return v && (v === 'none' || v === 'custom' || v in BACKGROUNDS) ? (v as Background) : null;
 }
 
 export function getStoredCustomBackground(): string | null {
-  return localStorage.getItem(BG_CUSTOM_KEY);
+  return safeGet(BG_CUSTOM_KEY);
 }
 
 export function getStoredStyleMode(): StyleMode | null {
-  const v = localStorage.getItem(STYLE_MODE_KEY);
+  const v = safeGet(STYLE_MODE_KEY);
   return v === 'classic' || v === 'liquid' || v === 'beta' ? v as StyleMode : null;
 }
 
 export function getStoredLiquidTone(): LiquidTone {
-  const v = (localStorage.getItem(LIQUID_TONE_KEY) || 'dark') as LiquidTone;
+  const v = (safeGet(LIQUID_TONE_KEY) || 'dark') as LiquidTone;
   return v === 'light' ? 'light' : 'dark';
 }
 
 export function applyLiquidTone(tone: LiquidTone) {
-  try { localStorage.setItem(LIQUID_TONE_KEY, tone); } catch {}
+  safeSet(LIQUID_TONE_KEY, tone);
   const root = document.documentElement;
   root.classList.toggle('liquid-light', tone === 'light');
   root.classList.toggle('liquid-dark', tone !== 'light');
@@ -93,7 +113,7 @@ export function applyStyleMode(mode: StyleMode) {
     // Force dark theme for Liquid mode and remember previous theme
     try {
       const prev = getStoredTheme() ?? (systemPrefersDark() ? 'dark' : 'light');
-      localStorage.setItem(LIQUID_PREV_THEME_KEY, prev);
+      safeSet(LIQUID_PREV_THEME_KEY, prev);
       const tone = getStoredLiquidTone();
       applyLiquidTone(tone);
     } catch {}
@@ -108,11 +128,11 @@ export function applyStyleMode(mode: StyleMode) {
   } else {
     // Restore theme that was active before Liquid mode
     try {
-      const prev = localStorage.getItem(LIQUID_PREV_THEME_KEY) as Theme | null;
+      const prev = safeGet(LIQUID_PREV_THEME_KEY) as Theme | null;
       if (prev === 'light' || prev === 'dark') {
         applyTheme(prev);
       }
-      localStorage.removeItem(LIQUID_PREV_THEME_KEY);
+      safeRemove(LIQUID_PREV_THEME_KEY);
     } catch {}
     try {
       const bg = getStoredBackground() ?? 'none';
@@ -120,7 +140,7 @@ export function applyStyleMode(mode: StyleMode) {
     } catch {}
   }
   try { window.dispatchEvent(new CustomEvent<StyleMode>('stylemodechange', { detail: mode })); } catch {}
-  try { localStorage.setItem(STYLE_MODE_KEY, mode); } catch {}
+  safeSet(STYLE_MODE_KEY, mode);
 }
 
 export function toggleStyleMode(): StyleMode {
@@ -130,14 +150,18 @@ export function toggleStyleMode(): StyleMode {
 }
 
 export function systemPrefersDark(): boolean {
-  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  try {
+    return typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  } catch {
+    return false;
+  }
 }
 
 export function applyTheme(t: Theme) {
   const root = document.documentElement;
   if (t === 'dark') root.classList.add('dark');
   else root.classList.remove('dark');
-  localStorage.setItem(STORAGE_KEY, t);
+  safeSet(STORAGE_KEY, t);
   // Sync meta theme-color for nicer mobile address bar
   const color = t === 'dark' ? '#0a0a0a' : '#fafafa';
   let meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
@@ -166,11 +190,11 @@ export function applyAccent(a: Accent) {
     document.documentElement.style.setProperty('--accent', c[500]);
     document.documentElement.style.setProperty('--accent-600', c[600]);
   }
-  localStorage.setItem(ACCENT_KEY, a);
+  safeSet(ACCENT_KEY, a);
 }
 
 export function setCustomAccent(hex: string) {
-  localStorage.setItem(ACCENT_CUSTOM_KEY, normalizeHex(hex));
+  safeSet(ACCENT_CUSTOM_KEY, normalizeHex(hex));
   applyAccent('custom');
 }
 
@@ -203,11 +227,11 @@ export function applyBackground(b: Background) {
     body.style.backgroundAttachment = attach as any;
     body.style.backgroundPosition = 'center';
   }
-  localStorage.setItem(BG_KEY, b);
+  safeSet(BG_KEY, b);
 }
 
 export function setCustomBackground(urlOrDataUrl: string) {
-  localStorage.setItem(BG_CUSTOM_KEY, urlOrDataUrl);
+  safeSet(BG_CUSTOM_KEY, urlOrDataUrl);
   applyBackground('custom');
 }
 
