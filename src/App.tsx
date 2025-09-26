@@ -12,6 +12,7 @@ const BuddyPlayground = React.lazy(() => import('./BuddyPlayground'));
 const HomePage = React.lazy(() => import('./HomePage'));
 const ForumPage = React.lazy(() => import('./ForumPage'));
 const ProfilePage = React.lazy(() => import('./ProfilePage'));
+const MembersPage = React.lazy(() => import('./ForumMembers'));
 const AdminPanel = React.lazy(() => import('./AdminPanel2'));
 import RecorderPage from './RecorderPage';
 import AboutPage from './AboutPage';
@@ -83,6 +84,7 @@ export default function App() {
           <Route path="/" element={<GovCheatsheetSky />} />
           <Route path="/home" element={<HomePage />} />
           <Route path="/forum/*" element={<ForumPage />} />
+          <Route path="/forum/members" element={<MembersPage />} />
           <Route path="/forum/profile/:username" element={<ProfilePage />} />
           <Route path="/forum/admin" element={<AdminPanel />} />
           <Route path="/whats-new" element={<WhatsNew />} />

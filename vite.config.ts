@@ -1,9 +1,9 @@
-import { defineConfig, splitVendorChunkPlugin } from 'vite';
+import { defineConfig, splitVendorChunkPlugin, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { writeFileSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-// РєР»Р°РґС‘Рј docs/.nojekyll (С‡С‚РѕР±С‹ Pages РЅРµ РІРєР»СЋС‡Р°Р» Jekyll)
+// Р С”Р В»Р В°Р Т‘РЎвЂР С docs/.nojekyll (РЎвЂЎРЎвЂљР С•Р В±РЎвЂ№ Pages Р Р…Р Вµ Р Р†Р С”Р В»РЎР‹РЎвЂЎР В°Р В» Jekyll)
 function noJekyllPlugin(enable: boolean) {
   return {
     name: 'nojekyll',
@@ -16,7 +16,7 @@ function noJekyllPlugin(enable: boolean) {
   }
 }
 
-// РєРѕРїРёСЂСѓРµРј index.html -> 404.html (SPA-fallback РґР»СЏ Р»СЋР±С‹С… РїСѓС‚РµР№)
+// Р С”Р С•Р С—Р С‘РЎР‚РЎС“Р ВµР С index.html -> 404.html (SPA-fallback Р Т‘Р В»РЎРЏ Р В»РЎР‹Р В±РЎвЂ№РЎвЂ¦ Р С—РЎС“РЎвЂљР ВµР в„–)
 function copy404Plugin(outDir: string | null) {
   return {
     name: 'copy-404',
@@ -46,8 +46,8 @@ export default defineConfig(({ mode }) => {
       noJekyllPlugin(isGh),
       copy404Plugin(outDir),
     ],
-    // РёРјСЏ СЂРµРїРѕР·РёС‚РѕСЂРёСЏ РЅР° GitHub Pages:
-    base: (process.env.VITE_BASE || (isGh ? '/' : '/')),
+    // Р С‘Р СРЎРЏ РЎР‚Р ВµР С—Р С•Р В·Р С‘РЎвЂљР С•РЎР‚Р С‘РЎРЏ Р Р…Р В° GitHub Pages:
+    base: (loadEnv(mode, process.cwd(), '').VITE_BASE || (isGh ? '/pravo/' : '/')),
     define: { __APP_VERSION__: JSON.stringify(version) },
     build: {
       outDir,

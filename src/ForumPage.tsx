@@ -180,7 +180,7 @@ function Header({ me, onLogout }: { me: RemoteUser; onLogout: () => void }) {
               className="text-[11px] uppercase tracking-[0.32em]"
               style={{ color: "var(--text-2)" }}
             >
-              SKY // FORUM
+              Forum // FORUM
             </div>
             <div className="text-sm font-semibold">Правительство</div>
           </div>
@@ -324,7 +324,7 @@ export default function ForumPage() {
               textShadow: "0 18px 80px rgba(139,92,246,.35)",
             }}
           >
-            SKY
+            Forum
           </h1>
         </div>
 

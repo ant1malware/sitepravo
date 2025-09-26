@@ -2,13 +2,26 @@
 // Тонкий клиент к твоему воркеру (Cloudflare Workers).
 // НИКАКИХ KV/DO тут нет — только HTTP к /skyapi/*
 
-const BASE: string =
-  (import.meta as any).env?.VITE_API_BASE ||
-  "https://notifications-worker.wizardiowhy.workers.dev/skyapi";
 
+function getApiBase(): string {
+  try {
+    const url = new URL(window.location.href);
+    const fromQuery = url.searchParams.get('api');
+    if (fromQuery) {
+      localStorage.setItem('forum:api_base', fromQuery);
+      // clean query param to avoid leaking
+      try { url.searchParams.delete('api'); history.replaceState({}, '', url.toString()); } catch {}
+    }
+    const stored = localStorage.getItem('forum:api_base');
+    if (stored) return stored;
+  } catch {}
+  const env = (import.meta as any).env?.VITE_API_BASE;
+  if (env) return env;
+  return '';
+}
+const BASE: string = getApiBase();
 const TOKEN_KEY = "forum:token";
 const SESSION_KEY = "forum:session";
-
 export type Role = "developer" | "admin" | "moderator" | "vip" | "user" | "newbie";
 export type RemoteUser = {
   id: string;
@@ -17,9 +30,20 @@ export type RemoteUser = {
   userNumber: number;
   role: Role;
   createdAt: string;
+  bannedUntil?: string | null;
+  mutedUntil?: string | null;
+  invitedById?: string | null;
+  invitedByName?: string | null;
 };
-
-export type Invite = { code: string; createdAt: string; createdBy: string; note?: string; usedBy?: string|null; usedAt?: string|null };
+export type Invite = {
+  code: string;
+  createdAt: string;
+  createdBy: string;
+  note?: string;
+  usedBy?: string | null;
+  usedAt?: string | null;
+  createdByName?: string;
+};
 export type ServerSettings = { registrationMode?: 'invite'|'open'; allowGuestRead?: boolean };
 
 function saveToken(token: string, remember = true) {
@@ -155,6 +179,26 @@ export async function listInvites(): Promise<Invite[]> {
 export async function generateInvites(count = 5, note?: string): Promise<Invite[]> {
   const { invites } = await api(`/invites`, { method: "POST", body: JSON.stringify({ count, note }) });
   return invites as Invite[];
+}
+
+// Moderation actions
+export async function banUser(id: string, until?: string) {
+  const body = until ? JSON.stringify({ until }) : JSON.stringify({ days: 7 });
+  const { user } = await api('/users/' + encodeURIComponent(id) + '/ban', { method: 'POST', body });
+  return user as RemoteUser;
+}
+export async function unbanUser(id: string) {
+  const { user } = await api('/users/' + encodeURIComponent(id) + '/unban', { method: 'POST' });
+  return user as RemoteUser;
+}
+export async function muteUser(id: string, until?: string) {
+  const body = until ? JSON.stringify({ until }) : JSON.stringify({ minutes: 60 });
+  const { user } = await api('/users/' + encodeURIComponent(id) + '/mute', { method: 'POST', body });
+  return user as RemoteUser;
+}
+export async function unmuteUser(id: string) {
+  const { user } = await api('/users/' + encodeURIComponent(id) + '/unmute', { method: 'POST' });
+  return user as RemoteUser;
 }
 
 export async function deleteInvite(code: string): Promise<void> {
