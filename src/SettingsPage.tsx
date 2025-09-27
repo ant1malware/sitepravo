@@ -37,6 +37,8 @@ import {
   applyAnimations,
   getAnimationsOn,
 } from './uiSettings';
+// Buddy (Chebzik) controls
+import { getBuddyEnabled, setBuddyEnabled, getBuddySkin, setBuddySkin } from './uiSettings';
 
 // Classic background previews
 type BgKey = keyof typeof BACKGROUNDS;
@@ -319,6 +321,38 @@ export default function SettingsPage() {
                   <button type="button" className={`settings-seg__item ${!animationsOn ? 'is-active' : ''}`} onClick={() => onAnimToggle(false)}>Выключены</button>
                 </div>
                 <p className="settings-help">Отключает плавучесть и блики стекла.</p>
+              </div>
+            </div>
+          </Panel>
+
+          <Panel title="Чебзик" desc="Летает по сайту и подсказывает. Можно отключить при желании.">
+            <div className="flex flex-wrap items-center gap-2">
+              <Link to="/buddy" className="btn btn-primary">Показать сцену</Link>
+              <label className="settings-checkbox">
+                <input type="checkbox" checked={(() => { try { return getBuddyEnabled(); } catch { return true; } })()} onChange={(e) => { try { setBuddyEnabled(e.target.checked); } catch {} }} />
+                Показать Чебзика
+              </label>
+              <span className="text-sm text-[color:var(--text-2)]">Можно отключить. Синхронизируйте цвета со скином из игры.</span>
+            </div>
+            <div className="mt-3 grid items-center gap-3 sm:grid-cols-[auto_auto_1fr]">
+              <div className="flex items-center gap-2">
+                <span className="text-xs opacity-70">Цвет A</span>
+                <input type="color" defaultValue={(getBuddySkin() as any).a} onChange={(e) => { try { const s = getBuddySkin(); setBuddySkin(e.target.value, s.b); } catch {} }} />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs opacity-70">Цвет B</span>
+                <input type="color" defaultValue={(getBuddySkin() as any).b} onChange={(e) => { try { const s = getBuddySkin(); setBuddySkin(s.a, e.target.value); } catch {} }} />
+              </div>
+              <div className="justify-self-start rounded-xl p-2" style={{ background: `linear-gradient(135deg, ${(getBuddySkin() as any).a}, ${(getBuddySkin() as any).b})` }}>
+                <svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <radialGradient id="g2" cx="50%" cy="30%" r="70%">
+                      <stop offset="0%" stopColor={(getBuddySkin() as any).a} stopOpacity="0.95"/>
+                      <stop offset="100%" stopColor={(getBuddySkin() as any).b} stopOpacity="0.85"/>
+                    </radialGradient>
+                  </defs>
+                  <path d="M18 2c6.2 0 11 4.8 11 11v8.5c0 2-1.7 3.7-3.7 3.7-1.3 0-2.6-.7-3.3-1.8-.6 1.1-1.8 1.8-3 1.8s-2.4-.7-3-1.8c-.7 1.1-2 1.8-3.3 1.8-2 0-3.7-1.7-3.7-3.7V13C5 6.8 10 2 16.2 2H18z" fill="url(#g2)" />
+                </svg>
               </div>
             </div>
           </Panel>

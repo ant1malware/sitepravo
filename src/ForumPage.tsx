@@ -12,6 +12,7 @@ import {
 import { getForumSettings } from "./store/forumStore";
 import { listSections, listLatestPosts } from "./store/forumRemote";
 import { Shield, Search, Bell, ChevronRight, Lock } from "lucide-react";
+import ForumSubnav from "./ForumSubnav";
 
 function Badge({ role }: { role: Role }) {
   const map: Record<Role, { color: string; text: string }> = {
@@ -205,11 +206,12 @@ function Header({ me, onLogout }: { me: RemoteUser; onLogout: () => void }) {
           <Bell size={16} />
           <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500" />
         </button>
-        {(me.role === "admin" || me.role === "developer") && (
+        {(me.role === "admin" || me.role === "developer" || me.role === "moderator") && (
           <Link to="/forum/admin" className="ml-2 btn">
             Admin
           </Link>
         )}
+        <Link to="/forum/members" className="ml-2 btn">Members</Link>
         <Link
           to={`/forum/profile/${me.username}`}
           className="ml-2 flex items-center gap-2 rounded-xl border px-3 py-2 card"
@@ -311,6 +313,7 @@ export default function ForumPage() {
       />
 
       <div className="mx-auto w-full max-w-6xl px-4 py-6">
+        <ForumSubnav />
         <div className="relative mb-6 overflow-hidden card">
           <h1
             className="select-none py-10 text-center font-black tracking-[0.16em]"

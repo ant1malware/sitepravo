@@ -352,6 +352,33 @@ async function deleteTopicDeep(env: Env, t: Topic): Promise<number> {
   return removed
 }
 
+// ====== Profiles storage ======
+type Profile = {
+  avatarData?: string; bannerData?: string; bio?: string; signature?: string;
+  links?: { website?: string; discord?: string; telegram?: string };
+  accentFrom?: string; accentTo?: string; badges?: string[];
+  privacy?: { showEmail?: boolean; showStats?: boolean };
+}
+function defaultProfile(): Profile { return { bio:'', signature:'', links:{}, accentFrom:'#8b5cf6', accentTo:'#0ea5e9', badges:[], privacy:{ showEmail:false, showStats:true } } }
+function sanitizeProfile(p: any): Profile {
+  const out: Profile = defaultProfile()
+  if (typeof p?.avatarData === 'string' && p.avatarData.length < 2_000_000) out.avatarData = p.avatarData
+  if (typeof p?.bannerData === 'string' && p.bannerData.length < 4_000_000) out.bannerData = p.bannerData
+  if (typeof p?.bio === 'string') out.bio = String(p.bio).slice(0, 2000)
+  if (typeof p?.signature === 'string') out.signature = String(p.signature).slice(0, 800)
+  if (p?.links && typeof p.links === 'object') {
+    out.links = { website: p.links.website ? String(p.links.website).slice(0,200) : undefined, discord: p.links.discord ? String(p.links.discord).slice(0,100) : undefined, telegram: p.links.telegram ? String(p.links.telegram).slice(0,100) : undefined }
+  }
+  if (typeof p?.accentFrom === 'string') out.accentFrom = p.accentFrom
+  if (typeof p?.accentTo === 'string') out.accentTo = p.accentTo
+  if (Array.isArray(p?.badges)) out.badges = p.badges.slice(0,3).map((x:any)=> String(x).slice(0,32))
+  if (p?.privacy && typeof p.privacy === 'object') out.privacy = { showEmail: !!p.privacy.showEmail, showStats: p.privacy.showStats !== false }
+  return out
+}
+const F_PROF = (id: string) => `forum:profile:${id}`
+async function getProfileKV(env: Env, id: string): Promise<Profile|null> { const raw = await env.AUTH_KV!.get(F_PROF(id)); return raw ? JSON.parse(raw) as Profile : null }
+async function putProfileKV(env: Env, id: string, profile: Profile) { await env.AUTH_KV!.put(F_PROF(id), JSON.stringify(profile)) }
+
 // Durable Object: глобальный счётчик userNumber
 export class UserCounter {
   constructor(private state: DurableObjectState) {}
@@ -468,6 +495,51 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
       if (!u) return json(req, { error:'unauthorized' }, { status: 401 })
       const { passwordHash: _1, salt: _2, ...pub } = u
       return json(req, { user: pub })
+    }
+
+    // GET /members (public) — minimal user directory
+    if (sub === '/members' && method === 'GET') {
+      const all = await listUsersKV(env)
+      const members = all.map(u => ({ id: u.id, username: u.username, role: u.role, createdAt: u.createdAt, userNumber: u.userNumber }))
+      return json(req, { members })
+    }
+
+    // ====== Profiles ======
+    // GET /profiles/by-username/:username (public)
+    {
+      const m = sub.match(/^\/profiles\/by-username\/([^/]+)$/)
+      if (m && method === 'GET') {
+        const username = decodeURIComponent(m[1])
+        const id = await getIdByUsername(env, username)
+        if (!id) return json(req, { error:'not found' }, { status: 404 })
+        const u = await getUserByIdKV(env, id)
+        if (!u) return json(req, { error:'not found' }, { status: 404 })
+        const profile = await getProfileKV(env, id)
+        const { passwordHash: _1, salt: _2, ...pub } = u
+        return json(req, { user: pub, profile: profile || defaultProfile() })
+      }
+    }
+    // GET /profiles/:id (public)
+    {
+      const m = sub.match(/^\/profiles\/([^/]+)$/)
+      if (m && method === 'GET') {
+        const id = decodeURIComponent(m[1])
+        const u = await getUserByIdKV(env, id)
+        if (!u) return json(req, { error:'not found' }, { status: 404 })
+        const profile = await getProfileKV(env, id)
+        return json(req, { profile: profile || defaultProfile() })
+      }
+    }
+    // PATCH /profiles/me (auth)
+    if (sub === '/profiles/me' && method === 'PATCH') {
+      const s = await readSession(env, req)
+      if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
+      const me = await getUserByIdKV(env, s.userId)
+      if (!me) return json(req, { error:'unauthorized' }, { status: 401 })
+      const patch = await req.json().catch(()=> ({}))
+      const profile = sanitizeProfile(patch)
+      await putProfileKV(env, me.id, profile)
+      return json(req, { profile })
     }
 
     // GET /users (admin/dev)

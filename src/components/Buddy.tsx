@@ -1,4 +1,5 @@
 import React from 'react';
+import { getBuddySkin } from '../uiSettings';
 
 // A tiny, friendly ghost-like buddy that wanders around the viewport.
 // Non-intrusive: small, semi-transparent, respects reduced motion and the global anim-off switch.
@@ -104,6 +105,7 @@ export default function Buddy() {
     if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; }
   }
 
+  const skin = getBuddySkin();
   return (
     <div ref={ref} className="buddy" aria-hidden>
       <button
@@ -117,8 +119,8 @@ export default function Buddy() {
         <svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <radialGradient id="g" cx="50%" cy="30%" r="70%">
-              <stop offset="0%" stopColor="#bcd3ff" stopOpacity="0.95"/>
-              <stop offset="100%" stopColor="#6a79ff" stopOpacity="0.85"/>
+              <stop offset="0%" stopColor={skin.a} stopOpacity="0.95"/>
+              <stop offset="100%" stopColor={skin.b} stopOpacity="0.85"/>
             </radialGradient>
           </defs>
           <g>

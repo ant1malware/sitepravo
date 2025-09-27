@@ -38,7 +38,7 @@ function getActorId(): string {
   }
 }
 
-export default function AdminPanel2() {
+export default function AdminPanel3() {
   const [tab, setTab] = React.useState<
     "users" | "sections" | "topics" | "invites" | "maintenance"
   >("users");
@@ -60,10 +60,12 @@ export default function AdminPanel2() {
       return ["users", "sections", "topics", "invites", "maintenance"];
     }
     if (role === "admin") {
-      return ["users", "topics"];
+      // Admins: moderation + limited invites
+      return ["users", "topics", "invites"];
     }
     if (role === "moderator") {
-      return ["users"];
+      // Moderators: mute/unmute + limited invites
+      return ["users", "invites"];
     }
     return ["topics"];
   })();
@@ -81,17 +83,19 @@ export default function AdminPanel2() {
           </button>
         ))}
       </div>
-      {tab === "users" && <UsersTab meRole={role} />}
+      {tab === "users" && <UsersTab meRole={role} meId={me?.id} />}
       {tab === "sections" && <SectionsTab />}
       {tab === "topics" && <TopicsTab meRole={role} />}
-      {tab === "invites" && <InvitesTab />}
+      {tab === "invites" && (
+        <InvitesTab meRole={role} meId={me?.id || ""} />
+      )}
       {tab === "maintenance" && <MaintenanceTab />}
     </div>
   );
 }
 
 /* ===== Users ===== */
-function UsersTab({ meRole }: { meRole?: string }) {
+function UsersTab({ meRole, meId }: { meRole?: string; meId?: string }) {
   const [rows, setRows] = React.useState<any[]>([]);
 
   const load = React.useCallback(async () => {
@@ -197,6 +201,19 @@ function UsersTab({ meRole }: { meRole?: string }) {
             );
           }
 
+          // invitedBy visibility rules:
+          // - developer sees who invited anyone
+          // - admin/moderator only see "invited by: you" for accounts they invited
+          const invitedSnippet = (() => {
+            if (meRole === "developer") {
+              return u.invitedByName ? `invited by: ${u.invitedByName}` : "";
+            }
+            if (meId && u.invitedById && u.invitedById === meId) {
+              return "invited by: you";
+            }
+            return "";
+          })();
+
           return (
             <div
               key={u.id}
@@ -206,9 +223,7 @@ function UsersTab({ meRole }: { meRole?: string }) {
               <div className="text-xs opacity-70">#{u.userNumber}</div>
               <div className="font-semibold">{u.username}</div>
               <div className="text-sm opacity-80 truncate">{u.email}</div>
-              <div className="text-xs opacity-70">
-                {u.invitedByName ? `invited by: ${u.invitedByName}` : ""}
-              </div>
+              <div className="text-xs opacity-70">{invitedSnippet}</div>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 {canManageRoles ? (
                   <select
@@ -325,7 +340,7 @@ function SectionsTab() {
               className="grid grid-cols-1 items-center gap-2 rounded-xl border px-3 py-2 sm:grid-cols-[160px_1fr_1fr_auto]"
               style={{ borderColor: "var(--border)" }}
             >
-              <div className="text-xs opacity-70">{s.id.slice(0, 8)}…</div>
+              <div className="text-xs opacity-70">{s.id.slice(0, 8)}:</div>
               <input
                 className="input"
                 value={s.title}
@@ -467,7 +482,7 @@ function TopicsTab({ meRole }: { meRole?: string }) {
               <div>
                 <div className="font-semibold">{t.title}</div>
                 <div className="text-xs opacity-70">
-                  id: {t.id.slice(0, 8)}… section: {t.sectionId.slice(0, 8)}…
+                  id: {t.id.slice(0, 8)}: section: {t.sectionId.slice(0, 8)}:
                 </div>
                 {(t.pinned || t.locked) && (
                   <div className="mt-1 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.2em] opacity-70">
@@ -491,29 +506,51 @@ function TopicsTab({ meRole }: { meRole?: string }) {
 }
 
 /* ===== Invites ===== */
-function InvitesTab() {
+function InvitesTab({ meRole, meId }: { meRole?: string; meId: string }) {
   const [rows, setRows] = React.useState<any[]>([]);
   const [count, setCount] = React.useState(5);
   const [note, setNote] = React.useState("");
+  const isDev = meRole === "developer";
 
   const reload = React.useCallback(async () => {
     try {
-      setRows(await listInvites());
+      const all = await listInvites();
+      // Visibility: dev sees all; others see only their own invites
+      const visible = isDev
+        ? all
+        : all.filter((i) => (i.createdBy || "") === (meId || ""));
+      setRows(visible);
     } catch (e: any) {
       alert(e?.message || "Failed");
     }
-  }, []);
+  }, [isDev, meId]);
 
   React.useEffect(() => {
     reload();
   }, [reload]);
 
+  // Quotas:
+  // - admin: max 2 codes per rolling 48h
+  // - moderator: max 1 code per rolling 72h
+  const now = Date.now();
+  const windowMs = meRole === "admin" ? 48 * 3600 * 1000 : meRole === "moderator" ? 72 * 3600 * 1000 : 0;
+  const windowStart = windowMs ? now - windowMs : 0;
+  const recentMine = rows.filter((i) => {
+    const ts = new Date(i.createdAt).getTime();
+    return !isNaN(ts) && ts >= windowStart;
+  });
+  const maxPerWindow = meRole === "admin" ? 2 : meRole === "moderator" ? 1 : Infinity;
+  const remaining = Math.max(0, maxPerWindow - recentMine.length);
+
   const generate = async () => {
     try {
-      await generateInvites(
-        Math.max(1, Math.min(20, count)),
-        note || undefined
-      );
+      const desired = Math.max(1, Math.min(20, count));
+      const toCreate = isFinite(remaining) ? Math.min(remaining, desired) : desired;
+      if (!isDev && toCreate <= 0) {
+        alert("Invite quota reached. Try again later.");
+        return;
+      }
+      await generateInvites(toCreate, note || undefined);
       setNote("");
       reload();
     } catch (e: any) {
@@ -534,12 +571,13 @@ function InvitesTab() {
   return (
     <div className="card p-4">
       <div className="mb-3 font-semibold">Invite codes</div>
+      {/* Generator */}
       <div className="mb-4 grid gap-2 sm:grid-cols-[120px_1fr_auto]">
         <input
           className="input"
           type="number"
           min={1}
-          max={20}
+          max={Math.min(20, isFinite(remaining) ? Math.max(remaining, 0) : 20)}
           value={count}
           onChange={(e) => setCount(parseInt(e.target.value || "1", 10))}
         />
@@ -549,8 +587,29 @@ function InvitesTab() {
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
-        <button className="btn btn-primary" onClick={generate}>Generate</button>
+        <button
+          className="btn btn-primary"
+          onClick={generate}
+          disabled={!isDev && remaining <= 0}
+          title={!isDev && remaining <= 0 ? "Quota reached" : undefined}
+        >
+          Generate
+        </button>
       </div>
+      {!isDev && (
+        <div className="mb-4 text-xs opacity-70">
+          {meRole === "admin" && (
+            <span>
+              Remaining in 48h window: <b>{remaining}</b> of 2
+            </span>
+          )}
+          {meRole === "moderator" && (
+            <span>
+              Remaining in 72h window: <b>{remaining}</b> of 1
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-2">
         {rows.map((i) => (
@@ -561,7 +620,11 @@ function InvitesTab() {
           >
             <div className="font-mono text-sm">{i.code}</div>
             <div className="text-xs opacity-70">created: {new Date(i.createdAt).toLocaleString()}</div>
-            <div className="text-xs opacity-80">by: {i.createdByName || i.createdBy?.slice(0, 8)}</div>
+            <div className="text-xs opacity-80">
+              {isDev
+                ? `by: ${i.createdByName || i.createdBy?.slice(0, 8)}`
+                : "by: you"}
+            </div>
             <div className="text-xs">{i.note || ""}</div>
             <div className="text-xs">
               {i.usedBy ? (

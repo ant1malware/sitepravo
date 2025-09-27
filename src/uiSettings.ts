@@ -8,6 +8,10 @@ const RADIUS_KEY = 'ui:radius'; // 'subtle' | 'standard' | 'rounded'
 const GLASS_KEY = 'ui:glass'; // number px (0..16)
 const READW_KEY = 'ui:readw'; // number ch (60..96)
 const ANIM_KEY = 'ui:anim'; // '1' | '0'
+// Buddy (Chebzik)
+const BUDDY_ENABLED_KEY = 'buddy:enabled'; // '1' | '0'
+const BUDDY_SKIN_A = 'buddy:skin_a'; // hex color
+const BUDDY_SKIN_B = 'buddy:skin_b'; // hex color
 
 export type Density = 'standard' | 'compact';
 export type Shadow = 'none' | 'soft' | 'strong';
@@ -164,4 +168,23 @@ export function applyAnimations(on: boolean) {
 }
 export function getAnimationsOn(): boolean {
   try { return safeGet(ANIM_KEY) !== '0'; } catch { return true; }
+}
+
+// Buddy (Chebzik) helpers
+export function setBuddyEnabled(on: boolean) {
+  safeSet(BUDDY_ENABLED_KEY, on ? '1' : '0');
+}
+export function getBuddyEnabled(): boolean {
+  try { return safeGet(BUDDY_ENABLED_KEY) !== '0'; } catch { return true; }
+}
+export function setBuddySkin(a: string, b: string) {
+  const A = /^#?[0-9a-fA-F]{6}$/.test(a) ? (a.startsWith('#') ? a : '#' + a) : '#bcd3ff';
+  const B = /^#?[0-9a-fA-F]{6}$/.test(b) ? (b.startsWith('#') ? b : '#' + b) : '#6a79ff';
+  safeSet(BUDDY_SKIN_A, A);
+  safeSet(BUDDY_SKIN_B, B);
+}
+export function getBuddySkin(): { a: string; b: string } {
+  const a = safeGet(BUDDY_SKIN_A) || '#bcd3ff';
+  const b = safeGet(BUDDY_SKIN_B) || '#6a79ff';
+  return { a, b };
 }

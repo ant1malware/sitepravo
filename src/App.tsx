@@ -13,7 +13,8 @@ const HomePage = React.lazy(() => import('./HomePage'));
 const ForumPage = React.lazy(() => import('./ForumPage'));
 const ProfilePage = React.lazy(() => import('./ProfilePage'));
 const MembersPage = React.lazy(() => import('./ForumMembers'));
-const AdminPanel = React.lazy(() => import('./AdminPanel2'));
+const SectionPage = React.lazy(() => import('./SectionPage'));
+const AdminPanel = React.lazy(() => import('./AdminPanel3'));
 import RecorderPage from './RecorderPage';
 import AboutPage from './AboutPage';
 import CommandPalette from "./CommandPalette";
@@ -29,6 +30,7 @@ import NotificationsBell from "./NotificationsBell";
 import MobileMenu from "./MobileMenu";
 import { useStyleMode } from './useStyleMode';
 import Buddy from './components/Buddy';
+import { getBuddyEnabled } from './uiSettings';
 
 // Tracks page views on route change
 function RouteTracker() {
@@ -44,6 +46,7 @@ function RouteTracker() {
 function BuddyGate() {
   const loc = useLocation();
   if ((loc.pathname || '').startsWith('/buddy')) return null;
+  try { if (!getBuddyEnabled()) return null; } catch {}
   return <Buddy />;
 }
 
@@ -84,6 +87,7 @@ export default function App() {
           <Route path="/" element={<GovCheatsheetSky />} />
           <Route path="/home" element={<HomePage />} />
           <Route path="/forum/*" element={<ForumPage />} />
+          <Route path="/forum/section/:id" element={<SectionPage />} />
           <Route path="/forum/members" element={<MembersPage />} />
           <Route path="/forum/profile/:username" element={<ProfilePage />} />
           <Route path="/forum/admin" element={<AdminPanel />} />

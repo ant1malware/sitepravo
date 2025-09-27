@@ -1,4 +1,4 @@
-import{l as A,j as e,r as Q,C as Z,a as ee,v as I}from"./index-Cqd5Tr40.js";import{R as S,e as se,L as $,r as g,b as te}from"./react-vendor-DTkXckhQ.js";import{a as re,j as H,h as ie,b as ae,k as q,e as k,S as D,F as U,B as G,U as ne,f as ce,l as le,M as de,m as oe,n as me,o as xe,p as he}from"./icons-DET5c9ig.js";import{i as pe,a as ge,R as ue,V as be}from"./VoteWidget-CQEIBAlV.js";import{a as K}from"./asset-ZvONeEnI.js";const fe=String.raw`
+import{l as A,j as e,r as Q,C as Z,a as ee,v as I}from"./index-C4sM7TPz.js";import{R as S,e as se,L as $,r as g,b as te}from"./react-vendor-DTkXckhQ.js";import{a as re,j as H,h as ie,b as ae,k as q,e as k,S as D,F as U,B as G,U as ne,f as ce,l as le,M as de,m as oe,n as me,o as xe,p as he}from"./icons-CVylmSus.js";import{i as pe,a as ge,R as ue,V as be}from"./VoteWidget-CUrPHACr.js";import{a as K}from"./asset-ZvONeEnI.js";const fe=String.raw`
 Учебные материалы для сотрудников Правительственного аппарата
 
 Лекция на тему: "Субординация и общение"​

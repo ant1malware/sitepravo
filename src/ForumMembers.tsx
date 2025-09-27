@@ -1,11 +1,9 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { Search, Users, ChevronRight } from "lucide-react";
-import {
-  listAccounts,
-  getSessionAccount,
-  type Account,
-} from "./store/forumStore";
+import ForumSubnav from "./ForumSubnav";
+import { listAccounts as listLocalAccounts, getSessionAccount as getLocalSession, type Account } from "./store/forumStore";
+import { listPublicMembers, getSessionAccount as getRemoteSession, type PublicMember } from "./store/authRemote";
 
 const ROLE_STYLES: Record<string, { label: string; color: string }> = {
   developer: { label: "Developer", color: "#22d3ee" },
@@ -83,21 +81,48 @@ function MemberCard({ member, highlight }: { member: Account; highlight: boolean
 }
 
 export default function ForumMembers() {
-  const [members, setMembers] = React.useState<Account[]>(() => listAccounts());
+  const [members, setMembers] = React.useState<Account[]>(() => listLocalAccounts());
   const [query, setQuery] = React.useState("");
-  const [session, setSession] = React.useState<Account | null>(() => getSessionAccount());
+  const [session, setSession] = React.useState<{ id: string; username: string } | null>(null);
 
   React.useEffect(() => {
-    const refresh = () => {
-      setMembers(listAccounts());
-      setSession(getSessionAccount());
+    const refresh = async () => {
+      // Try remote API first; fallback to local demo store
+      try {
+        const meRemote = await getRemoteSession();
+        const rows = await listPublicMembers();
+        if (meRemote || rows?.length) {
+          const adapted: Account[] = rows.map((u: PublicMember) => ({
+            id: u.id,
+            username: u.username,
+            email: `${u.username}@hidden.local`,
+            createdAt: u.createdAt,
+            role: u.role,
+            userNumber: u.userNumber,
+            posts: 0,
+            likes: 0,
+            topics: 0,
+            profile: { bio: "", signature: "", links: {}, accentFrom: "#22d3ee", accentTo: "#8b5cf6", badges: [], privacy: { showEmail: false, showStats: true } },
+            bans: null,
+            mutes: null,
+          }));
+          setMembers(adapted);
+          if (meRemote) setSession({ id: meRemote.id, username: meRemote.username }); else setSession(null);
+          return;
+        }
+      } catch {}
+      // Local fallback
+      setMembers(listLocalAccounts());
+      const meLocal = getLocalSession();
+      setSession(meLocal ? { id: meLocal.id, username: meLocal.username } : null);
     };
     refresh();
-    window.addEventListener("forum:session", refresh as any);
-    window.addEventListener("storage", refresh as any);
+    const h = () => refresh();
+    window.addEventListener("forum:session", h as any);
+    window.addEventListener("storage", h as any);
     return () => {
-      window.removeEventListener("forum:session", refresh as any);
-      window.removeEventListener("storage", refresh as any);
+      window.removeEventListener("forum:session", h as any);
+      window.removeEventListener("storage", h as any);
     };
   }, []);
 
@@ -113,6 +138,11 @@ export default function ForumMembers() {
     })
     .sort((a, b) => a.username.localeCompare(b.username));
 
+  // Quick featured groups
+  const devs = members.filter((m) => m.role === "developer");
+  const admins = members.filter((m) => m.role === "admin");
+  const mods = members.filter((m) => m.role === "moderator");
+
   return (
     <main
       className="min-h-screen"
@@ -123,6 +153,7 @@ export default function ForumMembers() {
       }}
     >
       <div className="mx-auto max-w-6xl px-4 py-6">
+        <ForumSubnav />
         <div className="card mb-6 overflow-hidden">
           <div className="flex flex-wrap items-center gap-3 px-5 py-6">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-400/10 text-cyan-300">
@@ -136,6 +167,46 @@ export default function ForumMembers() {
               <p className="mt-1 text-sm text-zinc-300/80">
                 Browse every registered profile, discover new collaborators, and jump straight into a member's timeline.
               </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Featured groups: Developers / Admins / Moderators */}
+        <div className="mb-5 grid gap-4 lg:grid-cols-3">
+          <div className="card p-3">
+            <div className="mb-2 text-xs uppercase tracking-[0.28em] text-cyan-300/80">Developers</div>
+            <div className="grid gap-2">
+              {devs.slice(0, 6).map((m) => (
+                <Link key={m.id} to={`/forum/profile/${m.username}`} className="flex items-center gap-2 text-sm">
+                  <span className="h-2 w-2 rounded-full bg-cyan-400" />
+                  <span className="font-semibold">{m.username}</span>
+                </Link>
+              ))}
+              {!devs.length && <div className="text-xs opacity-60">No developers yet</div>}
+            </div>
+          </div>
+          <div className="card p-3">
+            <div className="mb-2 text-xs uppercase tracking-[0.28em] text-rose-300/80">Admins</div>
+            <div className="grid gap-2">
+              {admins.slice(0, 8).map((m) => (
+                <Link key={m.id} to={`/forum/profile/${m.username}`} className="flex items-center gap-2 text-sm">
+                  <span className="h-2 w-2 rounded-full bg-rose-400" />
+                  <span className="font-semibold">{m.username}</span>
+                </Link>
+              ))}
+              {!admins.length && <div className="text-xs opacity-60">No admins yet</div>}
+            </div>
+          </div>
+          <div className="card p-3">
+            <div className="mb-2 text-xs uppercase tracking-[0.28em] text-violet-300/80">Moderators</div>
+            <div className="grid gap-2">
+              {mods.slice(0, 8).map((m) => (
+                <Link key={m.id} to={`/forum/profile/${m.username}`} className="flex items-center gap-2 text-sm">
+                  <span className="h-2 w-2 rounded-full bg-violet-400" />
+                  <span className="font-semibold">{m.username}</span>
+                </Link>
+              ))}
+              {!mods.length && <div className="text-xs opacity-60">No moderators yet</div>}
             </div>
           </div>
         </div>

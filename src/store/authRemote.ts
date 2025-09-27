@@ -35,6 +35,17 @@ export type RemoteUser = {
   invitedById?: string | null;
   invitedByName?: string | null;
 };
+export type RemoteProfile = {
+  avatarData?: string;
+  bannerData?: string;
+  bio?: string;
+  signature?: string;
+  links?: { website?: string; discord?: string; telegram?: string };
+  accentFrom?: string;
+  accentTo?: string;
+  badges?: string[];
+  privacy?: { showEmail?: boolean; showStats?: boolean };
+};
 export type Invite = {
   code: string;
   createdAt: string;
@@ -211,6 +222,24 @@ export async function getServerSettings(): Promise<ServerSettings> {
 }
 export async function updateServerSettings(patch: ServerSettings): Promise<ServerSettings> {
   const { settings } = await api(`/settings`, { method: 'PATCH', body: JSON.stringify(patch) }); return settings as ServerSettings;
+}
+
+// Profiles
+export async function getProfileByUsername(username: string): Promise<{ user: RemoteUser; profile: RemoteProfile } | null> {
+  try {
+    const data = await api(`/profiles/by-username/${encodeURIComponent(username)}`);
+    return { user: data.user as RemoteUser, profile: data.profile as RemoteProfile };
+  } catch { return null; }
+}
+export async function updateMyProfile(profile: RemoteProfile): Promise<RemoteProfile> {
+  const { profile: saved } = await api(`/profiles/me`, { method: 'PATCH', body: JSON.stringify(profile) });
+  return saved as RemoteProfile;
+}
+
+export type PublicMember = Pick<RemoteUser, 'id'|'username'|'role'|'createdAt'|'userNumber'>;
+export async function listPublicMembers(): Promise<PublicMember[]> {
+  const { members } = await api(`/members`);
+  return members as PublicMember[];
 }
 
 // Bootstrap Pavel (one-time). Requires ADMIN_KEY via query param; call from browser/curl.

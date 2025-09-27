@@ -2,10 +2,11 @@ import React from "react";
 import { useParams } from "react-router-dom";
 import {
   findAccountByUsername,
-  getSessionAccount,
-  updateAccountProfile,
+  getSessionAccount as getLocalSession,
+  updateAccountProfile as updateLocalProfile,
   type Account,
 } from "./store/forumStore";
+import { getSessionAccount as getRemoteSession, getProfileByUsername, updateMyProfile, type RemoteProfile } from "./store/authRemote";
 import { Camera, Pencil, Globe, Link as LinkIcon, BadgeCheck } from "lucide-react";
 
 const ROLE_STYLES: Record<string, { label: string; color: string }> = {
@@ -55,15 +56,51 @@ function InfoRow({ title, children }: { title: string; children: React.ReactNode
 
 export default function ProfilePage() {
   const { username = "" } = useParams();
-  const [user, setUser] = React.useState<Account | null>(() => findAccountByUsername(username) || null);
-  const [session, setSession] = React.useState<Account | null>(() => getSessionAccount());
+  const [user, setUser] = React.useState<Account | null>(null);
+  const [session, setSession] = React.useState<{ id: string; username: string } | null>(null);
+  const [remote, setRemote] = React.useState<boolean>(false);
 
   React.useEffect(() => {
-    setUser(findAccountByUsername(username) || null);
+    (async () => {
+      try {
+        const me = await getRemoteSession();
+        if (me) {
+          setRemote(true);
+          setSession({ id: me.id, username: me.username });
+          const pack = await getProfileByUsername(username);
+          if (pack) {
+            const acc: Account = {
+              id: pack.user.id,
+              username: pack.user.username,
+              email: pack.user.email,
+              createdAt: pack.user.createdAt,
+              role: pack.user.role,
+              userNumber: pack.user.userNumber,
+              posts: 0,
+              likes: 0,
+              topics: 0,
+              profile: (pack.profile as any) || { bio: "", signature: "", links: {}, accentFrom: "#8b5cf6", accentTo: "#0ea5e9", badges: [], privacy: { showEmail: false, showStats: true } },
+              bans: null,
+              mutes: null,
+            };
+            setUser(acc);
+            return;
+          }
+        }
+      } catch {}
+      setRemote(false);
+      setUser(findAccountByUsername(username) || null);
+      const meLocal = getLocalSession();
+      setSession(meLocal ? { id: meLocal.id, username: meLocal.username } : null);
+    })();
   }, [username]);
 
   React.useEffect(() => {
-    const sync = () => setSession(getSessionAccount());
+    const sync = async () => {
+      try { const me = await getRemoteSession(); if (me) { setSession({ id: me.id, username: me.username }); return; } } catch {}
+      const meLocal = getLocalSession();
+      setSession(meLocal ? { id: meLocal.id, username: meLocal.username } : null);
+    };
     window.addEventListener("forum:session", sync as any);
     window.addEventListener("storage", sync as any);
     return () => {
@@ -129,7 +166,27 @@ export default function ProfilePage() {
             {canEdit && (
               <CustomizeButton
                 user={user}
-                onUpdated={() => setUser(findAccountByUsername(username) || null)}
+                onUpdated={async () => {
+                  if (remote) {
+                    const pack = await getProfileByUsername(username);
+                    if (pack) setUser({
+                      id: pack.user.id,
+                      username: pack.user.username,
+                      email: pack.user.email,
+                      createdAt: pack.user.createdAt,
+                      role: pack.user.role,
+                      userNumber: pack.user.userNumber,
+                      posts: 0, likes: 0, topics: 0,
+                      profile: (pack.profile as any), bans: null, mutes: null,
+                    });
+                  } else {
+                    setUser(findAccountByUsername(username) || null);
+                  }
+                }}
+                saveProfile={async (profile) => {
+                  if (remote) { await updateMyProfile(profile as any as RemoteProfile); }
+                  else { updateLocalProfile(user!.id, profile); }
+                }}
               />
             )}
           </div>
@@ -187,7 +244,7 @@ export default function ProfilePage() {
   );
 }
 
-function CustomizeButton({ user, onUpdated }: { user: Account; onUpdated: () => void }) {
+function CustomizeButton({ user, onUpdated, saveProfile }: { user: Account; onUpdated: () => void; saveProfile: (p: any) => Promise<void> }) {
   const [open, setOpen] = React.useState(false);
   return (
     <>
@@ -202,6 +259,7 @@ function CustomizeButton({ user, onUpdated }: { user: Account; onUpdated: () => 
             onUpdated();
             setOpen(false);
           }}
+          saveProfile={saveProfile}
         />
       )}
     </>
@@ -212,10 +270,12 @@ function CustomizeModal({
   user,
   onClose,
   onSaved,
+  saveProfile,
 }: {
   user: Account;
   onClose: () => void;
   onSaved: () => void;
+  saveProfile: (p: any) => Promise<void>;
 }) {
   const [avatar, setAvatar] = React.useState<string>(user.profile.avatarData || "");
   const [banner, setBanner] = React.useState<string>(user.profile.bannerData || "");
@@ -246,19 +306,15 @@ function CustomizeModal({
     reader.readAsDataURL(file);
   };
 
-  const save = () => {
-    updateAccountProfile(user.id, {
+  const save = async () => {
+    await saveProfile({
       avatarData: avatar || undefined,
       bannerData: banner || undefined,
       accentFrom: from,
       accentTo: to,
       bio: bio.trim() || undefined,
       signature: signature.trim() || undefined,
-      links: {
-        website: website.trim() || undefined,
-        discord: discord.trim() || undefined,
-        telegram: telegram.trim() || undefined,
-      },
+      links: { website: website.trim() || undefined, discord: discord.trim() || undefined, telegram: telegram.trim() || undefined },
       badges,
     });
     onSaved();

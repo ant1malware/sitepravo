@@ -1,24 +1,80 @@
-<header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:border-zinc-800 dark:bg-[color:var(--surface)]/90 dark:supports-[backdrop-filter]:bg-[color:var(--surface)]/70">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
-          <Link to="/" className="text-sm underline decoration-dotted hover:no-underline">На главную</Link>
-          <h1 className="text-lg font-bold">Настройки</h1>
-          {/* Accent custom and Backgrounds */}
-          <section className="card">
-            <h2 className="mb-2 text-base font-semibold">Акцент и фон</h2>
-            <div className="mb-2 flex items-center gap-2 text-sm">
-              <input type="color" value={accentCustom} onChange={(e)=>onAccentCustomChange(e.target.value)} title="Пользовательский акцент" />
-              <span>Пользовательский цвет акцента</span>
-            </div>
-            <div className="mb-1 text-sm">Фон (только светлая тема):</div>
-            <div className="flex flex-wrap gap-2 text-sm">
-              {['none','bg1','bg2','bg3','custom'].map((id)=> (
-                <button key={id} className={`btn ${bgSel===id?'btn-primary':''}`} onClick={()=>onBgSelect(id)}>
-                  {id==='none'?'Нет':id==='custom'?'Свой':id.toUpperCase()}
-                </button>
-              ))}
-            </div>
-            <input className="input mt-2" placeholder="URL изображения для фона" onBlur={onBgCustomUrl} />
-          </section>
-
         </div>
-      </header>
+      </form>
+    </div>
+  );
+}
+
+function Header({ me, onLogout }: { me: RemoteUser; onLogout: () => void }) {
+  return (
+    <header
+      className="sticky top-0 z-50 border-b backdrop-blur"
+      style={{ background: "rgba(10,10,14,.6)", borderColor: "var(--border)" }}
+    >
+      <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
+        <Link to="/forum" className="flex items-center gap-3">
+          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[color:var(--accent)]/20 text-[color:var(--accent)] shadow">
+            <Shield size={18} />
+          </div>
+          <div>
+            <div
+              className="text-[11px] uppercase tracking-[0.32em]"
+              style={{ color: "var(--text-2)" }}
+            >
+              Forum // FORUM
+            </div>
+            <div className="text-sm font-semibold">Правительство</div>
+          </div>
+        </Link>
+        <div className="mx-4 hidden flex-1 items-center justify-center sm:flex">
+          <label
+            className="relative flex w-full max-w-xl items-center gap-2 rounded-full border px-4 py-2 text-sm shadow-sm"
+            style={{ borderColor: "var(--border)" }}
+          >
+            <Search size={16} />
+            <input
+              placeholder="Поиск"
+              className="w-full bg-transparent outline-none"
+              style={{ color: "var(--text-1)" }}
+            />
+          </label>
+        </div>
+        <button
+          className="relative grid h-10 w-10 place-items-center rounded-xl border card"
+          title="Уведомления"
+        >
+          <Bell size={16} />
+          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500" />
+        </button>
+        {(me.role === "admin" || me.role === "developer") && (
+          <Link to="/forum/admin" className="ml-2 btn">
+            Admin
+          </Link>
+        )}
+        <Link
+          to={`/forum/profile/${me.username}`}
+          className="ml-2 flex items-center gap-2 rounded-xl border px-3 py-2 card"
+        >
+          <Badge role={me.role} />
+          <div className="text-sm font-semibold">{me.username}</div>
+          <div className="border-l pl-2 text-xs opacity-70">#{me.userNumber}</div>
+        </Link>
+        <button onClick={onLogout} className="ml-2 text-xs btn">
+          Выйти
+        </button>
+      </div>
+    </header>
+  );
+}
+
+export default function ForumPage() {
+  const [, force] = React.useReducer((x) => x + 1, 0);
+  const [me, setMe] = React.useState<RemoteUser | null | undefined>(undefined);
+  const [sectionsState, setSectionsState] = React.useState<any[]>([]);
+  const [latestPosts, setLatestPosts] = React.useState<any[]>([]);
+
+  // session
+  React.useEffect(() => {
+    let alive = true;
+    const read = async () => {
+      try {
+        const u = await getSessionAccount();

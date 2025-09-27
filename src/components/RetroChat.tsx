@@ -4,7 +4,9 @@
 // Исправлено: модалка появляется/не пропадает до подтверждения сервером.
 
 import React from 'react';
-import { getSessionAccount, isMuted } from '../store/forumStore';
+import { Link } from 'react-router-dom';
+import { getSessionAccount as getLocalSession, isMuted } from '../store/forumStore';
+import { getSessionAccount as getRemoteSession } from '../store/authRemote';
 
 type ChatMessage = { id: string; author: string; text: string; ts: number };
 type ServerEvent =
@@ -357,6 +359,28 @@ export default function SimpleChat({
     latestStateRef.current = { epochReady, needNick, nick };
   }, [epochReady, needNick, nick]);
 
+  // Prefer forum profile username for chat nickname
+  React.useEffect(() => {
+    if (!epochReady) return;
+    (async () => {
+      let uname: string | null = null;
+      try { const me = await getRemoteSession(); if (me?.username) uname = me.username; } catch {}
+      if (!uname) {
+        try { const meLocal = getLocalSession(); if ((meLocal as any)?.username) uname = (meLocal as any).username; } catch {}
+      }
+      if (uname) {
+        setNick(uname);
+        setNickDraft(uname);
+        setNeedNick(false);
+        try { localStorage.setItem(keys.NAME_KEY, uname); localStorage.setItem(keys.NAME_LOCK, '1'); } catch {}
+        const ws = wsRef.current;
+        if (ws && ws.readyState === WebSocket.OPEN && helloSentRef.current !== uname) {
+          try { ws.send(JSON.stringify({ type: 'hello', name: uname })); helloSentRef.current = uname; } catch {}
+        }
+      }
+    })();
+  }, [epochReady, keys.NAME_KEY, keys.NAME_LOCK]);
+
   React.useEffect(() => {
     keysRef.current = keys;
   }, [keys]);
@@ -622,7 +646,7 @@ export default function SimpleChat({
     // модалку НЕ закрываем — дождёмся system.name от сервера
   }
 
-  const me = React.useMemo(() => { try { return getSessionAccount(); } catch { return null; } }, []);
+  const me = React.useMemo(() => { try { return getLocalSession(); } catch { return null; } }, []);
   const muted = React.useMemo(() => isMuted(me as any), [me]);
 
   function send() {
@@ -653,6 +677,18 @@ export default function SimpleChat({
   React.useEffect(() => {
     if (!canUseInput) setEmojiOpen(false);
   }, [canUseInput]);
+
+  // Mention helper — inserts @username into input and focuses
+  function mentionUser(name: string) {
+    const at = `@${name} `;
+    setInput((prev) => (prev ? (prev.replace(/\s+$/, ' ') + at) : at));
+    const node = inputRef.current as HTMLTextAreaElement | HTMLInputElement | null;
+    setTimeout(() => {
+      try {
+        if (node) { node.focus(); const len = (node as any).value.length; (node as any).selectionStart = (node as any).selectionEnd = len; }
+      } catch {}
+    }, 0);
+  }
 
   const toggleEmoji = () => {
     if (!canUseInput) return;
@@ -779,7 +815,8 @@ export default function SimpleChat({
               return (
                 <li key={m.id} className={mentionForMe ? 'rc-mention' : undefined}>
                   <span className="rc-ts">[{hhmmss(m.ts)}]</span>
-                  <span className={nickClass(m.author)}>{m.author}</span>
+                  <Link to={`/forum/profile/${encodeURIComponent(m.author)}`} className={nickClass(m.author)}>{m.author}</Link>
+                  <button className="rc-ax" type="button" onClick={() => mentionUser(m.author)} title={`@${m.author}`}>@</button>
                   <span>: </span>
                   <span className="rc-msg">{body}</span>
                   {isAdmin && (
@@ -940,7 +977,8 @@ export default function SimpleChat({
                           <div className="fc-body">
                             <div className="fc-meta">
                               <div className="fc-name">
-                                {m.author}
+                                <Link to={`/forum/profile/${encodeURIComponent(m.author)}`}>{m.author}</Link>
+                                <button type="button" className="fc-action-btn" onClick={() => mentionUser(m.author)} title={`@${m.author}`}>@</button>
                                 {role && (
                                   <span
                                     className="fc-role"
