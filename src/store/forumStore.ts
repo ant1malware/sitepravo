@@ -466,7 +466,7 @@ function seedDemoData() {
       id: crypto.randomUUID(),
       topicId: topics[2].id,
       authorId: mod.id,
-      content: "Added the aftermovie link and playlists from the DJ set�enjoy the nostalgia.",
+      content: "Added the aftermovie link and playlists from the DJ set—enjoy the nostalgia.",
       createdAt,
       likes: [admin.id],
     },

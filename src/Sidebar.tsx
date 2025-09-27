@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { BookOpen, Users, LayoutList, ClipboardList, FileText, MessageSquare, Shield, ListChecks, Info, Ghost, Lock } from 'lucide-react';
+import { BookOpen, Users, LayoutList, ClipboardList, FileText, MessageSquare, Shield, ListChecks, Info, Ghost, Lock, CircleUserRound } from 'lucide-react';
 import LiquidGlass from './components/LiquidGlass';
 import { useStyleMode } from './useStyleMode';
 import { useForumSessionWatcher } from './forumSession';
@@ -13,6 +13,7 @@ export type NavItem = TabNavItem | RouteNavItem;
 
 export const NAV: NavItem[] = [
   { key: 'forum',         type: 'route', label: 'Форум',         icon: <MessageSquare className="h-4 w-4" />, to: '/forum' },
+  { key: 'members',      type: 'route', label: 'Members',      icon: <CircleUserRound className="h-4 w-4" />, to: '/forum/members' },
   { key: 'roles',         type: 'tab',   label: 'Повышения',     icon: <Users className="h-4 w-4" />,       id: 'roles' },
   { key: 'templates',     type: 'tab',   label: 'Шаблоны',       icon: <FileText className="h-4 w-4" />,   id: 'templates' },
   { key: 'posts',         type: 'tab',   label: 'Посты',         icon: <LayoutList className="h-4 w-4" />, id: 'posts' },
