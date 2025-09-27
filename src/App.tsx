@@ -14,6 +14,8 @@ const ForumPage = React.lazy(() => import('./ForumPage'));
 const ProfilePage = React.lazy(() => import('./ProfilePage'));
 const MembersPage = React.lazy(() => import('./ForumMembers'));
 const SectionPage = React.lazy(() => import('./SectionPage'));
+const TopicPage = React.lazy(() => import('./TopicPage'));
+const QuestionsPage = React.lazy(() => import('./QuestionsPage'));
 const AdminPanel = React.lazy(() => import('./AdminPanel3'));
 import RecorderPage from './RecorderPage';
 import AboutPage from './AboutPage';
@@ -88,6 +90,8 @@ export default function App() {
           <Route path="/home" element={<HomePage />} />
           <Route path="/forum/*" element={<ForumPage />} />
           <Route path="/forum/section/:id" element={<SectionPage />} />
+          <Route path="/forum/topic/:id" element={<TopicPage />} />
+          <Route path="/forum/questions" element={<QuestionsPage />} />
           <Route path="/forum/members" element={<MembersPage />} />
           <Route path="/forum/profile/:username" element={<ProfilePage />} />
           <Route path="/forum/admin" element={<AdminPanel />} />

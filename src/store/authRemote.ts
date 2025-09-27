@@ -34,6 +34,7 @@ export type RemoteUser = {
   mutedUntil?: string | null;
   invitedById?: string | null;
   invitedByName?: string | null;
+  owner?: boolean;
 };
 export type RemoteProfile = {
   avatarData?: string;
@@ -108,12 +109,14 @@ export async function registerAccount(input: {
   password?: string;
   remember?: boolean;
   inviteCode?: string;
+  captchaToken?: string | null;
 }) {
   const body = JSON.stringify({
     username: input.username,
     email: input.email,
     password: input.password || "1234",
     inviteCode: input.inviteCode || "",
+    captchaToken: input.captchaToken || undefined,
   });
   const { token, user } = await api("/register", { method: "POST", body });
   saveToken(token, input.remember !== false);
@@ -134,10 +137,14 @@ export async function authenticateAccount(input: {
   usernameOrEmail: string;
   password?: string;
   remember?: boolean;
+  otp?: string;
+  captchaToken?: string | null;
 }) {
   const body = JSON.stringify({
     usernameOrEmail: input.usernameOrEmail,
     password: input.password || "1234",
+    otp: input.otp || undefined,
+    captchaToken: input.captchaToken || undefined,
   });
   const { token, user } = await api("/login", { method: "POST", body });
   saveToken(token, input.remember !== false);

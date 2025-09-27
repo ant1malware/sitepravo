@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Users, PanelsTopLeft, ShoppingBag } from "lucide-react";
+import { Users, PanelsTopLeft, ShoppingBag, ChevronDown } from "lucide-react";
 import { listSections } from "./store/forumRemote";
 
 export default function ForumSubnav() {
@@ -44,9 +44,26 @@ export default function ForumSubnav() {
     )
   );
 
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  React.useEffect(() => {
+    const onDoc = () => setMenuOpen(false);
+    document.addEventListener('click', onDoc);
+    return () => document.removeEventListener('click', onDoc);
+  }, []);
+
   return (
-    <div className="mb-4 flex flex-wrap gap-2">
-      <Btn to="/forum" active={isForums} icon={<PanelsTopLeft size={16} />}>Forums</Btn>
+    <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="relative" onClick={(e) => e.stopPropagation()}>
+        <button className={`btn inline-flex items-center gap-2 ${isForums ? 'btn-primary' : ''}`} onClick={() => setMenuOpen(v => !v)}>
+          <PanelsTopLeft size={16} /> Forums <ChevronDown size={14} />
+        </button>
+        {menuOpen && (
+          <div className="absolute left-0 z-20 mt-1 w-56 rounded-xl border border-white/10 bg-[color:var(--surface)] p-1 shadow-lg">
+            <Link className="block rounded-lg px-3 py-2 hover:bg-white/5" to="/forum" onClick={() => setMenuOpen(false)}>Главная</Link>
+            <Link className="block rounded-lg px-3 py-2 hover:bg-white/5" to="/forum/questions" onClick={() => setMenuOpen(false)}>Вопросы</Link>
+          </div>
+        )}
+      </div>
       <Btn to="/forum/members" active={isMembers} icon={<Users size={16} />}>Members</Btn>
       <Btn
         to={workshopId ? `/forum/section/${workshopId}` : "/forum"}

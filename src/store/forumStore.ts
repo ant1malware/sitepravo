@@ -28,7 +28,7 @@ export type AccountProfile = {
   accentFrom?: string;
   accentTo?: string;
   badges?: string[];
-  privacy?: { showEmail: boolean; showStats: boolean; showLinks?: boolean; allowComments?: boolean; showFollowers?: boolean };
+  privacy?: { showEmail: boolean; showStats: boolean; showLinks?: boolean; allowComments?: boolean; showFollowers?: boolean; showSecondaryRole?: boolean };
 };
 
 export type Account = {

@@ -12,6 +12,8 @@ import {
   getProfileByUsername,
   updateMyProfile,
   type RemoteProfile,
+  setRole as setRemoteRole,
+  listPublicMembers,
 } from "./store/authRemote";
 import {
   isFollowing,
@@ -22,7 +24,11 @@ import {
   addProfileComment,
   addReply,
   removeProfileComment,
+  listReactions,
+  toggleReaction,
+  getUserReaction,
   type ProfileComment,
+  type Reaction,
 } from "./store/socialStore";
 import {
   Camera, Pencil, Globe, Link as LinkIcon, BadgeCheck, UserPlus, UserMinus,
@@ -44,6 +50,7 @@ const ROLE_META: Record<string, {
   grad: string; // градиент чипа
   Icon: any;
 }> = {
+  owner:     { label: "Owner",     grad: "from-amber-400 via-rose-400 to-amber-400",  Icon: Crown },
   developer: { label: "Developer", grad: "from-cyan-400 via-fuchsia-400 to-cyan-400", Icon: Code2 },
   admin:     { label: "Admin",     grad: "from-rose-400 via-amber-400 to-rose-400",  Icon: Shield },
   moderator: { label: "Moderator", grad: "from-violet-400 via-sky-400 to-violet-400", Icon: Gavel },
@@ -139,6 +146,8 @@ export default function ProfilePage() {
   const [user, setUser] = React.useState<Account | null>(null);
   const [session, setSession] = React.useState<{ id: string; username: string } | null>(null);
   const [remote, setRemote] = React.useState<boolean>(false);
+  const [isOwnerRemote, setIsOwnerRemote] = React.useState<boolean>(false);
+  const [memberMap, setMemberMap] = React.useState<Record<string,string>>({});
 
   // load
   React.useEffect(() => {
@@ -148,6 +157,7 @@ export default function ProfilePage() {
         if (me) {
           setRemote(true);
           setSession({ id: me.id, username: me.username });
+          try { const rows = await listPublicMembers(); const map: Record<string,string> = {}; for (const m of rows as any) map[(m as any).id] = (m as any).username; setMemberMap(map); } catch {}
           const pack = await getProfileByUsername(username);
           if (pack) {
             const acc: Account = {
@@ -168,6 +178,7 @@ export default function ProfilePage() {
               bans: null, mutes: null,
             };
             setUser(acc);
+            try { setIsOwnerRemote(!!(pack as any).user?.owner); } catch {}
             return;
           }
         }
@@ -285,8 +296,11 @@ export default function ProfilePage() {
                 <span className="text-xs text-zinc-400/80">#{user.userNumber}</span>
               </div>
               {/* крупный бейдж роли под именем */}
-              <div className="mt-2">
-                <RoleBadgePro role={user.role} />
+              <div className="mt-2 flex items-center gap-2">
+                {isOwnerRemote && <RoleBadgePro role="owner" />}
+                {user.profile?.privacy?.showSecondaryRole !== false && (
+                  <RoleBadgePro role={user.role} />
+                )}
               </div>
               {/* дата/почта */}
               <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-zinc-400/90">
@@ -343,6 +357,43 @@ export default function ProfilePage() {
             )}
           </div>
         </div>
+
+        {remote && canEdit && isOwnerRemote && (
+          <div className="card mt-4 p-4">
+            <div className="mb-2 text-xs uppercase tracking-[0.28em] text-zinc-400/80">Secondary Role</div>
+            <div className="flex items-center gap-2">
+              <select
+                className="input"
+                value={user.profile?.privacy?.showSecondaryRole === false ? 'none' : user.role}
+                onChange={async (e) => {
+                  const next = e.target.value as any;
+                  try {
+                    const prev = user.profile?.privacy || { showEmail: false, showStats: true };
+                    if (next === 'none') {
+                      await updateMyProfile({ privacy: { ...prev, showSecondaryRole: false } } as any);
+                      setUser({ ...user, profile: { ...user.profile, privacy: { ...prev, showSecondaryRole: false } } });
+                    } else {
+                      await setRemoteRole(user.id, next);
+                      await updateMyProfile({ privacy: { ...prev, showSecondaryRole: true } } as any);
+                      setUser({ ...user, role: next, profile: { ...user.profile, privacy: { ...prev, showSecondaryRole: true } } });
+                    }
+                  } catch (err: any) {
+                    alert(err?.message || 'Failed to change role');
+                  }
+                }}
+              >
+                <option value="none">none</option>
+                <option value="developer">developer</option>
+                <option value="admin">admin</option>
+                <option value="moderator">moderator</option>
+                <option value="vip">vip</option>
+                <option value="user">user</option>
+                <option value="newbie">newbie</option>
+              </select>
+              <div className="text-xs opacity-70">Owner is permanent; this is your secondary role.</div>
+            </div>
+          </div>
+        )}
 
         {/* ===== STATS ===== */}
         {user.profile?.privacy?.showStats !== false && (
@@ -408,9 +459,10 @@ export default function ProfilePage() {
               {followers.length === 0 ? <span className="opacity-70">No followers yet.</span> : (
                 followers.slice(0, 18).map(fid => {
                   const acc = findAccountById(fid);
+                  const uname = acc?.username || memberMap[fid];
                   return (
                     <span key={fid} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">
-                      {acc?.username || `User`}
+                      {uname ? <a href={`/forum/profile/${uname}`} className="hover:underline">{uname}</a> : 'User'}
                     </span>
                   );
                 })
@@ -701,6 +753,7 @@ function CommentItem({
   const [openReply, setOpenReply] = React.useState(false);
   const acc = findAccountById(node.comment.authorId);
   const name = node.comment.authorName || acc?.username || (node.comment.authorId === ownerId ? "Owner" : (node.comment.authorId === currentUserId ? "You" : "User"));
+  const profileUsername = acc?.username || node.comment.authorName;
   return (
     <div className="rounded-xl border border-white/5 bg-white/3 p-3">
       <div className="flex items-start gap-3">
@@ -708,8 +761,8 @@ function CommentItem({
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-3">
             <div className="text-xs text-zinc-300/90">
-              {acc?.username ? (
-                <a href={`/forum/profile/${acc.username}`} className="font-semibold text-white hover:underline">{name}</a>
+              {profileUsername ? (
+                <a href={`/forum/profile/${profileUsername}`} className="font-semibold text-white hover:underline">{name}</a>
               ) : (
                 <span className="font-semibold text-white">{name}</span>
               )}
@@ -722,6 +775,7 @@ function CommentItem({
             )}
           </div>
           <div className="mt-1 whitespace-pre-wrap text-sm text-zinc-100/90">{node.comment.content}</div>
+          <Reactions targetId={ownerId} commentId={node.comment.id} currentUserId={currentUserId} />
           <div className="mt-2 flex items-center gap-2">
             <button className="btn" onClick={() => setOpenReply(v => !v)}>Reply</button>
           </div>
@@ -749,6 +803,27 @@ function InlineReply({ onSend }: { onSend: (text: string) => void }) {
     <div className="flex items-start gap-2">
       <textarea className="input min-h-[60px] flex-1" placeholder="Write a reply..." value={text} onChange={(e) => setText(e.target.value)} />
       <button className="btn btn-primary" onClick={() => { const t = text.trim(); if (!t) return; onSend(t); setText(""); }}>Send</button>
+    </div>
+  );
+}
+
+function Reactions({ targetId, commentId, currentUserId }: { targetId: string; commentId: string; currentUserId: string }) {
+  const [, force] = React.useReducer((x)=>x+1,0);
+  const state = listReactions(targetId)[commentId] || { counts: { like: 0, smile: 0, useful: 0 }, byUser: {} } as any;
+  const mine = currentUserId ? getUserReaction(targetId, commentId, currentUserId) : undefined;
+  const Btn = ({ r, label }: { r: Reaction; label: string }) => (
+    <button
+      className={`btn text-xs ${mine === r ? 'btn-primary' : ''}`}
+      onClick={() => { if (!currentUserId) return; toggleReaction(targetId, commentId, currentUserId, r); force(); }}
+    >
+      {label} {state.counts?.[r] ? <span className="opacity-80">{state.counts[r]}</span> : null}
+    </button>
+  );
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <Btn r="like" label="👍" />
+      <Btn r="smile" label="😊" />
+      <Btn r="useful" label="✅" />
     </div>
   );
 }

@@ -256,7 +256,7 @@ async function writeForumCfg(env: Env, cfg: ForumCfg) { await env.AUTH_KV!.put(C
 
 type Section = { id: string; title: string; description?: string; icon?: string; createdAt: string; order: number; moderatorIds: string[]; topicCount: number; postCount: number }
 type Topic = { id: string; sectionId: string; title: string; authorId: string; createdAt: string; updatedAt: string; pinned: boolean; locked: boolean; viewCount: number; replyCount: number; lastPostAt: string; lastPostBy: string }
-type Post = { id: string; topicId: string; authorId: string; content: string; createdAt: string; editedAt?: string|null }
+type Post = { id: string; topicId: string; authorId: string; content: string; createdAt: string; editedAt?: string|null; pinned?: boolean; likes?: string[] }
 
 const F_SEC = (id: string) => `forum:section:${id}`
 const F_TOP = (id: string) => `forum:topic:${id}`
@@ -322,7 +322,14 @@ async function listPostsKV(env: Env, topicId: string, limit=200): Promise<Post[]
     cursor = page.list_complete ? undefined : page.cursor
     if (out.length >= limit) break
   } while (cursor)
-  out.sort((a,b)=> new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+  // default pinned/likes for legacy posts
+  for (const p of out) { if (typeof (p as any).pinned !== 'boolean') (p as any).pinned = false; if (!Array.isArray((p as any).likes)) (p as any).likes = [] }
+  // keep pinned first, then by createdAt asc
+  out.sort((a,b)=> {
+    const ap = a.pinned ? 1 : 0, bp = b.pinned ? 1 : 0
+    if (ap !== bp) return bp - ap
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  })
   return out.slice(0, limit)
 }
 async function putPostKV(env: Env, p: Post) { await env.AUTH_KV!.put(F_POS(p.id), JSON.stringify(p)); await env.AUTH_KV!.put(IDX_P_T(p.topicId, p.id), '1') }
@@ -357,7 +364,7 @@ type Profile = {
   avatarData?: string; bannerData?: string; bio?: string; signature?: string;
   links?: { website?: string; discord?: string; telegram?: string };
   accentFrom?: string; accentTo?: string; badges?: string[];
-  privacy?: { showEmail?: boolean; showStats?: boolean };
+  privacy?: { showEmail?: boolean; showStats?: boolean; showSecondaryRole?: boolean };
 }
 function defaultProfile(): Profile { return { bio:'', signature:'', links:{}, accentFrom:'#8b5cf6', accentTo:'#0ea5e9', badges:[], privacy:{ showEmail:false, showStats:true } } }
 function sanitizeProfile(p: any): Profile {
@@ -372,7 +379,7 @@ function sanitizeProfile(p: any): Profile {
   if (typeof p?.accentFrom === 'string') out.accentFrom = p.accentFrom
   if (typeof p?.accentTo === 'string') out.accentTo = p.accentTo
   if (Array.isArray(p?.badges)) out.badges = p.badges.slice(0,3).map((x:any)=> String(x).slice(0,32))
-  if (p?.privacy && typeof p.privacy === 'object') out.privacy = { showEmail: !!p.privacy.showEmail, showStats: p.privacy.showStats !== false }
+  if (p?.privacy && typeof p.privacy === 'object') out.privacy = { showEmail: !!p.privacy.showEmail, showStats: p.privacy.showStats !== false, showSecondaryRole: p.privacy.showSecondaryRole !== false }
   return out
 }
 const F_PROF = (id: string) => `forum:profile:${id}`
@@ -467,6 +474,7 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
       try { const norm = (req as any)._normInvite as string|undefined; if (norm) await markInviteUsed(env, norm, id) } catch {}
       const token = await createSession(env, id)
       const { passwordHash: _1, salt: _2, ...pub } = user
+      ;(pub as any).owner = (userNumber === 1)
       return json(req, { token, user: pub })
     }
 
@@ -484,6 +492,7 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
       if (!ok) return json(req, { error:'bad credentials' }, { status: 401 })
       const token = await createSession(env, u.id)
       const { passwordHash: _1, salt: _2, ...pub } = u
+      ;(pub as any).owner = ((u.userNumber||0) === 1)
       return json(req, { token, user: pub })
     }
 
@@ -516,6 +525,7 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
         if (!u) return json(req, { error:'not found' }, { status: 404 })
         const profile = await getProfileKV(env, id)
         const { passwordHash: _1, salt: _2, ...pub } = u
+        ;(pub as any).owner = ((u.userNumber||0) === 1)
         return json(req, { user: pub, profile: profile || defaultProfile() })
       }
     }
@@ -542,32 +552,49 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
       return json(req, { profile })
     }
 
-    // GET /users (admin/dev)
+    // GET /users (admin/dev/moderator). Only developer sees emails.
     if (sub === '/users' && method === 'GET') {
       const s = await readSession(env, req)
       if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
       const me = await getUserByIdKV(env, s.userId)
-      if (!me || !((me.role==='admin'||me.role==='developer'||me.role==='moderator'))) return json(req, { error:'forbidden' }, { status: 403 })
+      const meIsOwner = ((me?.userNumber||0) === 1)
+      if (!me || !(meIsOwner || (me.role==='admin'||me.role==='developer'||me.role==='moderator'))) return json(req, { error:'forbidden' }, { status: 403 })
       const users = await listUsersKV(env)
+      for (const u of users as any[]) { (u as any).owner = (((u as any).userNumber||0) === 1) }
+      if (!meIsOwner && me.role !== 'developer') {
+        for (const u of users as any[]) {
+          // hide email from non-developers
+          if (u && typeof u.email === 'string') u.email = '[hidden]'
+        }
+      }
       return json(req, { users })
     }
 
-    // PATCH /users/:id/role (admin/dev)
+    // PATCH /users/:id/role (developer only). Cannot change role of first user.
     const m = sub.match(/^\/users\/([^/]+)\/role$/)
     if (m && method === 'PATCH') {
       const s = await readSession(env, req)
       if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
       const me = await getUserByIdKV(env, s.userId)
-      if (!me || !((me.role==='admin'||me.role==='developer'||me.role==='moderator'))) return json(req, { error:'forbidden' }, { status: 403 })
+      if (!me) return json(req, { error:'unauthorized' }, { status: 401 })
       const id = m[1]
       const body = await req.json().catch(()=> ({}))
       const role = String(body.role || '')
       if (!['developer','admin','moderator','vip','user','newbie'].includes(role)) return json(req, { error:'bad role' }, { status: 400 })
       const u = await getUserByIdKV(env, id)
       if (!u) return json(req, { error:'not found' }, { status: 404 })
+      const targetIsOwner = ((u.userNumber||0) === 1)
+      const meIsOwner = ((me.userNumber||0) === 1)
+      if (meIsOwner && me.id === id) {
+        // owner can change own secondary role
+      } else {
+        if (targetIsOwner) return json(req, { error:'forbidden' }, { status: 403 })
+        if (me.role !== 'developer') return json(req, { error:'forbidden' }, { status: 403 })
+      }
       u.role = role as Role
       await putUserKV(env, u)
       const { passwordHash: _1, salt: _2, ...pub } = u
+      ;(pub as any).owner = ((u.userNumber||0) === 1)
       return json(req, { user: pub })
     }
 
@@ -583,7 +610,8 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
       const s = await readSession(env, req)
       if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
       const me = await getUserByIdKV(env, s.userId)
-      if (!me || !((me.role==='admin'||me.role==='developer'||me.role==='moderator'))) return json(req, { error:'forbidden' }, { status: 403 })
+      const meIsOwner = ((me?.userNumber||0) === 1)
+      if (!me || !(meIsOwner || (me.role==='admin'||me.role==='developer'||me.role==='moderator'))) return json(req, { error:'forbidden' }, { status: 403 })
       const body = await req.json().catch(()=> ({}))
       const title = String(body.title||'').trim(); if (!title) return json(req, { error:'bad title' }, { status: 400 })
       const list = await listSectionsKV(env); const now = new Date().toISOString()
@@ -654,11 +682,25 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
         if (!raw) return json(req, { error:'not found' }, { status: 404 })
         const top = JSON.parse(raw) as Topic
         const body = await req.json().catch(()=> ({}))
-        if (typeof body.title==='string') top.title = body.title
-        if (typeof body.pinned==='boolean') top.pinned = body.pinned
-        if (typeof body.locked==='boolean') top.locked = body.locked
+        const isOwner = ((me.userNumber||0) === 1)
+        if (typeof body.title==='string') {
+          if (isOwner || me.role==='developer' || me.role==='admin' || me.role==='moderator') top.title = body.title; else return json(req, { error:'forbidden' }, { status: 403 })
+        }
+        if (typeof body.pinned==='boolean') {
+          if (isOwner || me.role==='developer' || me.role==='admin') top.pinned = body.pinned; else return json(req, { error:'forbidden' }, { status: 403 })
+        }
+        if (typeof body.locked==='boolean') {
+          if (isOwner || me.role==='developer' || me.role==='admin' || me.role==='moderator') top.locked = body.locked; else return json(req, { error:'forbidden' }, { status: 403 })
+        }
         top.updatedAt = new Date().toISOString()
         await putTopicKV(env, top)
+        return json(req, { topic: top })
+      }
+      if (mt && method === 'GET') {
+        const id = mt[1]
+        const raw = await env.AUTH_KV!.get(F_TOP(id))
+        if (!raw) return json(req, { error:'not found' }, { status: 404 })
+        const top = JSON.parse(raw) as Topic
         return json(req, { topic: top })
       }
     }
@@ -687,6 +729,8 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
     if (sub.startsWith('/posts') && method === 'GET') {
       const u = new URL(req.url); const topicId = u.searchParams.get('topicId') || ''
       const posts = await listPostsKV(env, topicId)
+      // bump view counter on topic
+      try { const topRaw = await env.AUTH_KV!.get(F_TOP(topicId)); if (topRaw) { const top = JSON.parse(topRaw) as Topic; top.viewCount = (top.viewCount||0)+1; await putTopicKV(env, top) } } catch {}
       return json(req, { posts })
     }
     // POST /posts (auth)
@@ -702,11 +746,98 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
       const top = JSON.parse(topRaw) as Topic
       if (top.locked) return json(req, { error:'locked' }, { status: 403 })
       const text = String(body.content || '').trim(); if (!text) return json(req,{error:'bad content'},{status:400})
-      const now = new Date().toISOString(); const post: Post = { id: crypto.randomUUID(), topicId, authorId: me.id, content: text, createdAt: now }
+      const now = new Date().toISOString(); const post: Post = { id: crypto.randomUUID(), topicId, authorId: me.id, content: text, createdAt: now, pinned: false, likes: [] }
       await putPostKV(env, post)
       top.replyCount += 1; top.updatedAt = now; top.lastPostAt = now; top.lastPostBy = me.id; await putTopicKV(env, top)
       const sec = await getSectionKV(env, top.sectionId); if (sec) { sec.postCount += 1; await putSectionKV(env, sec) }
       return json(req, { post })
+    }
+    // POST /posts/:id/like (toggle)
+    {
+      const ml = sub.match(/^\/posts\/([^/]+)\/like$/)
+      if (ml && method === 'POST') {
+        const s = await readSession(env, req)
+        if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
+        const me = await getUserByIdKV(env, s.userId)
+        if (!me) return json(req, { error:'unauthorized' }, { status: 401 })
+        const id = ml[1]
+        const raw = await env.AUTH_KV!.get(F_POS(id))
+        if (!raw) return json(req, { error:'not found' }, { status: 404 })
+        const post = JSON.parse(raw) as Post
+        if (!Array.isArray(post.likes)) post.likes = []
+        const idx = post.likes.indexOf(me.id)
+        if (idx === -1) post.likes.push(me.id); else post.likes.splice(idx, 1)
+        await putPostKV(env, post)
+        return json(req, { post })
+      }
+    }
+    // PATCH /posts/:id (pin/unpin by moderators; self-edit content)
+    {
+      const mp = sub.match(/^\/posts\/([^/]+)$/)
+      if (mp && method === 'PATCH') {
+        const s = await readSession(env, req)
+        if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
+        const me = await getUserByIdKV(env, s.userId)
+        if (!me) return json(req, { error:'unauthorized' }, { status: 401 })
+        const id = mp[1]
+        const raw = await env.AUTH_KV!.get(F_POS(id))
+        if (!raw) return json(req, { error:'not found' }, { status: 404 })
+        const post = JSON.parse(raw) as Post
+        const body = await req.json().catch(()=> ({}))
+        let changed = false
+        // allow moderators/admin/dev to toggle pinned
+        if (typeof body.pinned === 'boolean') {
+          if (me.role==='developer' || me.role==='admin' || me.role==='moderator') {
+            post.pinned = !!body.pinned
+            changed = true
+          } else {
+            return json(req, { error:'forbidden' }, { status: 403 })
+          }
+        }
+        // allow author to edit content
+        if (typeof body.content === 'string' && body.content.trim()) {
+          if (post.authorId === me.id || me.role==='developer' || me.role==='admin' || me.role==='moderator') {
+            post.content = String(body.content).slice(0, 10_000)
+            post.editedAt = new Date().toISOString()
+            changed = true
+          } else {
+            return json(req, { error:'forbidden' }, { status: 403 })
+          }
+        }
+        if (!changed) return json(req, { post })
+        await putPostKV(env, post)
+        return json(req, { post })
+      }
+    }
+    // DELETE /posts/:id (author or moderator/admin/dev)
+    {
+      const md = sub.match(/^\/posts\/([^/]+)$/)
+      if (md && method === 'DELETE') {
+        const s = await readSession(env, req)
+        if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
+        const me = await getUserByIdKV(env, s.userId)
+        if (!me) return json(req, { error:'unauthorized' }, { status: 401 })
+        const id = md[1]
+        const raw = await env.AUTH_KV!.get(F_POS(id))
+        if (!raw) return json(req, { error:'not found' }, { status: 404 })
+        const post = JSON.parse(raw) as Post
+        const canModerate = (me.role==='developer'||me.role==='admin'||me.role==='moderator')
+        const isAuthor = post.authorId === me.id
+        if (!canModerate && !isAuthor) return json(req, { error:'forbidden' }, { status: 403 })
+        // load topic for counters
+        const topRaw = await env.AUTH_KV!.get(F_TOP(post.topicId))
+        const top = topRaw ? (JSON.parse(topRaw) as Topic) : null
+        await deletePostKV(env, post)
+        if (top) {
+          // do not go negative
+          top.replyCount = Math.max(0, (top.replyCount||0) - 1)
+          top.updatedAt = new Date().toISOString()
+          await putTopicKV(env, top)
+          const sec = await getSectionKV(env, top.sectionId)
+          if (sec) { sec.postCount = Math.max(0, (sec.postCount||0) - 1); await putSectionKV(env, sec) }
+        }
+        return json(req, { ok: true })
+      }
     }
     // GET /latest-posts
     if (sub === '/latest-posts' && method === 'GET') {
@@ -728,7 +859,8 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
       const s = await readSession(env, req)
       if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
       const me = await getUserByIdKV(env, s.userId)
-      if (!me || !((me.role==='admin'||me.role==='developer'||me.role==='moderator'))) return json(req, { error:'forbidden' }, { status: 403 })
+      const meIsOwner = ((me?.userNumber||0) === 1)
+      if (!me || !(meIsOwner || (me.role==='admin'||me.role==='developer'||me.role==='moderator'))) return json(req, { error:'forbidden' }, { status: 403 })
       const body = await req.json().catch(()=> ({}))
       const cur = await readForumCfg(env)
       const next: ForumCfg = { ...cur }
@@ -738,6 +870,127 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
       return json(req, { settings: next })
     }
 
+    /* ---------- Social: follows + profile comments ---------- */
+    // follows storage
+    const F_FOLLOW_T = (targetId: string, followerId: string) => `social:follow:target:${targetId}:${followerId}`
+    const F_FOLLOW_B = (followerId: string, targetId: string) => `social:follow:by:${followerId}:${targetId}`
+    async function listFollowersIds(env: Env, targetId: string): Promise<string[]> {
+      const out: string[] = []
+      let cursor: string|undefined = undefined
+      const prefix = `social:follow:target:${targetId}:`
+      do {
+        const page = await env.AUTH_KV!.list({ prefix, cursor })
+        for (const k of page.keys) { const fid = k.name.slice(prefix.length); if (fid) out.push(fid) }
+        cursor = page.list_complete ? undefined : page.cursor
+      } while (cursor)
+      return out
+    }
+    async function listFollowingIds(env: Env, followerId: string): Promise<string[]> {
+      const out: string[] = []
+      let cursor: string|undefined = undefined
+      const prefix = `social:follow:by:${followerId}:`
+      do {
+        const page = await env.AUTH_KV!.list({ prefix, cursor })
+        for (const k of page.keys) { const tid = k.name.slice(prefix.length); if (tid) out.push(tid) }
+        cursor = page.list_complete ? undefined : page.cursor
+      } while (cursor)
+      return out
+    }
+    // POST /social/follow { targetId }
+    if (sub === '/social/follow' && method === 'POST') {
+      const s = await readSession(env, req); if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
+      const me = await getUserByIdKV(env, s.userId); if (!me) return json(req, { error:'unauthorized' }, { status: 401 })
+      const body = await req.json().catch(()=> ({})); const targetId = String(body.targetId||'')
+      if (!targetId || targetId === me.id) return json(req, { error:'bad target' }, { status: 400 })
+      await env.AUTH_KV!.put(F_FOLLOW_T(targetId, me.id), '1')
+      await env.AUTH_KV!.put(F_FOLLOW_B(me.id, targetId), '1')
+      return json(req, { ok: true })
+    }
+    // POST /social/unfollow { targetId }
+    if (sub === '/social/unfollow' && method === 'POST') {
+      const s = await readSession(env, req); if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
+      const me = await getUserByIdKV(env, s.userId); if (!me) return json(req, { error:'unauthorized' }, { status: 401 })
+      const body = await req.json().catch(()=> ({})); const targetId = String(body.targetId||'')
+      if (!targetId || targetId === me.id) return json(req, { error:'bad target' }, { status: 400 })
+      await env.AUTH_KV!.delete(F_FOLLOW_T(targetId, me.id))
+      await env.AUTH_KV!.delete(F_FOLLOW_B(me.id, targetId))
+      return json(req, { ok: true })
+    }
+    // GET /social/followers/:id
+    {
+      const m = sub.match(/^\/social\/followers\/([^/]+)$/)
+      if (m && method === 'GET') {
+        const id = decodeURIComponent(m[1])
+        const ids = await listFollowersIds(env, id)
+        return json(req, { followers: ids })
+      }
+    }
+    // GET /social/following/:id
+    {
+      const m = sub.match(/^\/social\/following\/([^/]+)$/)
+      if (m && method === 'GET') {
+        const id = decodeURIComponent(m[1])
+        const ids = await listFollowingIds(env, id)
+        return json(req, { following: ids })
+      }
+    }
+
+    // profile comments storage
+    type PComment = { id: string; targetId: string; authorId: string; authorName?: string; content: string; createdAt: string; parentId?: string|null; deleted?: boolean; deletedAt?: string|null; deletedById?: string|null }
+    const C_KEY = (targetId: string, id: string) => `social:comment:${targetId}:${id}`
+    async function listComments(env: Env, targetId: string): Promise<PComment[]> {
+      const out: PComment[] = []
+      let cursor: string|undefined = undefined
+      const prefix = `social:comment:${targetId}:`
+      do {
+        const page = await env.AUTH_KV!.list({ prefix, cursor })
+        for (const k of page.keys) { const raw = await env.AUTH_KV!.get(k.name); if (!raw) continue; out.push(JSON.parse(raw) as PComment) }
+        cursor = page.list_complete ? undefined : page.cursor
+      } while (cursor)
+      out.sort((a,b)=> (a.createdAt < b.createdAt ? 1 : -1))
+      return out
+    }
+    // GET /profiles/:id/comments
+    {
+      const m = sub.match(/^\/profiles\/([^/]+)\/comments$/)
+      if (m && method === 'GET') {
+        const id = decodeURIComponent(m[1])
+        const list = await listComments(env, id)
+        return json(req, { comments: list })
+      }
+    }
+    // POST /profiles/:id/comments { content, parentId }
+    {
+      const m = sub.match(/^\/profiles\/([^/]+)\/comments$/)
+      if (m && method === 'POST') {
+        const s = await readSession(env, req); if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
+        const me = await getUserByIdKV(env, s.userId); if (!me) return json(req, { error:'unauthorized' }, { status: 401 })
+        const id = decodeURIComponent(m[1])
+        const body = await req.json().catch(()=> ({}))
+        const text = String(body.content||'').trim(); if (!text) return json(req, { error:'bad content' }, { status: 400 })
+        const parentId = body.parentId ? String(body.parentId) : null
+        const c: PComment = { id: crypto.randomUUID(), targetId: id, authorId: me.id, authorName: me.username, content: text, createdAt: new Date().toISOString(), parentId, deleted: false }
+        await env.AUTH_KV!.put(C_KEY(id, c.id), JSON.stringify(c))
+        return json(req, { comment: c })
+      }
+    }
+    // DELETE /profiles/:id/comments/:cid
+    {
+      const m = sub.match(/^\/profiles\/([^/]+)\/comments\/([^/]+)$/)
+      if (m && method === 'DELETE') {
+        const s = await readSession(env, req); if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
+        const me = await getUserByIdKV(env, s.userId); if (!me) return json(req, { error:'unauthorized' }, { status: 401 })
+        const targetId = decodeURIComponent(m[1]); const cid = decodeURIComponent(m[2])
+        const raw = await env.AUTH_KV!.get(C_KEY(targetId, cid)); if (!raw) return json(req, { error:'not found' }, { status: 404 })
+        const c = JSON.parse(raw) as PComment
+        const can = (c.authorId === me.id) || (targetId === me.id) || me.role==='developer' || me.role==='admin' || me.role==='moderator' || ((me.userNumber||0)===1)
+        if (!can) return json(req, { error:'forbidden' }, { status: 403 })
+        c.deleted = true; c.deletedAt = new Date().toISOString(); c.deletedById = me.id; c.content = ''
+        await env.AUTH_KV!.put(C_KEY(targetId, cid), JSON.stringify(c))
+        return json(req, { comment: c })
+      }
+    }
+
     // DELETE /invites/:code (admin/dev)
     {
       const m = sub.match(/^\/invites\/([^/]+)$/)
@@ -745,7 +998,8 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
         const s = await readSession(env, req)
         if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
         const me = await getUserByIdKV(env, s.userId)
-        if (!me || !((me.role==='admin'||me.role==='developer'||me.role==='moderator'))) return json(req, { error:'forbidden' }, { status: 403 })
+        const meIsOwner = ((me?.userNumber||0) === 1)
+        if (!me || !(meIsOwner || (me.role==='admin'||me.role==='developer'||me.role==='moderator'))) return json(req, { error:'forbidden' }, { status: 403 })
         const code = normalizeInvite(m[1])
         await env.AUTH_KV!.delete(INV(code))
         return json(req, { ok: true })
@@ -759,7 +1013,8 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
         const s = await readSession(env, req)
         if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
         const me = await getUserByIdKV(env, s.userId)
-        if (!me || !((me.role==='admin'||me.role==='developer'||me.role==='moderator'))) return json(req, { error:'forbidden' }, { status: 403 })
+        const meIsOwner = ((me?.userNumber||0) === 1)
+        if (!me || !(meIsOwner || (me.role==='admin'||me.role==='developer'||me.role==='moderator'))) return json(req, { error:'forbidden' }, { status: 403 })
         const id = m[1]
         const sec = await getSectionKV(env, id)
         if (!sec) return json(req, { error:'not found' }, { status: 404 })
@@ -789,7 +1044,8 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
         if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
         const me = await getUserByIdKV(env, s.userId)
         if (!me) return json(req, { error:'unauthorized' }, { status: 401 })
-        if (!(me.role==='admin'||me.role==='developer')) return json(req, { error:'forbidden' }, { status: 403 })
+        const meIsOwner = ((me?.userNumber||0) === 1)
+        if (!(meIsOwner || me.role==='admin'||me.role==='developer')) return json(req, { error:'forbidden' }, { status: 403 })
         const id = m[1]
         const raw = await env.AUTH_KV!.get(F_TOP(id))
         if (!raw) return json(req, { error:'not found' }, { status: 404 })
@@ -808,7 +1064,8 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
         const sss = await readSession(env, req)
         if (!sss) return json(req, { error:'unauthorized' }, { status: 401 })
         const me = await getUserByIdKV(env, sss.userId)
-        if (!me || !((me.role==='admin'||me.role==='developer'||me.role==='moderator'))) return json(req, { error:'forbidden' }, { status: 403 })
+        const meIsOwner2 = ((me?.userNumber||0) === 1)
+        if (!me || !(meIsOwner2 || (me.role==='admin'||me.role==='developer'||me.role==='moderator'))) return json(req, { error:'forbidden' }, { status: 403 })
         const id = mm[1]
         const u = await getUserByIdKV(env, id)
         if (!u) return json(req, { error:'not found' }, { status: 404 })
@@ -820,6 +1077,7 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
         u.bannedUntil = until
         await putUserKV(env, u)
         const { passwordHash: _1, salt: _2, ...pub } = u
+        ;(pub as any).owner = ((u.userNumber||0) === 1)
         return json(req, { user: pub })
       }
     }
@@ -830,13 +1088,15 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
         const sss = await readSession(env, req)
         if (!sss) return json(req, { error:'unauthorized' }, { status: 401 })
         const me = await getUserByIdKV(env, sss.userId)
-        if (!me || !((me.role==='admin'||me.role==='developer'||me.role==='moderator'))) return json(req, { error:'forbidden' }, { status: 403 })
+        const meIsOwner3 = ((me?.userNumber||0) === 1)
+        if (!me || !(meIsOwner3 || (me.role==='admin'||me.role==='developer'||me.role==='moderator'))) return json(req, { error:'forbidden' }, { status: 403 })
         const id = mm[1]
         const u = await getUserByIdKV(env, id)
         if (!u) return json(req, { error:'not found' }, { status: 404 })
         u.bannedUntil = null
         await putUserKV(env, u)
         const { passwordHash: _1, salt: _2, ...pub } = u
+        ;(pub as any).owner = ((u.userNumber||0) === 1)
         return json(req, { user: pub })
       }
     }
@@ -859,6 +1119,7 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
         u.mutedUntil = until
         await putUserKV(env, u)
         const { passwordHash: _1, salt: _2, ...pub } = u
+        ;(pub as any).owner = ((u.userNumber||0) === 1)
         return json(req, { user: pub })
       }
     }
@@ -876,6 +1137,7 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
         u.mutedUntil = null
         await putUserKV(env, u)
         const { passwordHash: _1, salt: _2, ...pub } = u
+        ;(pub as any).owner = ((u.userNumber||0) === 1)
         return json(req, { user: pub })
       }
     }
@@ -886,7 +1148,8 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
       const s = await readSession(env, req)
       if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
       const me = await getUserByIdKV(env, s.userId)
-      if (!me || !((me.role==='admin'||me.role==='developer'||me.role==='moderator'))) return json(req, { error:'forbidden' }, { status: 403 })
+      const meIsOwner4 = ((me?.userNumber||0) === 1)
+      if (!me || !(meIsOwner4 || (me.role==='admin'||me.role==='developer'||me.role==='moderator'))) return json(req, { error:'forbidden' }, { status: 403 })
       const all = await listInvitesKV(env)
       const visible = (me.role==='developer') ? all : all.filter(i => i.createdBy === me.id)
       const names = new Map<string, string>()
@@ -900,7 +1163,8 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
       const s = await readSession(env, req)
       if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
       const me = await getUserByIdKV(env, s.userId)
-      if (!me || !((me.role==='admin'||me.role==='developer'||me.role==='moderator'))) return json(req, { error:'forbidden' }, { status: 403 })
+      const meIsOwner = ((me?.userNumber||0) === 1)
+      if (!me || !(meIsOwner || (me.role==='admin'||me.role==='developer'||me.role==='moderator'))) return json(req, { error:'forbidden' }, { status: 403 })
       const body = await req.json().catch(()=> ({}))
       const want = Math.max(1, Math.min(20, Math.floor(Number(body.count)||1)))
       let allowed = want
@@ -949,6 +1213,7 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
         await putUserKV(env, u)
         const token = await createSession(env, u.id)
         const { passwordHash: _1, salt: _2, ...pub } = u
+        ;(pub as any).owner = ((u.userNumber||0) === 1)
         return json(req, { user: pub, token })
       } else {
         const userNumber = await nextUserNumber(env)
@@ -961,6 +1226,7 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
         await putUserKV(env, u)
         const token = await createSession(env, u.id)
         const { passwordHash: _1, salt: _2, ...pub } = u
+        ;(pub as any).owner = ((u.userNumber||0) === 1)
         return json(req, { user: pub, token })
       }
     }

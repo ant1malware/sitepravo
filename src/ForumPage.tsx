@@ -9,9 +9,11 @@ import {
   Role,
   type RemoteUser,
 } from "./store/authRemote";
-import { getForumSettings } from "./store/forumStore";
+// forum settings now controlled on server via authRemote
 import { listSections, listLatestPosts } from "./store/forumRemote";
 import { Shield, ChevronRight, Lock } from "lucide-react";
+import RecaptchaGate from "./components/RecaptchaGate";
+import { requestEmailCode, verifyEmailCode } from "./store/emailVerifyLocal";
 import ForumSubnav from "./ForumSubnav";
 
 function Badge({ role }: { role: Role }) {
@@ -49,6 +51,8 @@ function AuthGate({ onDone }: { onDone: () => void }) {
   const [remember, setRemember] = React.useState(true);
   const [err, setErr] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const [captchaToken, setCaptchaToken] = React.useState<string | null>(null);
+  const [otp, setOtp] = React.useState("");
 
   const ascii = /^[A-Za-z0-9_]{3,16}$/;
   const needInvite = true;
@@ -63,6 +67,8 @@ function AuthGate({ onDone }: { onDone: () => void }) {
           usernameOrEmail: nick.trim() || email.trim(),
           password: pass,
           remember,
+          otp: otp.trim() || undefined,
+          captchaToken,
         });
       } else {
         if (!ascii.test(nick.trim()))
@@ -75,6 +81,7 @@ function AuthGate({ onDone }: { onDone: () => void }) {
           password: pass || undefined,
           inviteCode: needInvite ? invite.trim() : "",
           remember,
+          captchaToken,
         } as any);
       }
       onDone();
@@ -132,6 +139,16 @@ function AuthGate({ onDone }: { onDone: () => void }) {
             disabled={busy}
             required
           />
+          {mode === "login" && (
+            <input
+              className="input"
+              placeholder="2FA код (если включено)"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              disabled={busy}
+            />
+          )}
+          <RecaptchaGate onToken={setCaptchaToken} />
           {err && <div style={{ color: "#ef4444", fontSize: 13 }}>{err}</div>}
           <div className="flex items-center gap-2 text-xs opacity-80">
             <label className="flex items-center gap-2">
@@ -160,6 +177,81 @@ function AuthGate({ onDone }: { onDone: () => void }) {
             </button>
           </div>
         </div>
+      </form>
+    </div>
+  );
+}
+
+// Extended auth gate with captcha, email verify and 2FA input
+function AuthGateX({ onDone }: { onDone: () => void }) {
+  const [mode, setMode] = React.useState<"login" | "signup">("login");
+  const [nick, setNick] = React.useState("");
+  const [email, setEmail] = React.useState("");
+  const [pass, setPass] = React.useState("");
+  const [invite, setInvite] = React.useState("");
+  const [remember, setRemember] = React.useState(true);
+  const [err, setErr] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const [captchaToken, setCaptchaToken] = React.useState<string | null>(null);
+  const [otp, setOtp] = React.useState("");
+  const [verifyMode, setVerifyMode] = React.useState<false | 'email'>(false);
+  const [verifyCode, setVerifyCode] = React.useState("");
+
+  const ascii = /^[A-Za-z0-9_]{3,16}$/;
+  const needInvite = true;
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr(null);
+    setBusy(true);
+    try {
+      if (mode === "login") {
+        await authenticateAccount({ usernameOrEmail: nick.trim() || email.trim(), password: pass, remember, otp: otp.trim() || undefined, captchaToken });
+        onDone();
+      } else {
+        if (!ascii.test(nick.trim())) throw new Error("Username: 3-16 chars (A-Z a-z 0-9 _)");
+        await registerAccount({ username: nick.trim(), email: email.trim(), password: pass || undefined, inviteCode: needInvite ? invite.trim() : "", remember, captchaToken } as any);
+        try { requestEmailCode(email.trim()); } catch {}
+        setVerifyMode('email');
+      }
+    } catch (e: any) {
+      setErr(e?.message || "Что-то пошло не так");
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[90] grid place-items-center bg-black/70 p-4">
+      <form onSubmit={submit} className="w-[min(560px,92vw)] card p-5">
+        <div className="flex items-center gap-2"><Lock size={18} /><b>{mode === 'login' ? 'Вход' : 'Регистрация'}</b></div>
+        {!verifyMode && (
+          <div className="grid gap-3 mt-3">
+            <input className="input" placeholder={mode === 'login' ? 'Логин или e-mail' : 'Логин (латиница/цифры/_ )'} value={nick} onChange={(e)=>setNick(e.target.value)} disabled={busy} required />
+            {mode === 'signup' && (<input className="input" placeholder="E-mail" value={email} onChange={(e)=>setEmail(e.target.value)} disabled={busy} required />)}
+            {mode === 'signup' && needInvite && (<input className="input" placeholder="Invite code" value={invite} onChange={(e)=>setInvite(e.target.value)} disabled={busy} required />)}
+            <input className="input" type="password" placeholder="Пароль" value={pass} onChange={(e)=>setPass(e.target.value)} disabled={busy} required />
+            {mode === 'login' && (<input className="input" placeholder="2FA код (если включено)" value={otp} onChange={(e)=>setOtp(e.target.value)} disabled={busy} />)}
+            <RecaptchaGate onToken={setCaptchaToken} />
+            {err && <div style={{ color: '#ef4444', fontSize: 13 }}>{err}</div>}
+            <div className="flex items-center gap-2 text-xs opacity-80">
+              <label className="flex items-center gap-2"><input type="checkbox" checked={remember} onChange={(e)=>setRemember(e.target.checked)} disabled={busy} />Запомнить меня</label>
+            </div>
+            <div className="flex gap-2">
+              <button className="btn btn-primary" type="submit" disabled={busy}>{mode === 'login' ? 'Войти' : 'Зарегистрироваться'}</button>
+              <button className="btn" type="button" onClick={()=>setMode(mode==='login'?'signup':'login')} disabled={busy}>{mode === 'login' ? 'Нет аккаунта? Регистрация' : 'Уже есть? Войти'}</button>
+            </div>
+          </div>
+        )}
+        {verifyMode === 'email' && (
+          <div className="grid gap-3 mt-3">
+            <div className="text-sm text-zinc-300">Мы отправили код подтверждения на {email}. Введите код ниже.</div>
+            <input className="input" placeholder="Код подтверждения" value={verifyCode} onChange={(e)=>setVerifyCode(e.target.value)} />
+            {!!err && <div style={{ color: '#ef4444', fontSize: 13 }}>{err}</div>}
+            <div className="flex gap-2">
+              <button type="button" className="btn btn-primary" onClick={() => { if (verifyEmailCode(email, verifyCode)) { setVerifyMode(false); onDone(); } else { setErr('Неверный код'); } }}>Подтвердить</button>
+              <button type="button" className="btn" onClick={() => { requestEmailCode(email); }}>Отправить код ещё раз</button>
+            </div>
+          </div>
+        )}
       </form>
     </div>
   );
@@ -266,14 +358,12 @@ export default function ForumPage() {
   if (!me)
     return (
       <>
-        <AuthGate onDone={() => force()} />
+        <AuthGateX onDone={() => force()} />
         <div style={{ minHeight: "100vh", background: "#0c0d12" }} />
       </>
     );
 
-  // settings (если нужен сайд-эффект/инициализация)
-  const settings = getForumSettings();
-  void settings;
+  // server settings available via getServerSettings() if needed
 
   return (
     <main
@@ -308,15 +398,6 @@ export default function ForumPage() {
           >
             Forum
           </h1>
-        </div>
-
-        <div className="grid gap-3">
-          <div className="card px-4 py-3">
-            Включите 2FA и безопасные методы входа — это важно.
-          </div>
-          <div className="card px-4 py-3">
-            Правила: соблюдайте уважение. Бан без предупреждений за спам/флуд.
-          </div>
         </div>
 
         {/* ======= SECTIONS + LATEST POSTS ======= */}

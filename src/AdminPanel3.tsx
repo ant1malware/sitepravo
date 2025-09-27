@@ -55,16 +55,15 @@ export default function AdminPanel3() {
   }, []);
 
   const role = me?.role as string | undefined;
+  const isOwner = !!me?.owner;
   const tabs: Array<typeof tab> = (() => {
-    if (role === "developer") {
+    if (isOwner || role === "developer") {
       return ["users", "sections", "topics", "invites", "maintenance"];
     }
     if (role === "admin") {
-      // Admins: moderation + limited invites
       return ["users", "topics", "invites"];
     }
     if (role === "moderator") {
-      // Moderators: mute/unmute + limited invites
       return ["users", "invites"];
     }
     return ["topics"];
@@ -83,7 +82,7 @@ export default function AdminPanel3() {
           </button>
         ))}
       </div>
-      {tab === "users" && <UsersTab meRole={role} meId={me?.id} />}
+      {tab === "users" && <UsersTab meRole={role} meId={me?.id} meOwner={isOwner} />}
       {tab === "sections" && <SectionsTab />}
       {tab === "topics" && <TopicsTab meRole={role} />}
       {tab === "invites" && (
@@ -95,7 +94,7 @@ export default function AdminPanel3() {
 }
 
 /* ===== Users ===== */
-function UsersTab({ meRole, meId }: { meRole?: string; meId?: string }) {
+function UsersTab({ meRole, meId, meOwner }: { meRole?: string; meId?: string; meOwner?: boolean }) {
   const [rows, setRows] = React.useState<any[]>([]);
 
   const load = React.useCallback(async () => {
@@ -110,10 +109,9 @@ function UsersTab({ meRole, meId }: { meRole?: string; meId?: string }) {
     load();
   }, [load]);
 
-  const canManageRoles = meRole === "developer";
-  const canBan = meRole === "developer" || meRole === "admin";
-  const canMute =
-    meRole === "developer" || meRole === "admin" || meRole === "moderator";
+  const canManageRoles = meOwner || meRole === "developer";
+  const canBan = meOwner || meRole === "developer" || meRole === "admin";
+  const canMute = meOwner || meRole === "developer" || meRole === "admin" || meRole === "moderator";
 
   const changeRole = async (id: string, role: Role) => {
     if (!canManageRoles) return;
@@ -174,9 +172,10 @@ function UsersTab({ meRole, meId }: { meRole?: string; meId?: string }) {
       </div>
       <div className="grid gap-2">
         {rows.map((u) => {
+          const isOwner = Number(u.userNumber || 0) === 1;
           const roleLabel = String(u.role || "user");
           const actions: React.ReactNode[] = [];
-          if (canMute) {
+          if (canMute && !isOwner) {
             actions.push(
               <button key="mute" className="btn" onClick={() => mute(u.id)}>
                 Mute
@@ -188,7 +187,7 @@ function UsersTab({ meRole, meId }: { meRole?: string; meId?: string }) {
               </button>
             );
           }
-          if (canBan) {
+          if (canBan && !isOwner) {
             actions.push(
               <button key="ban" className="btn" onClick={() => ban(u.id)}>
                 Ban
@@ -205,6 +204,7 @@ function UsersTab({ meRole, meId }: { meRole?: string; meId?: string }) {
           // - developer sees who invited anyone
           // - admin/moderator only see "invited by: you" for accounts they invited
           const invitedSnippet = (() => {
+            if (isOwner) return 'OWNER';
             if (meRole === "developer") {
               return u.invitedByName ? `invited by: ${u.invitedByName}` : "";
             }
@@ -222,10 +222,10 @@ function UsersTab({ meRole, meId }: { meRole?: string; meId?: string }) {
             >
               <div className="text-xs opacity-70">#{u.userNumber}</div>
               <div className="font-semibold">{u.username}</div>
-              <div className="text-sm opacity-80 truncate">{u.email}</div>
+              <div className="text-sm opacity-80 truncate">{(meOwner || meRole === 'developer') ? u.email : ''}</div>
               <div className="text-xs opacity-70">{invitedSnippet}</div>
               <div className="flex flex-wrap items-center justify-end gap-2">
-                {canManageRoles ? (
+                {(canManageRoles && !isOwner) || (isOwner && meId === u.id) ? (
                   <select
                     className="input"
                     value={u.role}
@@ -243,7 +243,7 @@ function UsersTab({ meRole, meId }: { meRole?: string; meId?: string }) {
                     className="rounded-full border px-2 py-1 text-xs uppercase tracking-wider"
                     style={{ borderColor: "var(--border)" }}
                   >
-                    {roleLabel}
+                    {isOwner ? 'OWNER' : roleLabel}
                   </span>
                 )}
                 {actions.length ? actions : null}
@@ -700,4 +700,3 @@ function MaintenanceTab() {
     </div>
   );
 }
-

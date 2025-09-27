@@ -19,6 +19,7 @@ import {
 
 import { asset } from './lib/asset';
 import LiquidGlass from './components/LiquidGlass';
+import { randomBase32, verifyTotp } from './lib/totp';
 
 import {
   applyDensity,
@@ -62,6 +63,10 @@ export default function SettingsPage() {
   const [radius, setRadius] = React.useState<Radius>(() => getRadius());
   const [glass, setGlass] = React.useState<number>(() => getGlass());
   const [animationsOn, setAnimationsOn] = React.useState<boolean>(() => getAnimationsOn());
+  // Security (local)
+  const [twoFAEnabled, setTwoFAEnabled] = React.useState<boolean>(() => (localStorage.getItem('forum:2fa_enabled') === '1'));
+  const [twoFASecret, setTwoFASecret] = React.useState<string>(() => localStorage.getItem('forum:2fa_secret') || '');
+  const [twoFATestCode, setTwoFATestCode] = React.useState('');
 
   type BgSel = 'none' | BgKey;
   const [bgSel, setBgSel] = React.useState<BgSel>(() => ((localStorage.getItem('bg_preset') as BgSel) || 'none'));
@@ -111,6 +116,24 @@ export default function SettingsPage() {
     setGlassFallback(glass);
     setAccentFallback(accent);
   }, []);
+
+  // 2FA helpers
+  const onEnable2FA = () => {
+    const secret = randomBase32(20);
+    setTwoFASecret(secret);
+    try { localStorage.setItem('forum:2fa_secret', secret); } catch {}
+  };
+  const onConfirm2FA = async () => {
+    try {
+      const ok = await verifyTotp(twoFASecret, twoFATestCode.trim());
+      if (!ok) { alert('Неверный код'); return; }
+      setTwoFAEnabled(true); localStorage.setItem('forum:2fa_enabled', '1'); alert('2FA включена');
+    } catch { alert('Ошибка проверки 2FA'); }
+  };
+  const onDisable2FA = () => {
+    setTwoFAEnabled(false);
+    try { localStorage.removeItem('forum:2fa_enabled'); } catch {}
+  };
 
   // Theme / style / background handlers
   const onThemeSystem = () => {
@@ -321,6 +344,40 @@ export default function SettingsPage() {
                   <button type="button" className={`settings-seg__item ${!animationsOn ? 'is-active' : ''}`} onClick={() => onAnimToggle(false)}>Выключены</button>
                 </div>
                 <p className="settings-help">Отключает плавучесть и блики стекла.</p>
+              </div>
+            </div>
+          </Panel>
+
+          <Panel title="Безопасность" desc="Антиспам и двухфакторная защита (клиентская)">
+            <div className="settings-field">
+              <span className="settings-label">Двухфакторная аутентификация</span>
+              {!twoFAEnabled ? (
+                <div className="grid gap-2">
+                  <button type="button" className="btn" onClick={onEnable2FA}>Сгенерировать секрет</button>
+                  {twoFASecret && (
+                    <>
+                      <div className="text-xs opacity-80">Секрет (введите в приложение-аутентификатор):</div>
+                      <div className="rounded-xl bg-white/5 p-2 text-sm select-all">{twoFASecret}</div>
+                      <div className="flex items-center gap-2">
+                        <input className="input w-40" placeholder="Код из приложения" value={twoFATestCode} onChange={(e)=>setTwoFATestCode(e.target.value)} />
+                        <button type="button" className="btn btn-primary" onClick={onConfirm2FA}>Подтвердить</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">2FA включена</span>
+                  <button type="button" className="btn" onClick={onDisable2FA}>Выключить</button>
+                </div>
+              )}
+            </div>
+
+            <div className="settings-field">
+              <span className="settings-label">Отключить трекинг</span>
+              <div className="settings-seg">
+                <button type="button" className="settings-seg__item" onClick={() => { try { localStorage.setItem('telemetry_disabled', '1'); alert('Трекинг отключен'); } catch {} }}>Отключить</button>
+                <button type="button" className="settings-seg__item" onClick={() => { try { localStorage.removeItem('telemetry_disabled'); alert('Трекинг включен'); } catch {} }}>Включить</button>
               </div>
             </div>
           </Panel>

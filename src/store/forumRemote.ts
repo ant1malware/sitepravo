@@ -36,7 +36,7 @@ async function api(path: string, init: RequestInit = {}) {
 
 export type Section = { id: string; title: string; description?: string; icon?: string; createdAt: string; order: number; moderatorIds: string[]; topicCount: number; postCount: number };
 export type Topic   = { id: string; sectionId: string; title: string; authorId: string; createdAt: string; updatedAt: string; pinned: boolean; locked: boolean; viewCount: number; replyCount: number; lastPostAt: string; lastPostBy: string };
-export type Post    = { id: string; topicId: string; authorId: string; content: string; createdAt: string; editedAt?: string|null };
+export type Post    = { id: string; topicId: string; authorId: string; content: string; createdAt: string; editedAt?: string|null; pinned?: boolean; likes?: string[] };
 
 export async function listSections(): Promise<Section[]> {
   const { sections } = await api('/sections');
@@ -67,6 +67,9 @@ export async function updateTopic(id: string, patch: Partial<Topic>): Promise<To
   const { topic } = await api(`/topics/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
   return topic as Topic;
 }
+export async function getTopic(id: string): Promise<Topic | null> {
+  try { const { topic } = await api(`/topics/${id}`); return topic as Topic; } catch { return null; }
+}
 export async function moveTopic(id: string, to: string): Promise<Topic> {
   const { topic } = await api(`/topics/${id}/move`, { method: 'POST', body: JSON.stringify({ to }) });
   return topic as Topic;
@@ -81,6 +84,17 @@ export async function listPosts(topicId: string): Promise<Post[]> {
 }
 export async function createPost(input: { topicId: string; content: string }): Promise<Post> {
   const { post } = await api('/posts', { method: 'POST', body: JSON.stringify(input) });
+  return post as Post;
+}
+export async function updatePost(id: string, patch: Partial<Post>): Promise<Post> {
+  const { post } = await api(`/posts/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  return post as Post;
+}
+export async function deletePost(id: string): Promise<void> {
+  await api(`/posts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+export async function toggleLikePost(id: string): Promise<Post> {
+  const { post } = await api(`/posts/${encodeURIComponent(id)}/like`, { method: 'POST' });
   return post as Post;
 }
 export async function listLatestPosts(limit = 8): Promise<Post[]> {

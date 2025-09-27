@@ -1,4 +1,4 @@
-// Lightweight social features stored in localStorage
+// Lightweight social features stored in localStorage with optional remote sync
 // - profile follows
 // - profile comments (threads, edit, soft-delete, pagination)
 // Backward compatible with previous exports.
@@ -108,7 +108,45 @@ function saveFollows(edges: FollowEdge[]) {
   dispatchChange({ scope: "follows" });
 }
 
+// Remote helpers
+function getApiBase(): string {
+  try {
+    const url = new URL(window.location.href);
+    const fromQuery = url.searchParams.get('api');
+    if (fromQuery) {
+      localStorage.setItem('forum:api_base', fromQuery);
+      try { url.searchParams.delete('api'); history.replaceState({}, '', url.toString()); } catch {}
+    }
+    const stored = localStorage.getItem('forum:api_base');
+    if (stored) return stored;
+  } catch {}
+  const env = (import.meta as any).env?.VITE_API_BASE;
+  if (env) return env;
+  return '';
+}
+const BASE: string = getApiBase();
+function readToken(): string | null { try { return localStorage.getItem('forum:token') ?? sessionStorage.getItem('forum:token'); } catch { return null; } }
+async function remote(path: string, init: RequestInit = {}) {
+  const token = readToken();
+  const headers: any = { 'Content-Type': 'application/json', ...(init.headers||{}) };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${BASE}${path}`, { ...init, headers });
+  const text = await res.text(); let data: any = {};
+  try { data = text ? JSON.parse(text) : {}; } catch { data = { error: text || res.statusText }; }
+  if (!res.ok) throw new Error(data?.error || `${res.status} ${res.statusText}`);
+  return data;
+}
+function canRemote() { return !!BASE && !!readToken(); }
+
 export function listFollowers(targetId: string): string[] {
+  if (canRemote()) {
+    try {
+      const cache: Map<string, string[]> = (window as any).__socialRemoteFollowersCache || ((window as any).__socialRemoteFollowersCache = new Map());
+      const cached = cache.get(targetId);
+      if (cached) return cached;
+      remote(`/social/followers/${encodeURIComponent(targetId)}`).then((d:any)=>{ try { cache.set(targetId, Array.isArray(d.followers)? d.followers : []); dispatchChange({ scope:'follows', targetId }); } catch {} });
+    } catch {}
+  }
   return readFollows().filter(e => e.targetId === targetId).map(e => e.followerId);
 }
 export function listFollowing(followerId: string): string[] {
@@ -122,16 +160,26 @@ export function followingCount(followerId: string): number {
 }
 export function isFollowing(followerId: string | undefined | null, targetId: string): boolean {
   if (!followerId) return false;
+  if (canRemote()) {
+    try {
+      const cache: Map<string, string[]> = (window as any).__socialRemoteFollowingCache || ((window as any).__socialRemoteFollowingCache = new Map());
+      const arr = cache.get(followerId);
+      if (arr) return arr.includes(targetId);
+      remote(`/social/following/${encodeURIComponent(followerId)}`).then((d:any)=>{ try { cache.set(followerId, Array.isArray(d.following)? d.following : []); dispatchChange({ scope:'follows', followerId }); } catch {} });
+    } catch {}
+  }
   return readFollows().some(e => e.followerId === followerId && e.targetId === targetId);
 }
 export function follow(followerId: string, targetId: string) {
   if (!followerId || !targetId || followerId === targetId) return;
+  if (canRemote()) { try { remote('/social/follow', { method:'POST', body: JSON.stringify({ targetId }) }); } catch {} }
   const edges = readFollows();
   if (edges.some(e => e.followerId === followerId && e.targetId === targetId)) return;
   edges.push({ followerId, targetId, createdAt: nowISO() });
   saveFollows(edges);
 }
 export function unfollow(followerId: string, targetId: string) {
+  if (canRemote()) { try { remote('/social/unfollow', { method:'POST', body: JSON.stringify({ targetId }) }); } catch {} }
   const edges = readFollows().filter(e => !(e.followerId === followerId && e.targetId === targetId));
   saveFollows(edges);
 }
@@ -165,6 +213,14 @@ function migrateComments(arr: any[]): ProfileComment[] {
 }
 
 function readComments(targetId: string): ProfileComment[] {
+  if (canRemote()) {
+    try {
+      const cache: Map<string, ProfileComment[]> = (window as any).__socialRemoteCommentsCache || ((window as any).__socialRemoteCommentsCache = new Map());
+      const cached = cache.get(targetId);
+      if (cached) return cached;
+      remote(`/profiles/${encodeURIComponent(targetId)}/comments`).then((d:any)=>{ try { const arr = migrateComments(Array.isArray(d.comments)? d.comments : []); cache.set(targetId, arr); dispatchChange({ scope:'comments', targetId }); } catch {} });
+    } catch {}
+  }
   const raw = storage.getItem(commentsKey(targetId));
   const arr = safeParse<ProfileComment[]>(raw, []);
   return migrateComments(arr);
@@ -211,7 +267,15 @@ export function addProfileComment(
   const trimmed = (content ?? "").trim();
   if (!trimmed) throw new Error("Comment is empty");
   if (trimmed.length > MAX_LEN) throw new Error(`Comment too long (${trimmed.length} > ${MAX_LEN})`);
-  if (!canPost(targetId, authorId)) throw new Error("You are posting too fast. Please wait a bit.");
+  if (!canRemote() && !canPost(targetId, authorId)) throw new Error("You are posting too fast. Please wait a bit.");
+
+  if (canRemote()) {
+    try {
+      remote(`/profiles/${encodeURIComponent(targetId)}/comments`, { method:'POST', body: JSON.stringify({ content: trimmed, parentId: opts?.parentId || null }) })
+        .then((d:any)=>{ try { const cache: Map<string, ProfileComment[]> = (window as any).__socialRemoteCommentsCache; if (cache) { const list = cache.get(targetId) || []; const added = migrateComments(Array.isArray(d.comment) ? d.comment : [d.comment]); cache.set(targetId, [ ...added, ...list ]); dispatchChange({ scope:'comments', targetId }); } } catch {} })
+        .catch(()=>{})
+    } catch {}
+  }
 
   // parent check if reply
   if (opts?.parentId) {
@@ -274,6 +338,7 @@ export function editProfileComment(
 
 // Soft delete (keeps thread). Author OR profile owner can delete.
 export function removeProfileComment(targetId: string, commentId: string, byUserId: string) {
+  if (canRemote()) { try { remote(`/profiles/${encodeURIComponent(targetId)}/comments/${encodeURIComponent(commentId)}`, { method:'DELETE' }); } catch {} }
   const list = readComments(targetId);
   const i = list.findIndex(c => c.id === commentId);
   if (i < 0) return;
@@ -341,4 +406,34 @@ export function getCommentThread(targetId: string, rootId: string | null = null,
 export function commentCount(targetId: string, includeDeleted = false): number {
   const arr = readComments(targetId);
   return includeDeleted ? arr.length : arr.filter(c => !c.deleted).length;
+}
+
+// ---------- REACTIONS (local-only) ----------
+export type Reaction = 'like' | 'smile' | 'useful';
+type CommentReactions = { counts: Record<Reaction, number>; byUser: Record<string, Reaction | undefined> };
+type ReactionState = Record<string, CommentReactions>; // key: commentId
+
+function reactKey(targetId: string) { return `${NS}comment_reactions:${targetId}`; }
+function readReacts(targetId: string): ReactionState { return safeParse<ReactionState>(storage.getItem(reactKey(targetId)), {}); }
+function saveReacts(targetId: string, data: ReactionState) { try { storage.setItem(reactKey(targetId), JSON.stringify(data)); } catch {} dispatchChange({ scope: 'reactions', targetId }); }
+
+export function listReactions(targetId: string): ReactionState { return readReacts(targetId); }
+export function getUserReaction(targetId: string, commentId: string, userId: string): Reaction | undefined {
+  return readReacts(targetId)[commentId]?.byUser?.[userId];
+}
+export function toggleReaction(targetId: string, commentId: string, userId: string, reaction: Reaction): CommentReactions {
+  const state = readReacts(targetId);
+  const entry: CommentReactions = state[commentId] || { counts: { like: 0, smile: 0, useful: 0 }, byUser: {} };
+  const prev = entry.byUser[userId];
+  if (prev === reaction) {
+    entry.byUser[userId] = undefined;
+    entry.counts[reaction] = Math.max(0, (entry.counts[reaction] || 0) - 1);
+  } else {
+    if (prev) entry.counts[prev] = Math.max(0, (entry.counts[prev] || 0) - 1);
+    entry.byUser[userId] = reaction;
+    entry.counts[reaction] = (entry.counts[reaction] || 0) + 1;
+  }
+  state[commentId] = entry;
+  saveReacts(targetId, state);
+  return entry;
 }

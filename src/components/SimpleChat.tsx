@@ -5,7 +5,6 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { getSessionAccount as getLocalSession, isMuted } from '../store/forumStore';
 import { getSessionAccount as getRemoteSession } from '../store/authRemote';
 
 type ChatMessage = { id: string; author: string; text: string; ts: number };
@@ -366,7 +365,11 @@ export default function SimpleChat({
       let uname: string | null = null;
       try { const me = await getRemoteSession(); if (me?.username) uname = me.username; } catch {}
       if (!uname) {
-        try { const meLocal = getLocalSession(); if ((meLocal as any)?.username) uname = (meLocal as any).username; } catch {}
+        try {
+          const raw = localStorage.getItem('forum:session') || sessionStorage.getItem('forum:session');
+          const ss = raw ? JSON.parse(raw) : null;
+          if (ss?.username) uname = ss.username;
+        } catch {}
       }
       if (uname) {
         setNick(uname);
@@ -646,8 +649,12 @@ export default function SimpleChat({
     // модалку НЕ закрываем — дождёмся system.name от сервера
   }
 
-  const me = React.useMemo(() => { try { return getLocalSession(); } catch { return null; } }, []);
-  const muted = React.useMemo(() => isMuted(me as any), [me]);
+  const [meRemote, setMeRemote] = React.useState<any|null>(null);
+  React.useEffect(() => { (async () => { try { setMeRemote(await getRemoteSession()); } catch { setMeRemote(null); } })(); }, []);
+  const muted = React.useMemo(() => {
+    const until = meRemote?.mutedUntil ? Date.parse(meRemote.mutedUntil as any) : 0;
+    return !!until && until > Date.now();
+  }, [meRemote]);
 
   function send() {
     const raw = input.replace(/\r/g, '');
