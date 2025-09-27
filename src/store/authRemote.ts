@@ -44,7 +44,7 @@ export type RemoteProfile = {
   accentFrom?: string;
   accentTo?: string;
   badges?: string[];
-  privacy?: { showEmail?: boolean; showStats?: boolean };
+  privacy?: { showEmail?: boolean; showStats?: boolean; showLinks?: boolean; allowComments?: boolean; showFollowers?: boolean };
 };
 export type Invite = {
   code: string;

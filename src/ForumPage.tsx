@@ -11,7 +11,7 @@ import {
 } from "./store/authRemote";
 import { getForumSettings } from "./store/forumStore";
 import { listSections, listLatestPosts } from "./store/forumRemote";
-import { Shield, Search, Bell, ChevronRight, Lock } from "lucide-react";
+import { Shield, ChevronRight, Lock } from "lucide-react";
 import ForumSubnav from "./ForumSubnav";
 
 function Badge({ role }: { role: Role }) {
@@ -186,32 +186,13 @@ function Header({ me, onLogout }: { me: RemoteUser; onLogout: () => void }) {
             <div className="text-sm font-semibold">Правительство</div>
           </div>
         </Link>
-        <div className="mx-4 hidden flex-1 items-center justify-center sm:flex">
-          <label
-            className="relative flex w-full max-w-xl items-center gap-2 rounded-full border px-4 py-2 text-sm shadow-sm"
-            style={{ borderColor: "var(--border)" }}
-          >
-            <Search size={16} />
-            <input
-              placeholder="Поиск"
-              className="w-full bg-transparent outline-none"
-              style={{ color: "var(--text-1)" }}
-            />
-          </label>
-        </div>
-        <button
-          className="relative grid h-10 w-10 place-items-center rounded-xl border card"
-          title="Уведомления"
-        >
-          <Bell size={16} />
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500" />
-        </button>
+        {/* Admin shortcut restored for privileged roles */}
         {(me.role === "admin" || me.role === "developer" || me.role === "moderator") && (
           <Link to="/forum/admin" className="ml-2 btn">
             Admin
           </Link>
         )}
-        <Link to="/forum/members" className="ml-2 btn">Members</Link>
+        {/* Removed: search, notifications, members */}
         <Link
           to={`/forum/profile/${me.username}`}
           className="ml-2 flex items-center gap-2 rounded-xl border px-3 py-2 card"
@@ -220,9 +201,7 @@ function Header({ me, onLogout }: { me: RemoteUser; onLogout: () => void }) {
           <div className="text-sm font-semibold">{me.username}</div>
           <div className="border-l pl-2 text-xs opacity-70">#{me.userNumber}</div>
         </Link>
-        <button onClick={onLogout} className="ml-2 text-xs btn">
-          Выйти
-        </button>
+        {/* Removed: logout button */}
       </div>
     </header>
   );

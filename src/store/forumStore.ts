@@ -28,7 +28,7 @@ export type AccountProfile = {
   accentFrom?: string;
   accentTo?: string;
   badges?: string[];
-  privacy?: { showEmail: boolean; showStats: boolean };
+  privacy?: { showEmail: boolean; showStats: boolean; showLinks?: boolean; allowComments?: boolean; showFollowers?: boolean };
 };
 
 export type Account = {
@@ -273,7 +273,7 @@ function seedDemoData() {
       accentFrom: "#f472b6",
       accentTo: "#c084fc",
       badges: ["Moderator"],
-      privacy: { showEmail: false, showStats: true },
+      privacy: { showEmail: false, showStats: true, showLinks: true, allowComments: true, showFollowers: true },
     },
     bans: null,
     mutes: null,
@@ -294,7 +294,7 @@ function seedDemoData() {
       accentFrom: "#38bdf8",
       accentTo: "#a855f7",
       badges: ["Early"],
-      privacy: { showEmail: false, showStats: true },
+      privacy: { showEmail: false, showStats: true, showLinks: true, allowComments: true, showFollowers: true },
     },
     bans: null,
     mutes: null,
@@ -754,7 +754,7 @@ export function registerAccount({
       accentFrom: "#8b5cf6",
       accentTo: "#0ea5e9",
       badges: [],
-      privacy: { showEmail: false, showStats: true },
+      privacy: { showEmail: false, showStats: true, showLinks: true, allowComments: true, showFollowers: true },
     },
     bans: null,
     mutes: null,
@@ -825,6 +825,9 @@ export function updateAccountProfile(id: string, profile: AccountProfile) {
       privacy: {
         showEmail: profile.privacy?.showEmail ?? accounts[idx].profile.privacy?.showEmail ?? false,
         showStats: profile.privacy?.showStats ?? accounts[idx].profile.privacy?.showStats ?? true,
+        showLinks: profile.privacy?.showLinks ?? accounts[idx].profile.privacy?.showLinks ?? true,
+        allowComments: profile.privacy?.allowComments ?? accounts[idx].profile.privacy?.allowComments ?? true,
+        showFollowers: profile.privacy?.showFollowers ?? accounts[idx].profile.privacy?.showFollowers ?? true,
       },
     },
   };
