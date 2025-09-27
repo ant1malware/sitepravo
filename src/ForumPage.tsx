@@ -10,11 +10,29 @@ import {
   type RemoteUser,
 } from "./store/authRemote";
 // forum settings now controlled on server via authRemote
-import { listSections, listLatestPosts } from "./store/forumRemote";
-import { Shield, ChevronRight, Lock } from "lucide-react";
+import {
+  listSections,
+  listLatestPosts,
+  listTopics,
+  type Section,
+  type Topic,
+  type Post,
+} from "./store/forumRemote";
+import {
+  Shield,
+  ChevronRight,
+  Lock,
+  LogOut,
+  Search,
+  MessageCircle,
+  Users,
+  BarChart3,
+  Clock,
+} from "lucide-react";
 import RecaptchaGate from "./components/RecaptchaGate";
 import { requestEmailCode, verifyEmailCode } from "./store/emailVerifyLocal";
 import ForumSubnav from "./ForumSubnav";
+import { formatRelativeDate } from "./utils/time";
 
 function Badge({ role }: { role: Role }) {
   const map: Record<Role, { color: string; text: string }> = {
@@ -261,9 +279,9 @@ function Header({ me, onLogout }: { me: RemoteUser; onLogout: () => void }) {
   return (
     <header
       className="sticky top-0 z-50 border-b backdrop-blur"
-      style={{ background: "rgba(10,10,14,.6)", borderColor: "var(--border)" }}
+      style={{ background: "rgba(10,10,14,.7)", borderColor: "var(--border)" }}
     >
-      <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
         <Link to="/forum" className="flex items-center gap-3">
           <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[color:var(--accent)]/20 text-[color:var(--accent)] shadow">
             <Shield size={18} />
@@ -278,22 +296,33 @@ function Header({ me, onLogout }: { me: RemoteUser; onLogout: () => void }) {
             <div className="text-sm font-semibold">Правительство</div>
           </div>
         </Link>
-        {/* Admin shortcut restored for privileged roles */}
         {(me.role === "admin" || me.role === "developer" || me.role === "moderator") && (
-          <Link to="/forum/admin" className="ml-2 btn">
-            Admin
+          <Link to="/forum/admin" className="btn ml-2">
+            Панель
           </Link>
         )}
-        {/* Removed: search, notifications, members */}
-        <Link
-          to={`/forum/profile/${me.username}`}
-          className="ml-2 flex items-center gap-2 rounded-xl border px-3 py-2 card"
-        >
-          <Badge role={me.role} />
-          <div className="text-sm font-semibold">{me.username}</div>
-          <div className="border-l pl-2 text-xs opacity-70">#{me.userNumber}</div>
-        </Link>
-        {/* Removed: logout button */}
+        <div className="ml-auto flex flex-wrap items-center gap-3">
+          <Link
+            to={`/forum/profile/${me.username}`}
+            className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 shadow-sm transition hover:border-[color:var(--accent)]/60"
+          >
+            <div className="hidden text-right text-xs uppercase tracking-[0.24em] text-[color:var(--text-2)] sm:block">
+              Ваш профиль
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge role={me.role} />
+              <div className="text-sm font-semibold">{me.username}</div>
+            </div>
+            <div className="hidden border-l pl-2 text-xs opacity-70 sm:block">#{me.userNumber}</div>
+          </Link>
+          <button
+            className="btn flex items-center gap-2"
+            onClick={onLogout}
+            type="button"
+          >
+            <LogOut size={16} /> Выйти
+          </button>
+        </div>
       </div>
     </header>
   );
@@ -302,8 +331,10 @@ function Header({ me, onLogout }: { me: RemoteUser; onLogout: () => void }) {
 export default function ForumPage() {
   const [, force] = React.useReducer((x) => x + 1, 0);
   const [me, setMe] = React.useState<RemoteUser | null | undefined>(undefined);
-  const [sectionsState, setSectionsState] = React.useState<any[]>([]);
-  const [latestPosts, setLatestPosts] = React.useState<any[]>([]);
+  const [sectionsState, setSectionsState] = React.useState<Section[]>([]);
+  const [topicsState, setTopicsState] = React.useState<Topic[]>([]);
+  const [latestPosts, setLatestPosts] = React.useState<Post[]>([]);
+  const [search, setSearch] = React.useState("");
 
   // session
   React.useEffect(() => {
@@ -333,18 +364,21 @@ export default function ForumPage() {
     let alive = true;
     (async () => {
       try {
-        const [sections, posts] = await Promise.all([
+        const [sections, posts, topics] = await Promise.all([
           listSections(),
-          listLatestPosts(8),
+          listLatestPosts(12),
+          listTopics(),
         ]);
         if (alive) {
           setSectionsState(Array.isArray(sections) ? sections : []);
           setLatestPosts(Array.isArray(posts) ? posts : []);
+          setTopicsState(Array.isArray(topics) ? topics : []);
         }
       } catch {
         if (alive) {
           setSectionsState([]);
           setLatestPosts([]);
+          setTopicsState([]);
         }
       }
     })();
@@ -352,6 +386,75 @@ export default function ForumPage() {
       alive = false;
     };
   }, [me]);
+
+  const topicsById = React.useMemo(() => {
+    const map = new Map<string, Topic>();
+    for (const topic of topicsState || []) {
+      if (topic?.id) map.set(topic.id, topic);
+    }
+    return map;
+  }, [topicsState]);
+
+  const lastActivityBySection = React.useMemo(() => {
+    const map = new Map<string, { topicId: string; topicTitle: string; when: string | null; by: string | null; replies: number }>();
+    for (const topic of topicsState || []) {
+      if (!topic?.sectionId) continue;
+      const when = topic.lastPostAt || topic.updatedAt || topic.createdAt || null;
+      const prev = map.get(topic.sectionId);
+      const whenTs = when ? new Date(when).getTime() : 0;
+      const prevTs = prev?.when ? new Date(prev.when).getTime() : 0;
+      if (!prev || whenTs >= prevTs) {
+        map.set(topic.sectionId, {
+          topicId: topic.id,
+          topicTitle: topic.title,
+          when,
+          by: topic.lastPostBy || topic.authorId || null,
+          replies: topic.replyCount ?? 0,
+        });
+      }
+    }
+    return map;
+  }, [topicsState]);
+
+  const sectionTotals = React.useMemo(
+    () =>
+      (sectionsState || []).reduce(
+        (acc, section) => {
+          acc.sections += 1;
+          acc.topics += section.topicCount ?? 0;
+          acc.posts += section.postCount ?? 0;
+          return acc;
+        },
+        { sections: 0, topics: 0, posts: 0 }
+      ),
+    [sectionsState]
+  );
+
+  const filteredSections = React.useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const list = Array.isArray(sectionsState) ? [...sectionsState] : [];
+    const result = query
+      ? list.filter((section) => {
+          const title = section.title?.toLowerCase?.() ?? "";
+          const desc = section.description?.toLowerCase?.() ?? "";
+          return title.includes(query) || desc.includes(query);
+        })
+      : list;
+    return result.sort((a, b) => {
+      const orderDiff = (a.order ?? 0) - (b.order ?? 0);
+      if (orderDiff !== 0) return orderDiff;
+      return a.title.localeCompare(b.title);
+    });
+  }, [sectionsState, search]);
+
+  const enrichedLatestPosts = React.useMemo(
+    () =>
+      (latestPosts || []).map((post) => ({
+        post,
+        topic: post?.topicId ? topicsById.get(post.topicId) || null : null,
+      })),
+    [latestPosts, topicsById]
+  );
 
   if (me === undefined)
     return <div style={{ minHeight: "100vh", background: "#0c0d12" }} />;
@@ -381,102 +484,227 @@ export default function ForumPage() {
         }}
       />
 
-      <div className="mx-auto w-full max-w-6xl px-4 py-6">
+      <div className="mx-auto w-full max-w-6xl space-y-8 px-4 py-6">
         <ForumSubnav />
-        <div className="relative mb-6 overflow-hidden card">
-          <h1
-            className="select-none py-10 text-center font-black tracking-[0.16em]"
-            style={{
-              fontSize: "clamp(64px,12vw,140px)",
-              lineHeight: 1,
-              background:
-                "linear-gradient(180deg,#fff,#d1c3ff 38%,#8b5cf6 60%,rgba(255,255,255,.7))",
-              WebkitBackgroundClip: "text",
-              color: "transparent",
-              textShadow: "0 18px 80px rgba(139,92,246,.35)",
-            }}
-          >
-            Forum
-          </h1>
-        </div>
 
-        {/* ======= SECTIONS + LATEST POSTS ======= */}
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1.45fr_.85fr]">
-          {/* SECTIONS */}
-          <div className="grid gap-4">
-            <div
-              className="text-[11px] uppercase tracking-[0.32em]"
-              style={{ color: "var(--text-2)" }}
-            >
-              SECTIONS
-            </div>
-
-            {(Array.isArray(sectionsState) ? sectionsState : []).map(
-              (s: any) => (
-                <Link
-                  key={s.id}
-                  to={`/forum/section/${s.id}`}
-                  className="card p-4"
-                >
-                  <div className="font-semibold flex items-center gap-2">
-                    <ChevronRight size={16} />
-                    {s.title}
-                  </div>
-                  {s.description && (
-                    <div className="text-sm opacity-70 mt-1">
-                      {s.description}
-                    </div>
-                  )}
-                </Link>
-              )
-            )}
-
-            {!Array.isArray(sectionsState) || sectionsState.length === 0 ? (
-              <div className="card p-4 text-sm opacity-70">Нет разделов</div>
-            ) : null}
-          </div>
-
-          {/* LATEST POSTS */}
-          <aside className="grid content-start gap-4">
-            <div className="card flex items-center justify-between px-3 py-2">
-              <div className="text-xs uppercase tracking-[0.28em]">
-                LATEST POSTS
-              </div>
-            </div>
-
-            {(Array.isArray(latestPosts) ? latestPosts : []).map((p: any) => (
-              <div key={p.id} className="block card px-3 py-3">
-                <div className="relative pl-4">
-                  <span
-                    className="absolute left-0 top-1.5 h-2 w-2 rounded-full"
-                    style={{ background: "#22d3ee" }}
-                  />
-                  <div className="font-semibold">
-                    {p.title || "Пост"}
-                  </div>
-                  <div className="text-xs" style={{ color: "var(--text-2)" }}>
-                    {p.createdAt
-                      ? new Date(p.createdAt).toLocaleString()
-                      : ""}
-                  </div>
+        <section className="grid gap-6 lg:grid-cols-[1.65fr_1fr]">
+          <div className="card overflow-hidden">
+            <div className="relative overflow-hidden rounded-[18px] bg-gradient-to-br from-white/10 via-white/5 to-transparent">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.25),transparent_55%)]" />
+              <div className="relative flex flex-col gap-4 px-6 py-8">
+                <div className="text-[11px] uppercase tracking-[0.32em] text-[color:var(--text-2)]">
+                  Добро пожаловать
+                </div>
+                <h1 className="text-3xl font-black leading-tight sm:text-4xl">
+                  Форум Правительства
+                </h1>
+                <p className="max-w-2xl text-sm text-slate-300/80">
+                  Обсуждайте реформы, делитесь инициативами и находите союзников. Разделы ниже помогут быстро перейти к нужной теме.
+                </p>
+                <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                  <Link
+                    to={`/forum/profile/${me.username}`}
+                    className="btn btn-primary flex items-center justify-center gap-2"
+                  >
+                    <MessageCircle size={16} /> Мои обсуждения
+                  </Link>
+                  <Link
+                    to="/forum/questions"
+                    className="btn flex items-center justify-center gap-2"
+                  >
+                    <BarChart3 size={16} /> Вопросы и ответы
+                  </Link>
+                  <Link
+                    to="/forum/members"
+                    className="btn flex items-center justify-center gap-2"
+                  >
+                    <Users size={16} /> Участники форума
+                  </Link>
+                  <Link to="/settings" className="btn flex items-center justify-center gap-2">
+                    <Shield size={16} /> Настройки профиля
+                  </Link>
                 </div>
               </div>
-            ))}
+            </div>
+          </div>
 
-            {!Array.isArray(latestPosts) || latestPosts.length === 0 ? (
-              <div className="card p-3 text-sm opacity-70">
-                Постов пока нет
+          <div className="grid gap-4">
+            <div className="card p-5">
+              <div className="text-[11px] uppercase tracking-[0.32em] text-[color:var(--text-2)]">
+                Поиск по форуму
               </div>
-            ) : null}
-          </aside>
-        </div>
-        {/* ======= /SECTIONS + LATEST POSTS ======= */}
+              <label className="relative mt-3 block">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="input w-full pl-10"
+                  placeholder="Найдите раздел или обсуждение"
+                />
+              </label>
+              <div className="mt-3 text-xs text-slate-400">
+                Поиск выполняется моментально по заголовкам и описаниям разделов.
+              </div>
+            </div>
 
-        <div className="mt-8 card">
-          <div
-            className="border-b px-4 py-2 text-xs uppercase tracking-[0.3em]"
-            style={{ borderColor: "var(--border)", color: "var(--text-2)" }}
-          >
+            <div className="card p-5">
+              <div className="text-[11px] uppercase tracking-[0.32em] text-[color:var(--text-2)]">
+                Статистика сообщества
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
+                  <div className="text-[11px] uppercase tracking-[0.3em] text-slate-400">
+                    Разделы
+                  </div>
+                  <div className="mt-2 text-2xl font-semibold">{sectionTotals.sections}</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
+                  <div className="text-[11px] uppercase tracking-[0.3em] text-slate-400">
+                    Темы
+                  </div>
+                  <div className="mt-2 text-2xl font-semibold">{sectionTotals.topics}</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
+                  <div className="text-[11px] uppercase tracking-[0.3em] text-slate-400">
+                    Сообщения
+                  </div>
+                  <div className="mt-2 text-2xl font-semibold">{sectionTotals.posts}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="forum-sections" className="card overflow-hidden">
+          <header className="flex flex-col gap-2 border-b border-white/10 px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.32em] text-[color:var(--text-2)]">
+                Разделы
+              </div>
+              <div className="text-sm text-slate-300/80">
+                Организованы по направлениям — выбирайте, чтобы перейти к темам.
+              </div>
+            </div>
+            <div className="hidden text-[11px] uppercase tracking-[0.28em] text-slate-400 md:flex md:gap-12">
+              <span>Темы</span>
+              <span>Сообщения</span>
+              <span>Последняя активность</span>
+            </div>
+          </header>
+          <div className="divide-y divide-white/5">
+            {filteredSections.map((section) => {
+              const activity = lastActivityBySection.get(section.id);
+              return (
+                <div
+                  key={section.id}
+                  className="flex flex-col gap-3 px-5 py-4 transition hover:bg-white/5 md:flex-row md:items-center"
+                >
+                  <div className="flex-1 min-w-0">
+                    <Link
+                      to={`/forum/section/${section.id}`}
+                      className="flex items-start gap-3"
+                    >
+                      <div className="mt-1 hidden rounded-full bg-cyan-400/20 p-1 text-cyan-300 md:block">
+                        <ChevronRight size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-lg font-semibold leading-tight">{section.title}</div>
+                        {section.description && (
+                          <div className="mt-1 text-sm text-slate-300/80 line-clamp-2">
+                            {section.description}
+                          </div>
+                        )}
+                      </div>
+                    </Link>
+                  </div>
+                  <div className="grid gap-2 text-sm text-slate-300/90 md:grid-cols-[100px_120px_minmax(0,220px)] md:items-center md:text-right">
+                    <div className="md:justify-self-end">
+                      <div className="text-xs uppercase tracking-[0.26em] text-slate-500">Темы</div>
+                      <div className="font-semibold">{section.topicCount ?? 0}</div>
+                    </div>
+                    <div className="md:justify-self-end">
+                      <div className="text-xs uppercase tracking-[0.26em] text-slate-500">Сообщения</div>
+                      <div className="font-semibold">{section.postCount ?? 0}</div>
+                    </div>
+                    <div className="md:justify-self-end">
+                      {activity ? (
+                        <div className="text-left text-xs leading-relaxed text-slate-400 md:text-right">
+                          <div className="font-semibold text-slate-200">
+                            <Link to={`/forum/topic/${activity.topicId}`} className="hover:underline">
+                              {activity.topicTitle}
+                            </Link>
+                          </div>
+                          <div>
+                            {activity.by ? `от ${activity.by}` : "Новый участник"}
+                          </div>
+                          <div className="flex items-center gap-1 text-[11px] uppercase tracking-[0.3em] text-slate-500 md:justify-end">
+                            <Clock size={12} /> {formatRelativeDate(activity.when)}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-500">Пока нет активности</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {!filteredSections.length && (
+              <div className="px-5 py-6 text-sm text-slate-400">
+                Подходящих разделов не найдено. Попробуйте изменить запрос.
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-[1.4fr_.9fr]">
+          <div className="card overflow-hidden">
+            <div className="border-b border-white/10 px-5 py-3 text-[11px] uppercase tracking-[0.32em] text-[color:var(--text-2)]">
+              Последние сообщения
+            </div>
+            <div className="divide-y divide-white/5">
+              {enrichedLatestPosts.length ? (
+                enrichedLatestPosts.map(({ post, topic }) => (
+                  <Link
+                    key={post.id}
+                    to={topic ? `/forum/topic/${topic.id}` : "/forum"}
+                    className="flex flex-col gap-2 px-5 py-4 transition hover:bg-white/5"
+                  >
+                    <div className="flex items-center gap-2 text-xs uppercase tracking-[0.28em] text-cyan-300">
+                      <span>#{post.id.slice(0, 6)}</span>
+                      <span>•</span>
+                      <span>{formatRelativeDate(post.createdAt)}</span>
+                    </div>
+                    <div className="text-sm font-semibold leading-snug text-slate-100">
+                      {topic?.title ?? "Обсуждение"}
+                    </div>
+                    {post.content && (
+                      <div className="line-clamp-2 text-sm text-slate-400">
+                        {post.content}
+                      </div>
+                    )}
+                  </Link>
+                ))
+              ) : (
+                <div className="px-5 py-6 text-sm text-slate-400">
+                  Сообщений пока нет — будьте первым, кто начнет обсуждение.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="border-b border-white/10 px-5 py-3 text-[11px] uppercase tracking-[0.32em] text-[color:var(--text-2)]">
+              Лента активности
+            </div>
+            <div className="p-5 text-sm text-slate-300/80">
+              Просматривайте, что происходит прямо сейчас: популярные темы находятся в верхних строках разделов. Используйте быстрые ссылки выше, чтобы подключиться к сообществу.
+            </div>
+          </div>
+        </section>
+
+        <div className="card">
+          <div className="border-b px-4 py-2 text-xs uppercase tracking-[0.3em]" style={{ borderColor: "var(--border)", color: "var(--text-2)" }}>
             Retro chat
           </div>
           <div className="p-4">
