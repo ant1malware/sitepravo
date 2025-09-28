@@ -17,6 +17,7 @@ export default function SectionPage() {
   const [status, setStatus] = React.useState<'all'|'wip'|'review'|'done'>('all');
   const [tag, setTag] = React.useState<string>('all');
   const [show, setShow] = React.useState<number>(20);
+  const [sort, setSort] = React.useState<'updated' | 'created' | 'replies'>('updated');
 
   const reload = React.useCallback(async () => {
     try {
@@ -73,7 +74,29 @@ export default function SectionPage() {
 
   const byStatus = topics.filter(t => status==='all' ? true : statusOf(t.title) === status);
   const byTag = byStatus.filter(t => tag==='all' ? true : new RegExp(`\\[${tag.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\]`, 'i').test(String(t.title||'')));
-  const shown = byTag.slice(0, show);
+  const sorted = React.useMemo(() => {
+    const arr = [...byTag];
+    return arr.sort((a, b) => {
+      if (sort === 'replies') {
+        return (b.replyCount ?? 0) - (a.replyCount ?? 0);
+      }
+      const key = sort === 'created' ? 'createdAt' : 'updatedAt';
+      return new Date(b[key] || b.createdAt || 0).getTime() - new Date(a[key] || a.createdAt || 0).getTime();
+    });
+  }, [byTag, sort]);
+  const shown = sorted.slice(0, show);
+
+  const statusSummary = React.useMemo(() => {
+    const summary = { total: topics.length, wip: 0, review: 0, done: 0 };
+    if (!isWorkshop) return summary;
+    for (const item of topics) {
+      const st = statusOf(item.title);
+      if (st === 'wip') summary.wip += 1;
+      else if (st === 'review') summary.review += 1;
+      else if (st === 'done') summary.done += 1;
+    }
+    return summary;
+  }, [topics, isWorkshop]);
 
   return (
     <main
@@ -101,18 +124,32 @@ export default function SectionPage() {
 
         {isWorkshop && (
           <div className="card mb-4 p-4">
-            <div className="mb-2 flex items-center gap-2 font-semibold">
-              <ShoppingBag size={16} /> Workshop: рекомендации
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 font-semibold">
+                <ShoppingBag size={16} /> Workshop: рекомендации
+              </div>
+              <div className="ml-auto flex flex-wrap items-center gap-3 text-[11px] uppercase tracking-[0.3em] text-emerald-200/80">
+                <span>Проектов {statusSummary.total}</span>
+                <span>[WIP] {statusSummary.wip}</span>
+                <span>[Review] {statusSummary.review}</span>
+                <span>[Done] {statusSummary.done}</span>
+              </div>
             </div>
-            <div className="text-sm opacity-70">
+            <div className="mt-2 text-sm opacity-70">
               Добавляйте префиксы статуса в заголовок: [WIP], [Review], [Done].
               Пишите краткое описание, технологический стек и прогресс — будет проще ревьюить.
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-              <button className={`tab ${status==='all'?'tab-active':''}`} onClick={()=>setStatus('all')}>All</button>
-              <button className={`tab ${status==='wip'?'tab-active':''}`} onClick={()=>setStatus('wip')}>[WIP]</button>
-              <button className={`tab ${status==='review'?'tab-active':''}`} onClick={()=>setStatus('review')}>[Review]</button>
-              <button className={`tab ${status==='done'?'tab-active':''}`} onClick={()=>setStatus('done')}>[Done]</button>
+              <button className={`tab ${status==='all'?'tab-active':''}`} onClick={()=>{ setStatus('all'); setShow(20); }}>All</button>
+              <button className={`tab ${status==='wip'?'tab-active':''}`} onClick={()=>{ setStatus('wip'); setShow(20); }}>[WIP]</button>
+              <button className={`tab ${status==='review'?'tab-active':''}`} onClick={()=>{ setStatus('review'); setShow(20); }}>[Review]</button>
+              <button className={`tab ${status==='done'?'tab-active':''}`} onClick={()=>{ setStatus('done'); setShow(20); }}>[Done]</button>
+              <div className="ml-auto flex items-center gap-2">
+                <span className="opacity-60">Сортировка</span>
+                <button className={`tab ${sort==='updated'?'tab-active':''}`} onClick={()=>{ setSort('updated'); setShow(20); }}>Обновление</button>
+                <button className={`tab ${sort==='created'?'tab-active':''}`} onClick={()=>{ setSort('created'); setShow(20); }}>Создание</button>
+                <button className={`tab ${sort==='replies'?'tab-active':''}`} onClick={()=>{ setSort('replies'); setShow(20); }}>Ответы</button>
+              </div>
             </div>
           </div>
         )}
@@ -137,6 +174,12 @@ export default function SectionPage() {
               {allTags.map(x => (
                 <button key={x} className={`tab ${tag===x?'tab-active':''}`} onClick={()=>{ setTag(x); setShow(20); }}>{`[${x}]`}</button>
               ))}
+              <div className="ml-auto flex items-center gap-2">
+                <span className="opacity-60">Сортировка</span>
+                <button className={`tab ${sort==='updated'?'tab-active':''}`} onClick={()=>{ setSort('updated'); setShow(20); }}>Обновление</button>
+                <button className={`tab ${sort==='created'?'tab-active':''}`} onClick={()=>{ setSort('created'); setShow(20); }}>Создание</button>
+                <button className={`tab ${sort==='replies'?'tab-active':''}`} onClick={()=>{ setSort('replies'); setShow(20); }}>Ответы</button>
+              </div>
             </div>
           )}
           {shown.map((t) => (

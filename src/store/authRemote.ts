@@ -264,10 +264,20 @@ export async function unsetVip(id: string): Promise<RemoteUser> {
   return user as RemoteUser;
 }
 
-export type PublicMember = Pick<RemoteUser, 'id'|'username'|'role'|'createdAt'|'userNumber'>;
+export type PublicMember = RemoteUser & { profile?: RemoteProfile | null };
 export async function listPublicMembers(): Promise<PublicMember[]> {
   const { members } = await api(`/members`);
-  return members as PublicMember[];
+  const rows = Array.isArray(members) ? members : [];
+
+  // Support multiple payload shapes from the worker:
+  // - [{ id, username, ... }] (legacy)
+  // - [{ user: { ... }, profile: { ... } }] (current)
+  return rows.map((row: any) => {
+    if (row && typeof row === 'object' && row.user) {
+      return { ...(row.user as RemoteUser), profile: row.profile as RemoteProfile | null };
+    }
+    return { ...(row as RemoteUser), profile: null };
+  });
 }
 
 // Bootstrap Pavel (one-time). Requires ADMIN_KEY via query param; call from browser/curl.

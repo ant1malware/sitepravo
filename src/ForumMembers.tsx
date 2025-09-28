@@ -3,8 +3,14 @@ import { Link } from "react-router-dom";
 import { Search, Users, ChevronRight } from "lucide-react";
 import ForumSubnav from "./ForumSubnav";
 import Badge, { computePoints } from "./components/Badge";
-import { listAccounts as listLocalAccounts, getSessionAccount as getLocalSession, type Account } from "./store/forumStore";
-import { listPublicMembers, getSessionAccount as getRemoteSession, type PublicMember } from "./store/authRemote";
+import { type Account } from "./store/forumStore";
+import {
+  listPublicMembers,
+  getSessionAccount as getRemoteSession,
+  getProfileById,
+  type PublicMember,
+  type RemoteProfile,
+} from "./store/authRemote";
 
 const ROLE_STYLES: Record<string, { label: string; color: string }> = {
   developer: { label: "Developer", color: "#22d3ee" },
@@ -31,6 +37,7 @@ function MemberCard({ member, highlight }: { member: Account; highlight: boolean
   const pts = (member as any).score ?? computePoints({ posts: member.posts, likes: member.likes, topics: member.topics });
   const accentFrom = member.profile.accentFrom || "#22d3ee";
   const accentTo = member.profile.accentTo || "#8b5cf6";
+  const avatar = member.profile.avatarData;
   return (
     <Link
       to={"/forum/profile/" + member.username}
@@ -39,14 +46,21 @@ function MemberCard({ member, highlight }: { member: Account; highlight: boolean
       }`}
     >
       <div className="flex items-start gap-3">
-        <div
-          className="h-14 w-14 rounded-2xl"
-          style={{
-            background: member.profile.avatarData
-              ? `url(${member.profile.avatarData}) center/cover`
-              : `linear-gradient(135deg, ${accentFrom}, ${accentTo})`,
-          }}
-        />
+        <div className="relative h-14 w-14 overflow-hidden rounded-2xl border border-white/5">
+          {avatar ? (
+            <img
+              src={avatar}
+              alt={`${member.username} avatar`}
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div
+              className="h-full w-full"
+              style={{ background: `linear-gradient(135deg, ${accentFrom}, ${accentTo})` }}
+            />
+          )}
+        </div>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <div className="truncate text-lg font-semibold text-white">
@@ -84,40 +98,105 @@ function MemberCard({ member, highlight }: { member: Account; highlight: boolean
 }
 
 export default function ForumMembers() {
-  const [members, setMembers] = React.useState<Account[]>(() => listLocalAccounts());
+  const [members, setMembers] = React.useState<Account[]>([]);
   const [query, setQuery] = React.useState("");
   const [session, setSession] = React.useState<{ id: string; username: string } | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const deriveAccent = React.useCallback((username: string, offset = 0) => {
+    const safe = username || "user";
+    let hash = 0;
+    for (let i = 0; i < safe.length; i++) {
+      hash = (hash << 5) - hash + safe.charCodeAt(i);
+      hash |= 0;
+    }
+    const hue = (Math.abs(hash) + offset * 63) % 360;
+    const saturation = 62;
+    const lightness = offset ? 52 : 58;
+    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  }, []);
+
+  const normalizeProfile = React.useCallback(
+    (member: PublicMember, profile: RemoteProfile | null | undefined): Account["profile"] => ({
+      bio: profile?.bio || "",
+      signature: profile?.signature || "",
+      links: profile?.links || {},
+      avatarData: profile?.avatarData,
+      accentFrom: profile?.accentFrom || deriveAccent(member.username, 0),
+      accentTo: profile?.accentTo || deriveAccent(member.username, 1),
+      badges: profile?.badges || [],
+      privacy: {
+        showEmail: !!profile?.privacy?.showEmail,
+        showStats: profile?.privacy?.showStats !== false,
+        showLinks: profile?.privacy?.showLinks,
+        allowComments: profile?.privacy?.allowComments,
+        showFollowers: profile?.privacy?.showFollowers,
+      },
+    }),
+    [deriveAccent]
+  );
 
   React.useEffect(() => {
     const refresh = async () => {
-      // Try remote API first; fallback to local demo store
+      setLoading(true);
       try {
-        const meRemote = await getRemoteSession();
-        const rows = await listPublicMembers();
-        if (meRemote || rows?.length) {
-          const adapted: Account[] = rows.map((u: PublicMember) => ({
+        const [meRemote, rows] = await Promise.all([
+          getRemoteSession(),
+          listPublicMembers(),
+        ]);
+        if (rows?.length) {
+          const profiles = await Promise.all(
+            rows.map(async (u) => {
+              if (u.profile) return u.profile;
+              try {
+                return await getProfileById(u.id);
+              } catch {
+                return null;
+              }
+            })
+          );
+          const adapted: Account[] = rows.map((u, idx) => ({
             id: u.id,
             username: u.username,
             email: `${u.username}@hidden.local`,
             createdAt: u.createdAt,
             role: u.role,
             userNumber: u.userNumber,
-            posts: 0,
-            likes: 0,
-            topics: 0,
-            profile: { bio: "", signature: "", links: {}, accentFrom: "#22d3ee", accentTo: "#8b5cf6", badges: [], privacy: { showEmail: false, showStats: true } },
+            posts: (u as any).posts ?? 0,
+            likes: (u as any).likes ?? 0,
+            topics: (u as any).topics ?? 0,
+            profile: normalizeProfile(u, profiles[idx]),
             bans: null,
             mutes: null,
           }));
           setMembers(adapted);
-          if (meRemote) setSession({ id: meRemote.id, username: meRemote.username }); else setSession(null);
+          if (meRemote) {
+            setSession({ id: meRemote.id, username: meRemote.username });
+          } else {
+            setSession(null);
+          }
+          setError(null);
+          setLoading(false);
           return;
         }
-      } catch {}
-      // Local fallback
-      setMembers(listLocalAccounts());
-      const meLocal = getLocalSession();
-      setSession(meLocal ? { id: meLocal.id, username: meLocal.username } : null);
+        setMembers([]);
+        if (meRemote) {
+          setSession({ id: meRemote.id, username: meRemote.username });
+        } else {
+          setSession(null);
+        }
+        setError(null);
+        setLoading(false);
+        return;
+      } catch (err) {
+        console.warn("Failed to load remote members", err);
+        setError("Не удалось загрузить участников");
+      }
+
+      setLoading(false);
+      setMembers([]);
+      setSession(null);
     };
     refresh();
     const h = () => refresh();
@@ -127,7 +206,7 @@ export default function ForumMembers() {
       window.removeEventListener("forum:session", h as any);
       window.removeEventListener("storage", h as any);
     };
-  }, []);
+  }, [normalizeProfile]);
 
   const normalized = query.trim().toLowerCase();
   const filtered = members
@@ -214,20 +293,35 @@ export default function ForumMembers() {
           </div>
         </div>
 
-        <div className="mb-5 flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[220px]">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-            <input
-              className="input w-full pl-9"
-              placeholder="Search members by name, email, or role"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
+        <div className="card mb-5 flex flex-col gap-4 px-4 py-3 sm:flex-row sm:items-center">
+          <div className="flex-1 min-w-0">
+            <div className="text-xs uppercase tracking-[0.28em] text-zinc-400/70">
+              Поиск
+            </div>
+            <div className="text-lg font-semibold text-white">Find members</div>
           </div>
-          <div className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-            {filtered.length} of {members.length}
+          <div className="w-full sm:w-auto">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <input
+                className="input w-full pl-9"
+                placeholder="Search members by name, email, or role"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                disabled={loading && !members.length}
+              />
+            </div>
+            <div className="mt-2 text-xs uppercase tracking-[0.26em] text-zinc-500">
+              {filtered.length} of {members.length}
+            </div>
           </div>
         </div>
+
+        {error && (
+          <div className="card mb-5 border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-100">
+            {error}
+          </div>
+        )}
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((member) => (
@@ -239,7 +333,12 @@ export default function ForumMembers() {
           ))}
         </div>
 
-        {!filtered.length && (
+        {loading && (
+          <div className="card mt-6 p-5 text-sm text-zinc-300/80">
+            Загружаем участников...
+          </div>
+        )}
+        {!loading && !filtered.length && (
           <div className="card mt-6 p-5 text-sm text-zinc-300/80">
             No members match that query yet.
           </div>
