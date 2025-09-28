@@ -10,7 +10,7 @@ import {
   type RemoteUser,
 } from "./store/authRemote";
 // forum settings now controlled on server via authRemote
-import { listSections, listLatestPosts } from "./store/forumRemote";
+import { listSections, listLatestPosts, listTopics } from "./store/forumRemote";
 import { Shield, ChevronRight, Lock } from "lucide-react";
 import RecaptchaGate from "./components/RecaptchaGate";
 import { requestEmailCode, verifyEmailCode } from "./store/emailVerifyLocal";
@@ -44,6 +44,14 @@ function Badge({ role }: { role: Role }) {
   );
 }
 
+
+function projectStatus(title: string): 'wip' | 'review' | 'done' | 'none' {
+  const lower = String(title || '').toLowerCase();
+  if (lower.startsWith('[wip]')) return 'wip';
+  if (lower.startsWith('[review]')) return 'review';
+  if (lower.startsWith('[done]')) return 'done';
+  return 'none';
+}
 function AuthGate({ onDone }: { onDone: () => void }) {
   const [mode, setMode] = React.useState<"login" | "signup">("login");
   const [nick, setNick] = React.useState("");
@@ -75,7 +83,7 @@ function AuthGate({ onDone }: { onDone: () => void }) {
       } else {
         if (!ascii.test(nick.trim()))
           throw new Error(
-            "Никнейм: 3–16 символов латиницы/цифр/подчёркивания (A–Z a–z 0–9 _)."
+            "ÐÐ¸ÐºÐ½ÐµÐ¹Ð¼: 3â€“16 ÑÐ¸Ð¼Ð²Ð¾Ð»Ð¾Ð² Ð»Ð°Ñ‚Ð¸Ð½Ð¸Ñ†Ñ‹/Ñ†Ð¸Ñ„Ñ€/Ð¿Ð¾Ð´Ñ‡Ñ‘Ñ€ÐºÐ¸Ð²Ð°Ð½Ð¸Ñ (Aâ€“Z aâ€“z 0â€“9 _)."
           );
         await registerAccount({
           username: nick.trim(),
@@ -88,7 +96,7 @@ function AuthGate({ onDone }: { onDone: () => void }) {
       }
       onDone();
     } catch (e: any) {
-      setErr(e?.message || "Что-то пошло не так");
+      setErr(e?.message || "Ð§Ñ‚Ð¾-Ñ‚Ð¾ Ð¿Ð¾ÑˆÐ»Ð¾ Ð½Ðµ Ñ‚Ð°Ðº");
     } finally {
       setBusy(false);
     }
@@ -99,13 +107,13 @@ function AuthGate({ onDone }: { onDone: () => void }) {
       <form onSubmit={submit} className="w-[min(560px,92vw)] card p-5">
         <div className="flex items-center gap-2">
           <Lock size={18} />
-          <b>{mode === "login" ? "Вход" : "Регистрация"}</b>
+          <b>{mode === "login" ? "Ð’Ñ…Ð¾Ð´" : "Ð ÐµÐ³Ð¸ÑÑ‚Ñ€Ð°Ñ†Ð¸Ñ"}</b>
         </div>
         <div className="grid gap-3 mt-3">
           <input
             className="input"
             placeholder={
-              mode === "login" ? "Логин или e-mail" : "Логин (латиница/цифры/_)"
+              mode === "login" ? "Ð›Ð¾Ð³Ð¸Ð½ Ð¸Ð»Ð¸ e-mail" : "Ð›Ð¾Ð³Ð¸Ð½ (Ð»Ð°Ñ‚Ð¸Ð½Ð¸Ñ†Ð°/Ñ†Ð¸Ñ„Ñ€Ñ‹/_)"
             }
             value={nick}
             onChange={(e) => setNick(e.target.value)}
@@ -135,7 +143,7 @@ function AuthGate({ onDone }: { onDone: () => void }) {
           <input
             className="input"
             type="password"
-            placeholder="Пароль"
+            placeholder="ÐŸÐ°Ñ€Ð¾Ð»ÑŒ"
             value={pass}
             onChange={(e) => setPass(e.target.value)}
             disabled={busy}
@@ -144,7 +152,7 @@ function AuthGate({ onDone }: { onDone: () => void }) {
           {mode === "login" && (
             <input
               className="input"
-              placeholder="2FA код (если включено)"
+              placeholder="2FA ÐºÐ¾Ð´ (ÐµÑÐ»Ð¸ Ð²ÐºÐ»ÑŽÑ‡ÐµÐ½Ð¾)"
               value={otp}
               onChange={(e) => setOtp(e.target.value)}
               disabled={busy}
@@ -160,12 +168,12 @@ function AuthGate({ onDone }: { onDone: () => void }) {
                 onChange={(e) => setRemember(e.target.checked)}
                 disabled={busy}
               />
-              Запомнить меня
+              Ð—Ð°Ð¿Ð¾Ð¼Ð½Ð¸Ñ‚ÑŒ Ð¼ÐµÐ½Ñ
             </label>
           </div>
           <div className="flex gap-2">
             <button className="btn btn-primary" type="submit" disabled={busy}>
-              {mode === "login" ? "Войти" : "Создать аккаунт"}
+              {mode === "login" ? "Ð’Ð¾Ð¹Ñ‚Ð¸" : "Ð¡Ð¾Ð·Ð´Ð°Ñ‚ÑŒ Ð°ÐºÐºÐ°ÑƒÐ½Ñ‚"}
             </button>
             <button
               className="btn"
@@ -174,8 +182,8 @@ function AuthGate({ onDone }: { onDone: () => void }) {
               disabled={busy}
             >
               {mode === "login"
-                ? "У меня нет аккаунта"
-                : "У меня уже есть аккаунт"}
+                ? "Ð£ Ð¼ÐµÐ½Ñ Ð½ÐµÑ‚ Ð°ÐºÐºÐ°ÑƒÐ½Ñ‚Ð°"
+                : "Ð£ Ð¼ÐµÐ½Ñ ÑƒÐ¶Ðµ ÐµÑÑ‚ÑŒ Ð°ÐºÐºÐ°ÑƒÐ½Ñ‚"}
             </button>
           </div>
         </div>
@@ -217,40 +225,40 @@ function AuthGateX({ onDone }: { onDone: () => void }) {
         setVerifyMode('email');
       }
     } catch (e: any) {
-      setErr(e?.message || "Что-то пошло не так");
+      setErr(e?.message || "Ð§Ñ‚Ð¾-Ñ‚Ð¾ Ð¿Ð¾ÑˆÐ»Ð¾ Ð½Ðµ Ñ‚Ð°Ðº");
     } finally { setBusy(false); }
   };
 
   return (
     <div className="fixed inset-0 z-[90] grid place-items-center bg-black/70 p-4">
       <form onSubmit={submit} className="w-[min(560px,92vw)] card p-5">
-        <div className="flex items-center gap-2"><Lock size={18} /><b>{mode === 'login' ? 'Вход' : 'Регистрация'}</b></div>
+        <div className="flex items-center gap-2"><Lock size={18} /><b>{mode === 'login' ? 'Ð’Ñ…Ð¾Ð´' : 'Ð ÐµÐ³Ð¸ÑÑ‚Ñ€Ð°Ñ†Ð¸Ñ'}</b></div>
         {!verifyMode && (
           <div className="grid gap-3 mt-3">
-            <input className="input" placeholder={mode === 'login' ? 'Логин или e-mail' : 'Логин (латиница/цифры/_ )'} value={nick} onChange={(e)=>setNick(e.target.value)} disabled={busy} required />
+            <input className="input" placeholder={mode === 'login' ? 'Ð›Ð¾Ð³Ð¸Ð½ Ð¸Ð»Ð¸ e-mail' : 'Ð›Ð¾Ð³Ð¸Ð½ (Ð»Ð°Ñ‚Ð¸Ð½Ð¸Ñ†Ð°/Ñ†Ð¸Ñ„Ñ€Ñ‹/_ )'} value={nick} onChange={(e)=>setNick(e.target.value)} disabled={busy} required />
             {mode === 'signup' && (<input className="input" placeholder="E-mail" value={email} onChange={(e)=>setEmail(e.target.value)} disabled={busy} required />)}
             {mode === 'signup' && needInvite && (<input className="input" placeholder="Invite code" value={invite} onChange={(e)=>setInvite(e.target.value)} disabled={busy} required />)}
-            <input className="input" type="password" placeholder="Пароль" value={pass} onChange={(e)=>setPass(e.target.value)} disabled={busy} required />
-            {mode === 'login' && (<input className="input" placeholder="2FA код (если включено)" value={otp} onChange={(e)=>setOtp(e.target.value)} disabled={busy} />)}
+            <input className="input" type="password" placeholder="ÐŸÐ°Ñ€Ð¾Ð»ÑŒ" value={pass} onChange={(e)=>setPass(e.target.value)} disabled={busy} required />
+            {mode === 'login' && (<input className="input" placeholder="2FA ÐºÐ¾Ð´ (ÐµÑÐ»Ð¸ Ð²ÐºÐ»ÑŽÑ‡ÐµÐ½Ð¾)" value={otp} onChange={(e)=>setOtp(e.target.value)} disabled={busy} />)}
             <RecaptchaGate onToken={setCaptchaToken} />
             {err && <div style={{ color: '#ef4444', fontSize: 13 }}>{err}</div>}
             <div className="flex items-center gap-2 text-xs opacity-80">
-              <label className="flex items-center gap-2"><input type="checkbox" checked={remember} onChange={(e)=>setRemember(e.target.checked)} disabled={busy} />Запомнить меня</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={remember} onChange={(e)=>setRemember(e.target.checked)} disabled={busy} />Ð—Ð°Ð¿Ð¾Ð¼Ð½Ð¸Ñ‚ÑŒ Ð¼ÐµÐ½Ñ</label>
             </div>
             <div className="flex gap-2">
-              <button className="btn btn-primary" type="submit" disabled={busy}>{mode === 'login' ? 'Войти' : 'Зарегистрироваться'}</button>
-              <button className="btn" type="button" onClick={()=>setMode(mode==='login'?'signup':'login')} disabled={busy}>{mode === 'login' ? 'Нет аккаунта? Регистрация' : 'Уже есть? Войти'}</button>
+              <button className="btn btn-primary" type="submit" disabled={busy}>{mode === 'login' ? 'Ð’Ð¾Ð¹Ñ‚Ð¸' : 'Ð—Ð°Ñ€ÐµÐ³Ð¸ÑÑ‚Ñ€Ð¸Ñ€Ð¾Ð²Ð°Ñ‚ÑŒÑÑ'}</button>
+              <button className="btn" type="button" onClick={()=>setMode(mode==='login'?'signup':'login')} disabled={busy}>{mode === 'login' ? 'ÐÐµÑ‚ Ð°ÐºÐºÐ°ÑƒÐ½Ñ‚Ð°? Ð ÐµÐ³Ð¸ÑÑ‚Ñ€Ð°Ñ†Ð¸Ñ' : 'Ð£Ð¶Ðµ ÐµÑÑ‚ÑŒ? Ð’Ð¾Ð¹Ñ‚Ð¸'}</button>
             </div>
           </div>
         )}
         {verifyMode === 'email' && (
           <div className="grid gap-3 mt-3">
-            <div className="text-sm text-zinc-300">Мы отправили код подтверждения на {email}. Введите код ниже.</div>
-            <input className="input" placeholder="Код подтверждения" value={verifyCode} onChange={(e)=>setVerifyCode(e.target.value)} />
+            <div className="text-sm text-zinc-300">ÐœÑ‹ Ð¾Ñ‚Ð¿Ñ€Ð°Ð²Ð¸Ð»Ð¸ ÐºÐ¾Ð´ Ð¿Ð¾Ð´Ñ‚Ð²ÐµÑ€Ð¶Ð´ÐµÐ½Ð¸Ñ Ð½Ð° {email}. Ð’Ð²ÐµÐ´Ð¸Ñ‚Ðµ ÐºÐ¾Ð´ Ð½Ð¸Ð¶Ðµ.</div>
+            <input className="input" placeholder="ÐšÐ¾Ð´ Ð¿Ð¾Ð´Ñ‚Ð²ÐµÑ€Ð¶Ð´ÐµÐ½Ð¸Ñ" value={verifyCode} onChange={(e)=>setVerifyCode(e.target.value)} />
             {!!err && <div style={{ color: '#ef4444', fontSize: 13 }}>{err}</div>}
             <div className="flex gap-2">
-              <button type="button" className="btn btn-primary" onClick={() => { if (verifyEmailCode(email, verifyCode)) { setVerifyMode(false); onDone(); } else { setErr('Неверный код'); } }}>Подтвердить</button>
-              <button type="button" className="btn" onClick={() => { requestEmailCode(email); }}>Отправить код ещё раз</button>
+              <button type="button" className="btn btn-primary" onClick={() => { if (verifyEmailCode(email, verifyCode)) { setVerifyMode(false); onDone(); } else { setErr('ÐÐµÐ²ÐµÑ€Ð½Ñ‹Ð¹ ÐºÐ¾Ð´'); } }}>ÐŸÐ¾Ð´Ñ‚Ð²ÐµÑ€Ð´Ð¸Ñ‚ÑŒ</button>
+              <button type="button" className="btn" onClick={() => { requestEmailCode(email); }}>ÐžÑ‚Ð¿Ñ€Ð°Ð²Ð¸Ñ‚ÑŒ ÐºÐ¾Ð´ ÐµÑ‰Ñ‘ Ñ€Ð°Ð·</button>
             </div>
           </div>
         )}
@@ -277,7 +285,7 @@ function Header({ me, onLogout }: { me: RemoteUser; onLogout: () => void }) {
             >
               Forum // FORUM
             </div>
-            <div className="text-sm font-semibold">Правительство</div>
+            <div className="text-sm font-semibold">ÐŸÑ€Ð°Ð²Ð¸Ñ‚ÐµÐ»ÑŒÑÑ‚Ð²Ð¾</div>
           </div>
         </Link>
         {/* Admin shortcut restored for privileged roles */}
@@ -306,6 +314,41 @@ export default function ForumPage() {
   const [me, setMe] = React.useState<RemoteUser | null | undefined>(undefined);
   const [sectionsState, setSectionsState] = React.useState<any[]>([]);
   const [latestPosts, setLatestPosts] = React.useState<any[]>([]);
+  const [workshopSection, setWorkshopSection] = React.useState<any | null>(null);
+  const [workshopProjects, setWorkshopProjects] = React.useState<any[]>([]);
+  const [workshopSummary, setWorkshopSummary] = React.useState({ total: 0, wip: 0, review: 0, done: 0 });
+  const rtf = React.useMemo(() => {
+    try {
+      return new Intl.RelativeTimeFormat('ru', { numeric: 'auto' });
+    } catch {
+      try {
+        return new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+      } catch {
+        return null;
+      }
+    }
+  }, []);
+  const formatRelative = React.useCallback(
+    (value: string | number | Date | null | undefined) => {
+      if (!value) return '';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '';
+      if (!rtf) return date.toLocaleString();
+      const diff = date.getTime() - Date.now();
+      const minute = 60 * 1000;
+      const hour = 60 * minute;
+      const day = 24 * hour;
+      const month = 30 * day;
+      const year = 365 * day;
+      if (Math.abs(diff) < minute) return rtf.format(Math.round(diff / 1000), 'second');
+      if (Math.abs(diff) < hour) return rtf.format(Math.round(diff / minute), 'minute');
+      if (Math.abs(diff) < day) return rtf.format(Math.round(diff / hour), 'hour');
+      if (Math.abs(diff) < month) return rtf.format(Math.round(diff / day), 'day');
+      if (Math.abs(diff) < year) return rtf.format(Math.round(diff / month), 'month');
+      return rtf.format(Math.round(diff / year), 'year');
+    },
+    [rtf]
+  );
 
   // session
   React.useEffect(() => {
@@ -335,19 +378,57 @@ export default function ForumPage() {
     let alive = true;
     (async () => {
       try {
-        const [sections, posts] = await Promise.all([
-          listSections(),
-          listLatestPosts(8),
+        const sections = await listSections();
+        const normalizedSections = Array.isArray(sections)
+          ? [...sections].sort((a, b) => {
+              const order = (a.order ?? 0) - (b.order ?? 0);
+              if (order !== 0) return order;
+              return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+            })
+          : [];
+        const workshop = normalizedSections.find(
+          (s: any) => String(s.title || '').toLowerCase() === 'workshop'
+        ) || null;
+        const [posts, workshopTopics] = await Promise.all([
+          listLatestPosts(8).catch(() => []),
+          workshop?.id ? listTopics(workshop.id).catch(() => []) : Promise.resolve([]),
         ]);
-        if (alive) {
-          setSectionsState(Array.isArray(sections) ? sections : []);
-          setLatestPosts(Array.isArray(posts) ? posts : []);
-        }
-      } catch {
-        if (alive) {
-          setSectionsState([]);
-          setLatestPosts([]);
-        }
+        if (!alive) return;
+        setSectionsState(normalizedSections);
+        setLatestPosts(Array.isArray(posts) ? posts : []);
+        setWorkshopSection(workshop);
+        const summary = Array.isArray(workshopTopics)
+          ? workshopTopics.reduce(
+              (acc: any, topic: any) => {
+                const status = projectStatus(topic.title);
+                if (status === 'wip') acc.wip += 1;
+                else if (status === 'review') acc.review += 1;
+                else if (status === 'done') acc.done += 1;
+                acc.total += 1;
+                return acc;
+              },
+              { total: 0, wip: 0, review: 0, done: 0 }
+            )
+          : { total: 0, wip: 0, review: 0, done: 0 };
+        const curated = Array.isArray(workshopTopics)
+          ? [...workshopTopics]
+              .sort(
+                (a, b) =>
+                  new Date(b.updatedAt || b.createdAt || 0).getTime() -
+                  new Date(a.updatedAt || a.createdAt || 0).getTime()
+              )
+              .slice(0, 4)
+          : [];
+        setWorkshopProjects(curated);
+        setWorkshopSummary(summary);
+      } catch (err) {
+        if (!alive) return;
+        console.warn('Failed to load forum data', err);
+        setSectionsState([]);
+        setLatestPosts([]);
+        setWorkshopSection(null);
+        setWorkshopProjects([]);
+        setWorkshopSummary({ total: 0, wip: 0, review: 0, done: 0 });
       }
     })();
     return () => {
@@ -385,6 +466,16 @@ export default function ForumPage() {
 
   // server settings available via getServerSettings() if needed
 
+  const sectionsList = Array.isArray(sectionsState) ? sectionsState : [];
+  const latestList = Array.isArray(latestPosts) ? latestPosts : [];
+
+  const workshopBadges: Record<'wip' | 'review' | 'done' | 'none', { label: string; className: string }> = {
+    wip: { label: 'WIP', className: 'bg-amber-400/10 text-amber-300' },
+    review: { label: 'Review', className: 'bg-sky-400/10 text-sky-300' },
+    done: { label: 'Done', className: 'bg-emerald-400/10 text-emerald-300' },
+    none: { label: 'Idea', className: 'bg-zinc-200/10 text-zinc-200' },
+  };
+
   return (
     <main
       className="min-h-screen"
@@ -420,49 +511,130 @@ export default function ForumPage() {
             <div
               className="text-[11px] uppercase tracking-[0.32em]"
               style={{ color: "var(--text-2)" }}
-            >�������
+            >
+              Forum Sections
             </div>
 
-            {(Array.isArray(sectionsState) ? sectionsState : []).map(
-              (s: any) => (
+            {sectionsList.map((s: any) => {
+              const isWorkshop = String(s.title || "").toLowerCase() === "workshop";
+              return (
                 <Link
                   key={s.id}
                   to={`/forum/section/${s.id}`}
-                  className="card p-4"
+                  className="card p-4 transition hover:border-cyan-400/50"
                 >
-                  <div className="font-semibold flex items-center gap-2">
-                    {s.icon ? <span className="text-xl">{s.icon}</span> : <ChevronRight size={16} />}
-                    {s.title}
-                  </div>
-                  {s.description && (
-                    <div className="text-sm opacity-70 mt-1">
-                      {s.description}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 text-lg font-semibold">
+                        {s.icon ? <span className="text-xl">{s.icon}</span> : <ChevronRight size={16} />}
+                        <span className="truncate">{s.title}</span>
+                        {isWorkshop && (
+                          <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.3em] text-emerald-300">
+                            Workshop
+                          </span>
+                        )}
+                      </div>
+                      {s.description && (
+                        <p className="mt-1 text-sm text-zinc-300/80">{s.description}</p>
+                      )}
                     </div>
-                  )}
+                    <div className="text-right text-xs uppercase tracking-[0.28em] text-zinc-500">
+                      <div>Topics {s.topicCount ?? 0}</div>
+                      <div>Posts {s.postCount ?? 0}</div>
+                    </div>
+                  </div>
                 </Link>
-              )
-            )}
+              );
+            })}
 
-            {!Array.isArray(sectionsState) || sectionsState.length === 0 ? (
-              <div className="card p-4 text-sm opacity-70">Нет разделов</div>
-            ) : null}
-          </div>
-
-          {/* LATEST POSTS */}
-          <aside className="grid content-start gap-4">
-            <div className="card flex items-center justify-between px-3 py-2">
-              <div className="text-xs uppercase tracking-[0.28em]">��������� �����</div>
+            {!sectionsList.length ? (
+              <div className="text-xs uppercase tracking-[0.28em] text-zinc-400">
+                Latest activity
+              </div>
+              <Link to="/forum?feed=latest" className="text-xs text-cyan-300 hover:underline">
+                Feed
+              </Link>
+            {latestList.map((p: any) => (
+              <Link
+                key={p.id}
+                to={`/forum/topic/${p.topicId || p.id}`}
+                className="block card px-3 py-3 transition hover:border-cyan-400/40"
+              >
+                  <div className="truncate font-semibold">
+                    {p.title || p.topicTitle || "Пост"}
+                  <div className="mt-1 text-xs" style={{ color: "var(--text-2)" }}>
+                    {formatRelative(p.createdAt || p.updatedAt) || (p.createdAt ? new Date(p.createdAt).toLocaleString() : '')}
+              </Link>
+            {!latestList.length ? (
+              <div className="card p-3 text-sm opacity-70">Постов пока нет</div>
+        {workshopSection ? (
+          <div className="mt-8 card p-5">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="text-xs uppercase tracking-[0.3em] text-emerald-300/80">Workshop</div>
+                <h2 className="text-2xl font-semibold text-white">{workshopSection.title || 'Workshop'}</h2>
+                <p className="mt-1 text-sm text-zinc-300/80">
+                  Мастерская для проектных тем: статус, стек, прогресс и ревью сообщества.
+                </p>
+              </div>
+              <Link to={`/forum/section/${workshopSection.id}`} className="btn btn-primary">
+                Открыть мастерскую
+              </Link>
             </div>
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-[11px] uppercase tracking-[0.32em] text-zinc-400/80">
+              <span>Проектов {workshopSummary.total}</span>
+              <span>[WIP] {workshopSummary.wip}</span>
+              <span>[Review] {workshopSummary.review}</span>
+              <span>[Done] {workshopSummary.done}</span>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {workshopProjects.map((topic: any) => {
+                const status = projectStatus(topic.title);
+                const badge = workshopBadges[status];
+                return (
+                  <Link
+                    key={topic.id}
+                    to={`/forum/topic/${topic.id}`}
+                    className="card p-4 transition hover:border-emerald-400/40"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] uppercase tracking-[0.3em] ${badge.className}`}
+                      >
+                        {badge.label}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-semibold text-white">{topic.title}</div>
+                        <div className="mt-1 text-xs text-zinc-400/80">
+                          {formatRelative(topic.updatedAt || topic.createdAt) || (topic.updatedAt ? new Date(topic.updatedAt).toLocaleString() : '')}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-4 text-[11px] uppercase tracking-[0.3em] text-zinc-500">
+                      <span>Replies {topic.replyCount ?? 0}</span>
+                      <span>Views {topic.viewCount ?? 0}</span>
+                    </div>
+                  </Link>
+                );
+              })}
+              {!workshopProjects.length && (
+                <div className="card p-4 text-sm text-zinc-300/80">
+                  В мастерской пока нет проектов. Добавьте первый, чтобы получить ревью.
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-8 card border border-dashed border-white/10 p-5 text-sm text-zinc-300/70">
+            Workshop-раздел ещё не создан. Создайте его в панели администратора, чтобы делиться проектами.
+          </div>
+        )}
 
-            {(Array.isArray(latestPosts) ? latestPosts : []).map((p: any) => (
-              <div key={p.id} className="block card px-3 py-3">
-                <div className="relative pl-4">
-                  <span
                     className="absolute left-0 top-1.5 h-2 w-2 rounded-full"
                     style={{ background: "#22d3ee" }}
                   />
                   <div className="font-semibold">
-                    {p.title || "Пост"}
+                    {p.title || "ÐŸÐ¾ÑÑ‚"}
                   </div>
                   <div className="text-xs" style={{ color: "var(--text-2)" }}>
                     {p.createdAt
@@ -475,7 +647,7 @@ export default function ForumPage() {
 
             {!Array.isArray(latestPosts) || latestPosts.length === 0 ? (
               <div className="card p-3 text-sm opacity-70">
-                Постов пока нет
+                ÐŸÐ¾ÑÑ‚Ð¾Ð² Ð¿Ð¾ÐºÐ° Ð½ÐµÑ‚
               </div>
             ) : null}
           </aside>
