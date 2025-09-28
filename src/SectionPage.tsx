@@ -1,15 +1,22 @@
-import React from "react";
+﻿import React from "react";
 import { Link, useParams } from "react-router-dom";
 import { listSections, listTopics, createTopic } from "./store/forumRemote";
 import { ChevronLeft, ShoppingBag, Plus } from "lucide-react";
 import ForumSubnav from "./ForumSubnav";
+import MarkdownEditor from './components/MarkdownEditor';
+import FavStar from './FavStar';
+import { t } from './utils/i18n';
 
 export default function SectionPage() {
   const { id = "" } = useParams();
   const [section, setSection] = React.useState<any | null>(null);
   const [topics, setTopics] = React.useState<any[]>([]);
   const [newTitle, setNewTitle] = React.useState("");
+  const [newBody, setNewBody] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  const [status, setStatus] = React.useState<'all'|'wip'|'review'|'done'>('all');
+  const [tag, setTag] = React.useState<string>('all');
+  const [show, setShow] = React.useState<number>(20);
 
   const reload = React.useCallback(async () => {
     try {
@@ -25,11 +32,22 @@ export default function SectionPage() {
     }
   }, [id]);
 
-  React.useEffect(() => {
-    reload();
-  }, [reload]);
+  React.useEffect(() => { reload(); }, [reload]);
 
   const isWorkshop = (section?.title || "").toLowerCase() === "workshop";
+
+  // collect tags from [Tag] in titles (exclude Workshop statuses)
+  const allTags = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const t of topics) {
+      const matches = String(t.title || '').match(/\[(.+?)\]/g) || [];
+      for (const raw of matches) {
+        const v = raw.replace(/[\[\]]/g, '');
+        if (!['wip', 'review', 'done'].includes(v.toLowerCase())) set.add(v);
+      }
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [topics]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,15 +55,25 @@ export default function SectionPage() {
     if (!title) return;
     setBusy(true);
     try {
-      await createTopic({ sectionId: id, title });
-      setNewTitle("");
+      await createTopic({ sectionId: id, title, content: isWorkshop ? newBody : undefined as any });
+      setNewTitle(""); setNewBody("");
       reload();
     } catch (err: any) {
       alert(err?.message || "Failed to create topic");
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   };
+
+  function statusOf(title: string): 'wip'|'review'|'done'|'none' {
+    const t = (title||'').toLowerCase();
+    if (t.startsWith('[wip]')) return 'wip';
+    if (t.startsWith('[review]')) return 'review';
+    if (t.startsWith('[done]')) return 'done';
+    return 'none';
+  }
+
+  const byStatus = topics.filter(t => status==='all' ? true : statusOf(t.title) === status);
+  const byTag = byStatus.filter(t => tag==='all' ? true : new RegExp(`\\[${tag.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\]`, 'i').test(String(t.title||'')));
+  const shown = byTag.slice(0, show);
 
   return (
     <main
@@ -58,6 +86,11 @@ export default function SectionPage() {
     >
       <div className="mx-auto max-w-6xl px-4 py-6">
         <ForumSubnav />
+        <nav className="mb-3 text-sm opacity-80">
+          <Link to="/forum" className="hover:underline">{t('Форум','Forum')}</Link>
+          <span className="mx-2">/</span>
+          <span>{section?.title || '...'}</span>
+        </nav>
         <div className="mb-5 flex items-center gap-3">
           <Link to="/forum" className="btn flex items-center gap-2">
             <ChevronLeft size={16} /> Back
@@ -69,51 +102,65 @@ export default function SectionPage() {
         {isWorkshop && (
           <div className="card mb-4 p-4">
             <div className="mb-2 flex items-center gap-2 font-semibold">
-              <ShoppingBag size={16} /> Workshop: Товары
+              <ShoppingBag size={16} /> Workshop: рекомендации
             </div>
             <div className="text-sm opacity-70">
-              Выставляйте свои товары и предложения. Каждая тема — отдельный лот.
+              Добавляйте префиксы статуса в заголовок: [WIP], [Review], [Done].
+              Пишите краткое описание, технологический стек и прогресс — будет проще ревьюить.
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              <button className={`tab ${status==='all'?'tab-active':''}`} onClick={()=>setStatus('all')}>All</button>
+              <button className={`tab ${status==='wip'?'tab-active':''}`} onClick={()=>setStatus('wip')}>[WIP]</button>
+              <button className={`tab ${status==='review'?'tab-active':''}`} onClick={()=>setStatus('review')}>[Review]</button>
+              <button className={`tab ${status==='done'?'tab-active':''}`} onClick={()=>setStatus('done')}>[Done]</button>
             </div>
           </div>
         )}
 
-        {/* New topic (listing) */}
-        <form onSubmit={submit} className="card mb-4 grid gap-2 p-4 sm:grid-cols-[1fr_auto]">
-          <input
-            className="input"
-            placeholder={isWorkshop ? "Название товара / лота" : "Topic title"}
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            disabled={busy}
-          />
+        {/* New topic */}
+        <form onSubmit={submit} className="card mb-4 grid gap-2 p-4">
+          <input className="input" placeholder={isWorkshop ? "[WIP] Короткий заголовок проекта" : "Topic title"} value={newTitle} onChange={(e) => setNewTitle(e.target.value)} disabled={busy} />
+          {isWorkshop && (
+            <MarkdownEditor value={newBody} onChange={setNewBody} placeholder="Описание проекта..." projectTemplate draftKey={section ? `forum:draft:new:${section.id}` : undefined} />
+          )}
           <button className="btn btn-primary flex items-center gap-2" disabled={busy}>
-            <Plus size={16} /> {isWorkshop ? "Добавить товар" : "Создать тему"}
+            <Plus size={16} /> {isWorkshop ? "Создать проект" : "Создать тему"}
           </button>
         </form>
 
         {/* Topics */}
         <div className="grid gap-3">
-          {topics.map((t) => (
-            <Link
-              key={t.id}
-              to={`/forum/topic/${t.id}`}
-              className={`card p-4 ${isWorkshop ? "grid grid-cols-[1fr_auto] items-center" : ""}`}
-            >
+          {!isWorkshop && (
+            <div className="card flex flex-wrap items-center gap-2 p-2 text-xs">
+              <span className="opacity-70">{t('Теги','Tags')}:</span>
+              <button className={`tab ${tag==='all'?'tab-active':''}`} onClick={()=>{ setTag('all'); setShow(20); }}>All</button>
+              {allTags.map(x => (
+                <button key={x} className={`tab ${tag===x?'tab-active':''}`} onClick={()=>{ setTag(x); setShow(20); }}>{`[${x}]`}</button>
+              ))}
+            </div>
+          )}
+          {shown.map((t) => (
+            <Link key={t.id} to={`/forum/topic/${t.id}`} className={`card p-4 ${isWorkshop ? "grid grid-cols-[1fr_auto] items-center" : ""}`}>
               <div className="min-w-0">
-                <div className="font-semibold truncate">{t.title}</div>
-                <div className="mt-1 text-xs opacity-70">
-                  replies: {t.replyCount} • views: {t.viewCount}
+                <div className="font-semibold truncate">
+                  {isWorkshop && statusOf(t.title) !== 'none' && (
+                    <span className="mr-2 inline-block rounded bg-white/10 px-2 py-0.5 text-xs">{`[${statusOf(t.title).toUpperCase()}]`}</span>
+                  )}
+                  {t.title}
                 </div>
+                <div className="mt-1 text-xs opacity-70">replies: {t.replyCount} • views: {t.viewCount}</div>
               </div>
               {isWorkshop && (
-                <div className="text-xs uppercase tracking-[0.28em] text-emerald-300/80">
-                  Товар
-                </div>
+                <div className="text-xs uppercase tracking-[0.28em] text-emerald-300/80">Проект</div>
               )}
+              <FavStar kind="topic" id={t.id} title={t.title} url={`/forum/topic/${t.id}`} size="sm" />
             </Link>
           ))}
-          {!topics.length && (
+          {!shown.length && (
             <div className="card p-4 text-sm opacity-70">No topics yet.</div>
+          )}
+          {byTag.length > show && (
+            <button className="btn" onClick={()=> setShow(show + 20)}>{t('Показать ещё','Show more')}</button>
           )}
         </div>
       </div>

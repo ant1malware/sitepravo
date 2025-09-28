@@ -15,6 +15,8 @@ import { Shield, ChevronRight, Lock } from "lucide-react";
 import RecaptchaGate from "./components/RecaptchaGate";
 import { requestEmailCode, verifyEmailCode } from "./store/emailVerifyLocal";
 import ForumSubnav from "./ForumSubnav";
+import ForumSearch from './components/ForumSearch';
+import { t } from './utils/i18n';
 
 function Badge({ role }: { role: Role }) {
   const map: Record<Role, { color: string; text: string }> = {
@@ -353,6 +355,24 @@ export default function ForumPage() {
     };
   }, [me]);
 
+  // forum hotkeys: '/' focus search; g h = forum home; g q = questions
+  React.useEffect(() => {
+    let gPressed = false;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === '/') {
+        const el = document.getElementById('forum-search-input') as HTMLInputElement | null;
+        if (el) { e.preventDefault(); el.focus(); }
+        return;
+      }
+      if (e.key.toLowerCase() === 'g') { gPressed = true; setTimeout(() => { gPressed = false; }, 800); return; }
+      if (!gPressed) return;
+      if (e.key.toLowerCase() === 'h') { e.preventDefault(); try { window.location.href = '/forum'; } catch { location.assign('/forum'); } }
+      if (e.key.toLowerCase() === 'q') { e.preventDefault(); try { window.location.href = '/forum/questions'; } catch { location.assign('/forum/questions'); } }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   if (me === undefined)
     return <div style={{ minHeight: "100vh", background: "#0c0d12" }} />;
   if (!me)
@@ -383,20 +403,13 @@ export default function ForumPage() {
 
       <div className="mx-auto w-full max-w-6xl px-4 py-6">
         <ForumSubnav />
+        <ForumSearch />
         <div className="relative mb-6 overflow-hidden card">
           <h1
-            className="select-none py-10 text-center font-black tracking-[0.16em]"
-            style={{
-              fontSize: "clamp(64px,12vw,140px)",
-              lineHeight: 1,
-              background:
-                "linear-gradient(180deg,#fff,#d1c3ff 38%,#8b5cf6 60%,rgba(255,255,255,.7))",
-              WebkitBackgroundClip: "text",
-              color: "transparent",
-              textShadow: "0 18px 80px rgba(139,92,246,.35)",
-            }}
+            className="select-none py-10 text-center font-black tracking-[0.16em] text-transparent bg-clip-text shimmer-text"
+            style={{ fontSize: "clamp(64px,12vw,140px)", lineHeight: 1 }}
           >
-            Forum
+            SKY
           </h1>
         </div>
 
@@ -407,8 +420,7 @@ export default function ForumPage() {
             <div
               className="text-[11px] uppercase tracking-[0.32em]"
               style={{ color: "var(--text-2)" }}
-            >
-              SECTIONS
+            >пюгдекш
             </div>
 
             {(Array.isArray(sectionsState) ? sectionsState : []).map(
@@ -419,7 +431,7 @@ export default function ForumPage() {
                   className="card p-4"
                 >
                   <div className="font-semibold flex items-center gap-2">
-                    <ChevronRight size={16} />
+                    {s.icon ? <span className="text-xl">{s.icon}</span> : <ChevronRight size={16} />}
                     {s.title}
                   </div>
                   {s.description && (
@@ -439,9 +451,7 @@ export default function ForumPage() {
           {/* LATEST POSTS */}
           <aside className="grid content-start gap-4">
             <div className="card flex items-center justify-between px-3 py-2">
-              <div className="text-xs uppercase tracking-[0.28em]">
-                LATEST POSTS
-              </div>
+              <div className="text-xs uppercase tracking-[0.28em]">онякедмхе онярш</div>
             </div>
 
             {(Array.isArray(latestPosts) ? latestPosts : []).map((p: any) => (
@@ -487,3 +497,9 @@ export default function ForumPage() {
     </main>
   );
 }
+
+
+
+
+
+

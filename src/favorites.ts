@@ -1,5 +1,5 @@
 // src/favorites.ts
-export type FavKind = 'role' | 'law' | 'vu' | 'lawsec';
+export type FavKind = 'role' | 'law' | 'vu' | 'lawsec' | 'topic';
 
 export type FavMeta = {
   title?: string;
@@ -112,7 +112,7 @@ export function listFavoritesMeta(kind?: FavKind): FavListItem[] {
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i) || '';
-      const m = /^fav:(role|law|vu|lawsec):(.+)$/.exec(k);
+      const m = /^fav:(role|law|vu|lawsec|topic):(.+)$/.exec(k);
       if (!m) continue;
 
       const curKind = m[1] as FavKind;

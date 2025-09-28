@@ -23,6 +23,10 @@ import {
   getServerSettings,
   updateServerSettings,
   getSessionAccount,
+  setVip,
+  unsetVip,
+  setCustomLabels,
+  getProfileById,
   type Role,
 } from "./store/authRemote";
 
@@ -200,6 +204,28 @@ function UsersTab({ meRole, meId, meOwner }: { meRole?: string; meId?: string; m
             );
           }
 
+          const vipBadge = u.vipUntil ? (
+            <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] uppercase tracking-wider text-amber-300" title={`VIP until ${new Date(u.vipUntil).toLocaleString()}`}>VIP</span>
+          ) : null;
+
+          const manageLabels = async () => {
+            try {
+              const prof = await getProfileById(u.id);
+              const current = (prof?.labels || []).join(', ');
+              const input = prompt('Custom labels (comma-separated, up to 7)', current || '');
+              if (input === null) return;
+              const labels = input.split(',').map(s => s.trim()).filter(Boolean).slice(0,7);
+              await setCustomLabels(u.id, labels);
+              alert('Labels updated');
+            } catch (e: any) { alert(e?.message || 'Failed to update labels'); }
+          };
+
+          const giveVip = async () => {
+            const days = parseInt(prompt('VIP days', '30') || '30', 10);
+            try { await setVip(u.id, isNaN(days) ? 30 : Math.max(1, days)); await load(); } catch (e:any) { alert(e?.message || 'Failed to set VIP'); }
+          };
+          const removeVip = async () => { try { await unsetVip(u.id); await load(); } catch (e:any) { alert(e?.message || 'Failed to remove VIP'); } };
+
           // invitedBy visibility rules:
           // - developer sees who invited anyone
           // - admin/moderator only see "invited by: you" for accounts they invited
@@ -223,7 +249,7 @@ function UsersTab({ meRole, meId, meOwner }: { meRole?: string; meId?: string; m
               <div className="text-xs opacity-70">#{u.userNumber}</div>
               <div className="font-semibold">{u.username}</div>
               <div className="text-sm opacity-80 truncate">{(meOwner || meRole === 'developer') ? u.email : ''}</div>
-              <div className="text-xs opacity-70">{invitedSnippet}</div>
+              <div className="flex items-center gap-2 text-xs opacity-70">{invitedSnippet} {vipBadge}</div>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 {(canManageRoles && !isOwner) || (isOwner && meId === u.id) ? (
                   <select
@@ -246,6 +272,9 @@ function UsersTab({ meRole, meId, meOwner }: { meRole?: string; meId?: string; m
                     {isOwner ? 'OWNER' : roleLabel}
                   </span>
                 )}
+                <button className="btn" onClick={manageLabels} title="Custom labels">Labels</button>
+                <button className="btn" onClick={giveVip} title="Give VIP">Give VIP</button>
+                {u.vipUntil && (<button className="btn" onClick={removeVip} title="Remove VIP">UnVIP</button>)}
                 {actions.length ? actions : null}
               </div>
             </div>

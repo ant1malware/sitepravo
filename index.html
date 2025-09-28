@@ -18,7 +18,7 @@
     <!-- <link rel="preconnect" href="https://rsms.me" crossorigin> -->
   </head>
 
-  <body class="bg-zinc-50 text-zinc-900">
+  <body class="bg-zinc-50 text-zinc-900">\n    <a href="#main" class="skip-link" style="position:absolute;left:-9999px;top:0;background:#111;color:#fff;padding:8px;border-radius:6px;z-index:1000">Skip to content</a>
     <div id="root"></div>
 
     <!-- убиваем любой старый service worker и его кэши (чтоб не прилипала старая версия) -->
@@ -37,5 +37,11 @@
 
     <!-- dev-скрипт; при билде Vite сам заменит на /pravo/assets/index-*.js и подключит CSS -->
     <script type="module" src="/src/main.tsx"></script>
-  </body>
+      <script>
+      document.addEventListener(''DOMContentLoaded'', function () {
+        try { var m = document.querySelector(''main''); if (m && !m.id) m.id = ''main''; } catch {}
+      });
+    </script></body>
 </html>
+
+

@@ -44,7 +44,7 @@ function suggestNick(): string {
 function parseWsData(data: any): ServerEvent | null {
   try {
     if (typeof data === 'string') return JSON.parse(data);
-    if (data instanceof ArrayBuffer) return JSON.parse(new TextDecoder().decode(data));
+    // Assume server sends text frames for UTF-8 safety; no client-side recoding
     // @ts-ignore
     if (typeof Blob !== 'undefined' && data instanceof Blob) return null;
     return null;
@@ -277,6 +277,13 @@ export default function SimpleChat({
   const [onlineNames, setOnlineNames] = React.useState<string[]>([]);
   const [presenceOpen, setPresenceOpen] = React.useState(false);
   const [isAdmin, setIsAdmin] = React.useState(false);
+  // If server recognizes us as admin, allow composing without picking a nick
+  React.useEffect(() => {
+    if (isAdmin) {
+      try { setNeedNick(false as any); } catch {}
+      try { if (!nick) setNick('Admin' as any); } catch {}
+    }
+  }, [isAdmin]);
   const [input, setInput] = React.useState('');
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const wsRef = React.useRef<WebSocket | null>(null);
@@ -653,7 +660,9 @@ export default function SimpleChat({
   React.useEffect(() => { (async () => { try { setMeRemote(await getRemoteSession()); } catch { setMeRemote(null); } })(); }, []);
   const muted = React.useMemo(() => {
     const until = meRemote?.mutedUntil ? Date.parse(meRemote.mutedUntil as any) : 0;
-    return !!until && until > Date.now();
+    const isPrivileged = ['developer','admin','moderator'].includes(String(meRemote?.role || ''));
+    // Privileged roles are never locally muted in UI
+    return !isPrivileged && !!until && until > Date.now();
   }, [meRemote]);
 
   function send() {
@@ -672,7 +681,8 @@ export default function SimpleChat({
     adjustTextareaHeight();
   }
 
-  const canUseInput = epochReady && connected && !!nick && !needNick && !muted;
+  // Allow admins to type even without a nick (server assigns name 'Admin')
+  const canUseInput = epochReady && connected && (!!nick || isAdmin) && !needNick && !muted;
 
   const handleTextareaKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {

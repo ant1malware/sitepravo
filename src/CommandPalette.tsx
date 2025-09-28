@@ -1,4 +1,4 @@
-п»їimport React from 'react';
+import React from 'react';
 import { Search, BookOpen, Users, Shield, X, Settings, Star } from 'lucide-react';
 import { rolesData } from './roles';
 import { lawsData } from './laws';
@@ -26,28 +26,18 @@ export default function CommandPalette() {
   const [flt, setFlt] = React.useState<'all'|'role'|'law'|'vu'>(()=> (localStorage.getItem('cp_filter') as any) || 'all');
   React.useEffect(()=>{ try{ localStorage.setItem('cp_filter', flt);}catch{} }, [flt]);
 
-  React.useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      const meta = e.ctrlKey || e.metaKey;
-      if (meta && e.key.toLowerCase() === 'k') { e.preventDefault(); setOpen(true); setQ(''); setIdx(0); }
-      if (!open) return;
-      if (e.key === 'Escape') setOpen(false);
-    }
-    window.addEventListener('keydown', onKey);
-    (window as any).openCommandPalette = () => { setOpen(true); setQ(''); setIdx(0); };
-    return () => {
-      try { delete (window as any).openCommandPalette; } catch {}
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+  
+  const [workshopId, setWorkshopId] = React.useState<string | null>(null);
+  React.useEffect(() => { (async () => { try { const mod = await import('./store/forumRemote'); const secs = await mod.listSections(); const ws = secs.find((s:any)=> String(s.title||'').toLowerCase()==='workshop'); setWorkshopId(ws?.id || null); } catch {} })(); }, []);
 
   const baseRows: Row[] = React.useMemo(() => {
     const list: Row[] = [];
-    list.push({ kind: 'page', id: 'favorites', title: 'РР·Р±СЂР°РЅРЅРѕРµ', subtitle: 'РЎС‚СЂР°РЅРёС†Р°', url: baseUrl('/favorites') });
-    list.push({ kind: 'page', id: 'settings', title: 'РќР°СЃС‚СЂРѕР№РєРё', subtitle: 'РЎС‚СЂР°РЅРёС†Р°', url: baseUrl('/settings') });
-    for (const r of rolesData) list.push({ kind: 'role', id: r.id, title: r.role, subtitle: 'Р Р°Р·РґРµР»', url: baseUrl(`/roles/${r.id}`) });
-    for (const l of lawsData) list.push({ kind: 'law', id: l.slug, title: l.title, subtitle: 'Р—Р°РєРѕРЅ', url: baseUrl(`/laws/${l.slug}`) });
-    for (const v of vuDocs) list.push({ kind: 'vu', id: v.id, title: v.title, subtitle: 'Р’РЈ', url: baseUrl(`/vu/${v.id}`) });
+    list.push({ kind: 'page', id: 'forum', title: 'Форум', subtitle: 'Навигация', url: baseUrl('/forum') });
+    list.push({ kind: 'page', id: 'favorites', title: 'Избранное', subtitle: 'Страница', url: baseUrl('/favorites') });
+    list.push({ kind: 'page', id: 'settings', title: 'Настройки', subtitle: 'Страница', url: baseUrl('/settings') });
+    for (const r of rolesData) list.push({ kind: 'role', id: r.id, title: r.role, subtitle: 'Раздел', url: baseUrl(`/roles/${r.id}`) });
+    for (const l of lawsData) list.push({ kind: 'law', id: l.slug, title: l.title, subtitle: 'Закон', url: baseUrl(`/laws/${l.slug}`) });
+    for (const v of vuDocs) list.push({ kind: 'vu', id: v.id, title: v.title, subtitle: 'ВУ', url: baseUrl(`/vu/${v.id}`) });
     const qq = q.trim().toLowerCase();
     if (qq) list.push(...indexLawMatches(qq).slice(0, 60));
     if (!qq) return list.slice(0, 20);
@@ -87,7 +77,7 @@ export default function CommandPalette() {
           if (curId && headL.includes(qq)) {
             const key = `${l.slug}#${curId}`;
             if (!added.has(key)) {
-              const row: Row = { kind: 'law', id: key, title: `${l.title} вЂ” ${curHead}`, subtitle: 'Р—Р°РіРѕР»РѕРІРѕРє', url: baseUrl(`/laws/${l.slug}?q=${encodeURIComponent(qq)}#${curId}`) };
+              const row: Row = { kind: 'law', id: key, title: `${l.title} — ${curHead}`, subtitle: 'Заголовок', url: baseUrl(`/laws/${l.slug}?q=${encodeURIComponent(qq)}#${curId}`) };
               (row as any).__boost = headL.startsWith(qq) ? 8 : 6;
               out.push(row); added.add(key);
             }
@@ -97,10 +87,10 @@ export default function CommandPalette() {
         if (s && s.toLowerCase().includes(qq)) {
           const key = curId ? `${l.slug}#${curId}` : l.slug;
           if (!added.has(key)) {
-            const snippet = s.length > 140 ? s.slice(0, 137) + 'вЂ¦' : s;
-            const title = curId ? `${l.title} вЂ” ${curHead}` : l.title;
+            const snippet = s.length > 140 ? s.slice(0, 137) + '…' : s;
+            const title = curId ? `${l.title} — ${curHead}` : l.title;
             const url = curId ? baseUrl(`/laws/${l.slug}?q=${encodeURIComponent(qq)}#${curId}`) : baseUrl(`/laws/${l.slug}?q=${encodeURIComponent(qq)}`);
-            const row: Row = { kind: 'law', id: key, title, subtitle: snippet || 'РљРѕРЅС‚РµРєСЃС‚', url };
+            const row: Row = { kind: 'law', id: key, title, subtitle: snippet || 'Контекст', url };
             (row as any).__boost = 5;
             out.push(row); added.add(key);
           }
@@ -141,7 +131,7 @@ export default function CommandPalette() {
   return (
     <>
       {!open ? null : (
-        <div className="fixed inset-0 z-[70] flex items-start justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="РџРѕРёСЃРє">
+        <div className="fixed inset-0 z-[70] flex items-start justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Поиск">
           <Panel>
             <div className="mb-2 flex items-center gap-2">
               <Search className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
@@ -150,24 +140,24 @@ export default function CommandPalette() {
                 value={q}
                 onChange={(e) => { setQ(e.target.value); setIdx(0); }}
                 onKeyDown={onKeyList}
-                placeholder="РџРѕРёСЃРє: Р·Р°РєРѕРЅ, СЂРѕР»СЊ, Р’РЈ..."
+                placeholder="Поиск: закон, роль, ВУ..."
                 className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring text-zinc-900 placeholder-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-500"
               />
-              <button className="btn text-zinc-600 dark:text-zinc-300" onClick={() => setOpen(false)} aria-label="Р—Р°РєСЂС‹С‚СЊ"><X className="h-4 w-4" /></button>
+              <button className="btn text-zinc-600 dark:text-zinc-300" onClick={() => setOpen(false)} aria-label="Закрыть"><X className="h-4 w-4" /></button>
             </div>
             <div className="mb-2 flex items-center gap-2">
               {([
-                {k:'all', label:'Р’СЃРµ'},
-                {k:'role', label:'Р РѕР»Рё'},
-                {k:'law', label:'Р—Р°РєРѕРЅС‹'},
-                {k:'vu', label:'Р’РЈ'},
+                {k:'all', label:'Все'},
+                {k:'role', label:'Роли'},
+                {k:'law', label:'Законы'},
+                {k:'vu', label:'ВУ'},
               ] as any[]).map((c)=> (
                 <button key={c.k} onClick={()=>{ setFlt(c.k); setIdx(0); }} className={`chip ${flt===c.k? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900' : 'bg-white dark:bg-zinc-900'}`}>{c.label}</button>
               ))}
             </div>
             <div className="max-h-80 overflow-y-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
               {!rows.length && (
-                <div className="p-3 text-sm text-zinc-500 dark:text-zinc-400">РќРёС‡РµРіРѕ РЅРµ РЅР°Р№РґРµРЅРѕ</div>
+                <div className="p-3 text-sm text-zinc-500 dark:text-zinc-400">Ничего не найдено</div>
               )}
               {rows.map((r, i) => (
                 <button
@@ -195,3 +185,5 @@ export default function CommandPalette() {
     </>
   );
 }
+
+

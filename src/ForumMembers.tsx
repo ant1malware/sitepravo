@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Search, Users, ChevronRight } from "lucide-react";
 import ForumSubnav from "./ForumSubnav";
+import Badge, { computePoints } from "./components/Badge";
 import { listAccounts as listLocalAccounts, getSessionAccount as getLocalSession, type Account } from "./store/forumStore";
 import { listPublicMembers, getSessionAccount as getRemoteSession, type PublicMember } from "./store/authRemote";
 
@@ -27,6 +28,7 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 function MemberCard({ member, highlight }: { member: Account; highlight: boolean }) {
+  const pts = (member as any).score ?? computePoints({ posts: member.posts, likes: member.likes, topics: member.topics });
   const accentFrom = member.profile.accentFrom || "#22d3ee";
   const accentTo = member.profile.accentTo || "#8b5cf6";
   return (
@@ -51,6 +53,7 @@ function MemberCard({ member, highlight }: { member: Account; highlight: boolean
               {member.username}
             </div>
             <RoleBadge role={member.role} />
+            <Badge points={pts} />
             {highlight && (
               <span className="rounded-full bg-cyan-500/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.3em] text-cyan-300">
                 You
@@ -245,3 +248,6 @@ export default function ForumMembers() {
     </main>
   );
 }
+
+
+

@@ -40,7 +40,7 @@ function corsHeaders(req: Request): Record<string, string> {
 }
 
 function json(req: Request, body: unknown, init: ResponseInit = {}) {
-  const headers = new Headers({ 'Content-Type': 'application/json', ...corsHeaders(req), ...(init.headers || {}) })
+  const headers = new Headers({ 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders(req), ...(init.headers || {}) })
   return new Response(JSON.stringify(body), { ...init, headers })
 }
 
@@ -161,6 +161,8 @@ type UserFull = {
   // moderation flags
   bannedUntil?: string | null;
   mutedUntil?: string | null;
+  // VIP expiry (optional); if set and expired, downgrade role from 'vip' to 'user'
+  vipUntil?: string | null;
 }
 type UserPublic = Omit<UserFull, 'passwordHash'|'salt'>
 
@@ -220,6 +222,11 @@ async function listUsersKV(env: Env): Promise<UserPublic[]> {
       const raw = await env.AUTH_KV!.get(k.name)
       if (!raw) continue
       const u = JSON.parse(raw) as UserFull
+      // auto-downgrade expired VIPs during listing
+      try {
+        const until = u.vipUntil ? Date.parse(u.vipUntil as any) : 0;
+        if (u.role === 'vip' && until && until < Date.now()) { u.role = 'user'; u.vipUntil = null; await putUserKV(env, u) }
+      } catch {}
       const { passwordHash, salt, ...pub } = u
       out.push(pub as UserPublic)
     }
@@ -364,6 +371,7 @@ type Profile = {
   avatarData?: string; bannerData?: string; bio?: string; signature?: string;
   links?: { website?: string; discord?: string; telegram?: string };
   accentFrom?: string; accentTo?: string; badges?: string[];
+  labels?: string[];
   privacy?: { showEmail?: boolean; showStats?: boolean; showSecondaryRole?: boolean };
 }
 function defaultProfile(): Profile { return { bio:'', signature:'', links:{}, accentFrom:'#8b5cf6', accentTo:'#0ea5e9', badges:[], privacy:{ showEmail:false, showStats:true } } }
@@ -395,7 +403,7 @@ export class UserCounter {
       let n = (await this.state.storage.get<number>('n')) ?? 0
       n += 1
       await this.state.storage.put('n', n)
-      return new Response(JSON.stringify({ n }), { status: 200 })
+      return json(req, { n }, { status: 200 })
     }
     return new Response('not found', { status: 404 })
   }
@@ -502,6 +510,11 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
       if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
       const u = await getUserByIdKV(env, s.userId)
       if (!u) return json(req, { error:'unauthorized' }, { status: 401 })
+      // auto-downgrade expired VIPs
+      try {
+        const until = u.vipUntil ? Date.parse(u.vipUntil as any) : 0;
+        if (u.role === 'vip' && until && until < Date.now()) { u.role = 'user'; u.vipUntil = null; await putUserKV(env, u) }
+      } catch {}
       const { passwordHash: _1, salt: _2, ...pub } = u
       return json(req, { user: pub })
     }
@@ -552,6 +565,28 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
       return json(req, { profile })
     }
 
+    // PATCH /profiles/:id/labels (admin/dev) — set custom cosmetic labels up to 7 items
+    {
+      const m = sub.match(/^\/profiles\/([^/]+)\/labels$/)
+      if (m && method === 'PATCH') {
+        const s = await readSession(env, req)
+        if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
+        const me = await getUserByIdKV(env, s.userId)
+        if (!me || !((me.userNumber||0) === 1 || me.role==='admin' || me.role==='developer')) return json(req, { error:'forbidden' }, { status: 403 })
+        const id = decodeURIComponent(m[1])
+        const u = await getUserByIdKV(env, id)
+        if (!u) return json(req, { error:'not found' }, { status: 404 })
+        const body = await req.json().catch(()=> ({}))
+        const arr = Array.isArray(body?.labels) ? body.labels : []
+        const labels: string[] = []
+        for (const x of arr) { if (typeof x === 'string') { const v = x.trim().slice(0, 24); if (v) { labels.push(v); if (labels.length >= 7) break } } }
+        const profile = (await getProfileKV(env, id)) || defaultProfile()
+        profile.labels = labels
+        await putProfileKV(env, id, profile)
+        return json(req, { profile })
+      }
+    }
+
     // GET /users (admin/dev/moderator). Only developer sees emails.
     if (sub === '/users' && method === 'GET') {
       const s = await readSession(env, req)
@@ -596,6 +631,49 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
       const { passwordHash: _1, salt: _2, ...pub } = u
       ;(pub as any).owner = ((u.userNumber||0) === 1)
       return json(req, { user: pub })
+    }
+
+    // POST /users/:id/vip (admin/dev) — assign VIP with expiration in days
+    {
+      const mv = sub.match(/^\/users\/([^/]+)\/vip$/)
+      if (mv && method === 'POST') {
+        const s = await readSession(env, req)
+        if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
+        const me = await getUserByIdKV(env, s.userId)
+        if (!me || !((me.userNumber||0) === 1 || me.role==='admin' || me.role==='developer')) return json(req, { error:'forbidden' }, { status: 403 })
+        const id = mv[1]
+        const u = await getUserByIdKV(env, id)
+        if (!u) return json(req, { error:'not found' }, { status: 404 })
+        const body = await req.json().catch(()=> ({}))
+        const days = Math.max(1, Math.min(3650, parseInt(String(body?.days||30), 10) || 30))
+        const until = new Date(Date.now() + days*24*60*60*1000).toISOString()
+        u.role = 'vip'
+        u.vipUntil = until
+        await putUserKV(env, u)
+        const { passwordHash: _1, salt: _2, ...pub } = u
+        ;(pub as any).owner = ((u.userNumber||0) === 1)
+        return json(req, { user: pub })
+      }
+    }
+
+    // POST /users/:id/unvip (admin/dev) — remove VIP and clear expiry
+    {
+      const mv = sub.match(/^\/users\/([^/]+)\/unvip$/)
+      if (mv && method === 'POST') {
+        const s = await readSession(env, req)
+        if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
+        const me = await getUserByIdKV(env, s.userId)
+        if (!me || !((me.userNumber||0) === 1 || me.role==='admin' || me.role==='developer')) return json(req, { error:'forbidden' }, { status: 403 })
+        const id = mv[1]
+        const u = await getUserByIdKV(env, id)
+        if (!u) return json(req, { error:'not found' }, { status: 404 })
+        u.vipUntil = null
+        if (u.role === 'vip') u.role = 'user'
+        await putUserKV(env, u)
+        const { passwordHash: _1, salt: _2, ...pub } = u
+        ;(pub as any).owner = ((u.userNumber||0) === 1)
+        return json(req, { user: pub })
+      }
     }
 
     /* ---------- Forum: sections/topics/posts ---------- */

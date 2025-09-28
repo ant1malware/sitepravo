@@ -11,10 +11,12 @@ const VuPage = React.lazy(() => import('./VuPage'));
 const BuddyPlayground = React.lazy(() => import('./BuddyPlayground'));
 const HomePage = React.lazy(() => import('./HomePage'));
 const ForumPage = React.lazy(() => import('./ForumPage'));
+const DevSeed = React.lazy(() => import('./DevSeed')); 
 const ProfilePage = React.lazy(() => import('./ProfilePage'));
 const MembersPage = React.lazy(() => import('./ForumMembers'));
 const SectionPage = React.lazy(() => import('./SectionPage'));
 const TopicPage = React.lazy(() => import('./TopicPage'));
+const TagPage = React.lazy(() => import('./TagPage'));
 const QuestionsPage = React.lazy(() => import('./QuestionsPage'));
 const AdminPanel = React.lazy(() => import('./AdminPanel3'));
 import RecorderPage from './RecorderPage';
@@ -84,7 +86,7 @@ export default function App() {
       {/* Offset notifications button below topbar on small screens; keep under full-screen overlays */}
       <div className="fixed right-2 top-14 z-[60] sm:top-2"><NotificationsBell /></div>
       <RouteTracker />
-      <React.Suspense fallback={<div className="p-4 text-sm text-zinc-300">Загрузка…</div>}>
+      <React.Suspense fallback={<div className="p-4 text-sm text-zinc-300">Р—Р°РіСЂСѓР·РєР°вЂ¦</div>}>
         <Routes>
           <Route path="/" element={<GovCheatsheetSky />} />
           <Route path="/home" element={<HomePage />} />
@@ -94,6 +96,8 @@ export default function App() {
           <Route path="/forum/questions" element={<QuestionsPage />} />
           <Route path="/forum/members" element={<MembersPage />} />
           <Route path="/forum/profile/:username" element={<ProfilePage />} />
+          <Route path="/u/:username" element={<ProfilePage />} />
+          <Route path="/forum/tag/:tag" element={<TagPage />} />
           <Route path="/forum/admin" element={<AdminPanel />} />
           <Route path="/whats-new" element={<WhatsNew />} />
           <Route path="/diff/:id" element={<DiffPage />} />
@@ -107,6 +111,8 @@ export default function App() {
           <Route path="/buddy" element={<BuddyPlayground />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/favorites" element={<FavoritesPage />} />
+                  <Route path="/forum/feeds" element={<ForumFeedsPage />} />
+                  <Route path="/dev/seed" element={<DevSeed />} />
         </Routes>
       </React.Suspense>
     </BrowserRouter>
@@ -117,4 +123,6 @@ export default function App() {
 
 
 
+
+const ForumFeedsPage = React.lazy(() => import('./ForumFeedsPage'));
 

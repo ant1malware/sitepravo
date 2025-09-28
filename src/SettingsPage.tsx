@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Link } from 'react-router-dom';
 import {
   ACCENTS,
@@ -341,7 +341,7 @@ export default function SettingsPage() {
                 <span className="settings-label">Анимации Liquid</span>
                 <div className="settings-seg">
                   <button type="button" className={`settings-seg__item ${animationsOn ? 'is-active' : ''}`} onClick={() => onAnimToggle(true)}>Включены</button>
-                  <button type="button" className={`settings-seg__item ${!animationsOn ? 'is-active' : ''}`} onClick={() => onAnimToggle(false)}>Выключены</button>
+                  <button type="button" className={`settings-seg__item ${!animationsOn ? 'is-active' : ''}`} onClick={() => onAnimToggle(false)}>Отключены</button>
                 </div>
                 <p className="settings-help">Отключает плавучесть и блики стекла.</p>
               </div>
@@ -376,8 +376,20 @@ export default function SettingsPage() {
             <div className="settings-field">
               <span className="settings-label">Отключить трекинг</span>
               <div className="settings-seg">
-                <button type="button" className="settings-seg__item" onClick={() => { try { localStorage.setItem('telemetry_disabled', '1'); alert('Трекинг отключен'); } catch {} }}>Отключить</button>
-                <button type="button" className="settings-seg__item" onClick={() => { try { localStorage.removeItem('telemetry_disabled'); alert('Трекинг включен'); } catch {} }}>Включить</button>
+                <button
+                  type="button"
+                  className="settings-seg__item"
+                  onClick={() => { try { localStorage.setItem('telemetry_disabled', '1'); alert('Трекинг отключён'); } catch {} }}
+                >
+                  Отключить
+                </button>
+                <button
+                  type="button"
+                  className="settings-seg__item"
+                  onClick={() => { try { localStorage.removeItem('telemetry_disabled'); alert('Трекинг включён'); } catch {} }}
+                >
+                  Включить
+                </button>
               </div>
             </div>
           </Panel>
@@ -386,21 +398,36 @@ export default function SettingsPage() {
             <div className="flex flex-wrap items-center gap-2">
               <Link to="/buddy" className="btn btn-primary">Показать сцену</Link>
               <label className="settings-checkbox">
-                <input type="checkbox" checked={(() => { try { return getBuddyEnabled(); } catch { return true; } })()} onChange={(e) => { try { setBuddyEnabled(e.target.checked); } catch {} }} />
-                Показать Чебзика
+                <input
+                  type="checkbox"
+                  checked={(() => { try { return getBuddyEnabled(); } catch { return true; } })()}
+                  onChange={(e) => { try { setBuddyEnabled(e.target.checked); } catch {} }}
+                />
+                Показывать Чебзика
               </label>
               <span className="text-sm text-[color:var(--text-2)]">Можно отключить. Синхронизируйте цвета со скином из игры.</span>
             </div>
             <div className="mt-3 grid items-center gap-3 sm:grid-cols-[auto_auto_1fr]">
               <div className="flex items-center gap-2">
                 <span className="text-xs opacity-70">Цвет A</span>
-                <input type="color" defaultValue={(getBuddySkin() as any).a} onChange={(e) => { try { const s = getBuddySkin(); setBuddySkin(e.target.value, s.b); } catch {} }} />
+                <input
+                  type="color"
+                  defaultValue={(getBuddySkin() as any).a}
+                  onChange={(e) => { try { const s = getBuddySkin(); setBuddySkin(e.target.value, s.b); } catch {} }}
+                />
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs opacity-70">Цвет B</span>
-                <input type="color" defaultValue={(getBuddySkin() as any).b} onChange={(e) => { try { const s = getBuddySkin(); setBuddySkin(s.a, e.target.value); } catch {} }} />
+                <input
+                  type="color"
+                  defaultValue={(getBuddySkin() as any).b}
+                  onChange={(e) => { try { const s = getBuddySkin(); setBuddySkin(s.a, e.target.value); } catch {} }}
+                />
               </div>
-              <div className="justify-self-start rounded-xl p-2" style={{ background: `linear-gradient(135deg, ${(getBuddySkin() as any).a}, ${(getBuddySkin() as any).b})` }}>
+              <div
+                className="justify-self-start rounded-xl p-2"
+                style={{ background: `linear-gradient(135deg, ${(getBuddySkin() as any).a}, ${(getBuddySkin() as any).b})` }}
+              >
                 <svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
                   <defs>
                     <radialGradient id="g2" cx="50%" cy="30%" r="70%">
@@ -447,7 +474,13 @@ export default function SettingsPage() {
               {ACCENT_KEYS.map((name) => {
                 const palette: any = (ACCENTS as any)[name];
                 return (
-                  <button key={name} className={`accent-swatch ${accent === name ? 'is-active' : ''}`} style={{ ['--sw1' as any]: palette?.[500], ['--sw2' as any]: palette?.[600] }} title={name} onClick={() => onAccentName(name)} />
+                  <button
+                    key={name}
+                    className={`accent-swatch ${accent === name ? 'is-active' : ''}`}
+                    style={{ ['--sw1' as any]: palette?.[500], ['--sw2' as any]: palette?.[600] }}
+                    title={name}
+                    onClick={() => onAccentName(name)}
+                  />
                 );
               })}
             </div>
@@ -466,7 +499,14 @@ export default function SettingsPage() {
                 <span>Без фона</span>
               </button>
               {BG_KEYS.map((id) => (
-                <button key={id} type="button" title={id.toUpperCase()} onClick={() => onBgPreset(id)} className={`settings-bg-tile ${bgSel === id ? 'is-active' : ''}`} style={{ backgroundImage: `url("${PRESET_BG[id]}")` }} />
+                <button
+                  key={id}
+                  type="button"
+                  title={id.toUpperCase()}
+                  onClick={() => onBgPreset(id)}
+                  className={`settings-bg-tile ${bgSel === id ? 'is-active' : ''}`}
+                  style={{ backgroundImage: `url("${PRESET_BG[id]}")` }}
+                />
               ))}
             </div>
 
@@ -474,10 +514,22 @@ export default function SettingsPage() {
               <div className="settings-bg-controls">
                 <div>
                   <span className="settings-label">Интенсивность затемнения</span>
-                  <input type="range" min={0} max={0.85} step={0.05} value={bgOverlay} onChange={(e) => onOverlayChange(parseFloat(e.target.value))} className="slider" />
+                  <input
+                    type="range"
+                    min={0}
+                    max={0.85}
+                    step={0.05}
+                    value={bgOverlay}
+                    onChange={(e) => onOverlayChange(parseFloat(e.target.value))}
+                    className="slider"
+                  />
                 </div>
-                <label className="settings-checkbox"><input type="checkbox" checked={bgFixed} onChange={(e) => onFixedToggle(e.target.checked)} /> Фиксированный фон</label>
-                <label className="settings-checkbox"><input type="checkbox" checked={bgSmart} onChange={(e) => onSmartToggle(e.target.checked)} /> Умное затемнение</label>
+                <label className="settings-checkbox">
+                  <input type="checkbox" checked={bgFixed} onChange={(e) => onFixedToggle(e.target.checked)} /> Фиксированный фон
+                </label>
+                <label className="settings-checkbox">
+                  <input type="checkbox" checked={bgSmart} onChange={(e) => onSmartToggle(e.target.checked)} /> Умное затемнение
+                </label>
               </div>
             )}
           </Panel>
@@ -492,8 +544,33 @@ export default function SettingsPage() {
               <span className="text-sm text-[color:var(--text-2)]">Игра открывается на отдельной странице.</span>
             </div>
           </Panel>
+
+          <Panel title="Лента форума" desc="Выберите ленту по умолчанию для /forum.">
+            <div className="flex items-center gap-2">
+              <FeedSelector />
+            </div>
+          </Panel>
         </main>
       </div>
+    </div>
+  );
+}
+
+function FeedSelector() {
+  const [def, setDef] = React.useState<string>(() => { try { return localStorage.getItem('forum:default_feed') || 'hot'; } catch { return 'hot'; } });
+  const set = (v: string) => { setDef(v); try { localStorage.setItem('forum:default_feed', v); } catch {} };
+  return (
+    <div className="flex items-center gap-2">
+      {(['hot','new','questions'] as const).map(id => (
+        <button
+          key={id}
+          type="button"
+          className={`tab ${def===id ? 'tab-active' : ''}`}
+          onClick={() => set(id)}
+        >
+          {id==='hot'?'горячее':id==='new'?'новое':'вопросы'}
+        </button>
+      ))}
     </div>
   );
 }

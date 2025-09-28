@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { useParams } from "react-router-dom";
 import {
   findAccountByUsername,
@@ -34,8 +34,9 @@ import {
   Camera, Pencil, Globe, Link as LinkIcon, BadgeCheck, UserPlus, UserMinus,
   MessageSquare, Trash2, Shield, Code2, Gavel, Crown
 } from "lucide-react";
+import Badge, { computePoints } from "./components/Badge";
 
-// ====== ROLE META (для красивого бейджа и подсветки) ======
+// ====== ROLE META (РґР»СЏ РєСЂР°СЃРёРІРѕРіРѕ Р±РµР№РґР¶Р° Рё РїРѕРґСЃРІРµС‚РєРё) ======
 const ROLE_STYLES: Record<string, { label: string; color: string; glow: string }> = {
   developer: { label: "Developer", color: "#22d3ee", glow: "from-cyan-400/35" },
   admin:     { label: "Admin",     color: "#ef4444", glow: "from-rose-400/35" },
@@ -47,7 +48,7 @@ const ROLE_STYLES: Record<string, { label: string; color: string; glow: string }
 
 const ROLE_META: Record<string, {
   label: string;
-  grad: string; // градиент чипа
+  grad: string; // РіСЂР°РґРёРµРЅС‚ С‡РёРїР°
   Icon: any;
 }> = {
   owner:     { label: "Owner",     grad: "from-amber-400 via-rose-400 to-amber-400",  Icon: Crown },
@@ -82,7 +83,7 @@ function InfoRow({ title, children, right }: { title: string; children: React.Re
   );
 }
 
-// Крупный красивый бейдж роли — под именем
+// РљСЂСѓРїРЅС‹Р№ РєСЂР°СЃРёРІС‹Р№ Р±РµР№РґР¶ СЂРѕР»Рё вЂ” РїРѕРґ РёРјРµРЅРµРј
 function RoleBadgePro({ role }: { role: string }) {
   const meta = ROLE_META[role] ?? ROLE_META.user;
   const Icon = meta.Icon;
@@ -99,7 +100,7 @@ function RoleBadgePro({ role }: { role: string }) {
   );
 }
 
-// Маленькая плашка роли на аватаре
+// РњР°Р»РµРЅСЊРєР°СЏ РїР»Р°С€РєР° СЂРѕР»Рё РЅР° Р°РІР°С‚Р°СЂРµ
 function RoleMini({ role }: { role: string }) {
   const meta = ROLE_META[role] ?? ROLE_META.user;
   return (
@@ -281,37 +282,47 @@ export default function ProfilePage() {
                     : `linear-gradient(135deg, ${accentFrom}, ${accentTo})`,
                 }}
               />
-              {/* мягкое свечение аватара по роли */}
+              {/* РјСЏРіРєРѕРµ СЃРІРµС‡РµРЅРёРµ Р°РІР°С‚Р°СЂР° РїРѕ СЂРѕР»Рё */}
               <div className={`absolute -inset-1 -z-10 rounded-full bg-gradient-to-br ${roleStyle.glow} to-transparent blur-lg`} />
-              {/* мини-плашка роли на аватаре */}
+              {/* РјРёРЅРё-РїР»Р°С€РєР° СЂРѕР»Рё РЅР° Р°РІР°С‚Р°СЂРµ */}
               <div className="absolute -bottom-2 left-1">
                 <RoleMini role={user.role} />
               </div>
             </div>
 
             <div className="flex-1 min-w-0">
-              {/* имя и номер */}
+              {/* РёРјСЏ Рё РЅРѕРјРµСЂ */}
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="text-2xl font-extrabold text-white">{user.username}</h1>
                 <span className="text-xs text-zinc-400/80">#{user.userNumber}</span>
+                <Badge points={(user as any).score ?? computePoints({ posts: user.posts, likes: user.likes, topics: user.topics })} />
               </div>
-              {/* крупный бейдж роли под именем */}
+              {/* РєСЂСѓРїРЅС‹Р№ Р±РµР№РґР¶ СЂРѕР»Рё РїРѕРґ РёРјРµРЅРµРј */}
               <div className="mt-2 flex items-center gap-2">
                 {isOwnerRemote && <RoleBadgePro role="owner" />}
                 {user.profile?.privacy?.showSecondaryRole !== false && (
                   <RoleBadgePro role={user.role} />
                 )}
               </div>
-              {/* дата/почта */}
+              {/* РґР°С‚Р°/РїРѕС‡С‚Р° */}
               <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-zinc-400/90">
                 <span>Joined {new Date(user.createdAt).toLocaleDateString()}</span>
                 {user.profile.privacy?.showEmail && user.email ? (
                   <span className="rounded-full bg-white/[0.04] px-2 py-1">{user.email}</span>
                 ) : null}
               </div>
-              {/* пользовательские бейджи */}
+              {/* РїРѕР»СЊР·РѕРІР°С‚РµР»СЊСЃРєРёРµ Р±РµР№РґР¶Рё */}
               <div className="mt-2">
                 <BadgesRow badges={user.profile.badges} />
+                {Array.isArray((user as any).profile?.labels) && (user as any).profile.labels.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(user as any).profile.labels.slice(0,7).map((label: string, i: number) => (
+                      <span key={i} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs">
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -766,7 +777,7 @@ function CommentItem({
               ) : (
                 <span className="font-semibold text-white">{name}</span>
               )}
-              <span className="opacity-70"> · {new Date(node.comment.createdAt).toLocaleString()}</span>
+              <span className="opacity-70"> В· {new Date(node.comment.createdAt).toLocaleString()}</span>
             </div>
             {(currentUserId === node.comment.authorId || currentUserId === ownerId) && (
               <button className="btn" title="Delete" onClick={() => onDelete(node.comment.id)}>
@@ -821,9 +832,10 @@ function Reactions({ targetId, commentId, currentUserId }: { targetId: string; c
   );
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
-      <Btn r="like" label="👍" />
-      <Btn r="smile" label="😊" />
-      <Btn r="useful" label="✅" />
+      <Btn r="like" label="рџ‘Ќ" />
+      <Btn r="smile" label="рџЉ" />
+      <Btn r="useful" label="вњ…" />
     </div>
   );
 }
+

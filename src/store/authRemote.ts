@@ -32,6 +32,7 @@ export type RemoteUser = {
   createdAt: string;
   bannedUntil?: string | null;
   mutedUntil?: string | null;
+  vipUntil?: string | null;
   invitedById?: string | null;
   invitedByName?: string | null;
   owner?: boolean;
@@ -45,6 +46,7 @@ export type RemoteProfile = {
   accentFrom?: string;
   accentTo?: string;
   badges?: string[];
+  labels?: string[];
   privacy?: { showEmail?: boolean; showStats?: boolean; showLinks?: boolean; allowComments?: boolean; showFollowers?: boolean };
 };
 export type Invite = {
@@ -241,6 +243,25 @@ export async function getProfileByUsername(username: string): Promise<{ user: Re
 export async function updateMyProfile(profile: RemoteProfile): Promise<RemoteProfile> {
   const { profile: saved } = await api(`/profiles/me`, { method: 'PATCH', body: JSON.stringify(profile) });
   return saved as RemoteProfile;
+}
+
+export async function getProfileById(id: string): Promise<RemoteProfile | null> {
+  try { const { profile } = await api(`/profiles/${encodeURIComponent(id)}`); return profile as RemoteProfile; } catch { return null; }
+}
+
+export async function setCustomLabels(id: string, labels: string[]): Promise<RemoteProfile> {
+  const payload = { labels: Array.isArray(labels) ? labels : [] } as any;
+  const { profile } = await api(`/profiles/${encodeURIComponent(id)}/labels`, { method: 'PATCH', body: JSON.stringify(payload) });
+  return profile as RemoteProfile;
+}
+
+export async function setVip(id: string, days = 30): Promise<RemoteUser> {
+  const { user } = await api(`/users/${encodeURIComponent(id)}/vip`, { method: 'POST', body: JSON.stringify({ days }) });
+  return user as RemoteUser;
+}
+export async function unsetVip(id: string): Promise<RemoteUser> {
+  const { user } = await api(`/users/${encodeURIComponent(id)}/unvip`, { method: 'POST' });
+  return user as RemoteUser;
 }
 
 export type PublicMember = Pick<RemoteUser, 'id'|'username'|'role'|'createdAt'|'userNumber'>;
