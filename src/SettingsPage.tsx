@@ -39,7 +39,7 @@ import {
   getAnimationsOn,
 } from './uiSettings';
 // Buddy (Chebzik) controls
-import { getBuddyEnabled, setBuddyEnabled, getBuddySkin, setBuddySkin } from './uiSettings';
+import { getBuddyEnabled, setBuddyEnabled, getBuddySkin } from './uiSettings';
 
 // Classic background previews
 type BgKey = keyof typeof BACKGROUNDS;
@@ -405,23 +405,27 @@ export default function SettingsPage() {
                 />
                 Показывать Чебзика
               </label>
-              <span className="text-sm text-[color:var(--text-2)]">Можно отключить. Синхронизируйте цвета со скином из игры.</span>
+              <span className="text-sm text-[color:var(--text-2)]">Можно отключить. Цвет синхронизируется со скином из игры.</span>
             </div>
             <div className="mt-3 grid items-center gap-3 sm:grid-cols-[auto_auto_1fr]">
               <div className="flex items-center gap-2">
                 <span className="text-xs opacity-70">Цвет A</span>
                 <input
                   type="color"
-                  defaultValue={(getBuddySkin() as any).a}
-                  onChange={(e) => { try { const s = getBuddySkin(); setBuddySkin(e.target.value, s.b); } catch {} }}
+                  value={(getBuddySkin() as any).a}
+                  disabled
+                  readOnly
+                  title="Цвет управляется сценой Чебзика"
                 />
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs opacity-70">Цвет B</span>
                 <input
                   type="color"
-                  defaultValue={(getBuddySkin() as any).b}
-                  onChange={(e) => { try { const s = getBuddySkin(); setBuddySkin(s.a, e.target.value); } catch {} }}
+                  value={(getBuddySkin() as any).b}
+                  disabled
+                  readOnly
+                  title="Цвет управляется сценой Чебзика"
                 />
               </div>
               <div

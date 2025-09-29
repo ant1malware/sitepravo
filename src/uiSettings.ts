@@ -1,5 +1,7 @@
 // src/uiSettings.ts
 
+import { CHEBZIK_DEFAULT_GRADIENT, getChebPaletteGradient } from './data/chebPalette';
+
 const DENSITY_KEY = 'ui:density'; // 'standard' | 'compact'
 const FONT_KEY = 'ui:font'; // number, 0.9..1.3
 const FEATURES_KEY = 'ui:features'; // JSON map
@@ -12,6 +14,7 @@ const ANIM_KEY = 'ui:anim'; // '1' | '0'
 const BUDDY_ENABLED_KEY = 'buddy:enabled'; // '1' | '0'
 const BUDDY_SKIN_A = 'buddy:skin_a'; // hex color
 const BUDDY_SKIN_B = 'buddy:skin_b'; // hex color
+const BUDDY_SAVE_KEY = 'buddy:save:v1';
 
 export type Density = 'standard' | 'compact';
 export type Shadow = 'none' | 'soft' | 'strong';
@@ -184,7 +187,31 @@ export function setBuddySkin(a: string, b: string) {
   safeSet(BUDDY_SKIN_B, B);
 }
 export function getBuddySkin(): { a: string; b: string } {
-  const a = safeGet(BUDDY_SKIN_A) || '#bcd3ff';
-  const b = safeGet(BUDDY_SKIN_B) || '#6a79ff';
-  return { a, b };
+  const fromSave = readBuddyPaletteFromSave();
+  let a = safeGet(BUDDY_SKIN_A);
+  let b = safeGet(BUDDY_SKIN_B);
+  if (fromSave) {
+    const [sa, sb] = fromSave;
+    if (!a || !b || a.toLowerCase() !== sa.toLowerCase() || b.toLowerCase() !== sb.toLowerCase()) {
+      setBuddySkin(sa, sb);
+      a = sa;
+      b = sb;
+    }
+  }
+  const [defA, defB] = CHEBZIK_DEFAULT_GRADIENT;
+  return { a: a || defA, b: b || defB };
+}
+
+function readBuddyPaletteFromSave(): [string, string] | null {
+  try {
+    const raw = safeGet(BUDDY_SAVE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    const paletteId = data?.cosm?.equipped?.palette as string | undefined;
+    const gradient = getChebPaletteGradient(typeof paletteId === 'string' ? paletteId : null);
+    if (!gradient) return null;
+    return gradient;
+  } catch {
+    return null;
+  }
 }
