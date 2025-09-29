@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { useParams } from "react-router-dom";
 import {
   findAccountByUsername,
@@ -12,6 +12,7 @@ import {
   getProfileByUsername,
   updateMyProfile,
   type RemoteProfile,
+  type RemoteProfilePayload,
   setRole as setRemoteRole,
   listPublicMembers,
 } from "./store/authRemote";
@@ -36,46 +37,46 @@ import {
 } from "lucide-react";
 import Badge, { computePoints } from "./components/Badge";
 
-// ====== ROLE META (РґР»СЏ РєСЂР°СЃРёРІРѕРіРѕ Р±РµР№РґР¶Р° Рё РїРѕРґСЃРІРµС‚РєРё) ======
+// ====== ROLE META (для красивого бейджа и подсветки) ======
 const ROLE_STYLES: Record<string, { label: string; color: string; glow: string }> = {
-  developer: { label: "Developer", color: "#22d3ee", glow: "from-cyan-400/35" },
-  admin:     { label: "Admin",     color: "#ef4444", glow: "from-rose-400/35" },
-  moderator: { label: "Moderator", color: "#8b5cf6", glow: "from-violet-400/35" },
-  vip:       { label: "VIP",       color: "#eab308", glow: "from-amber-400/35" },
-  user:      { label: "User",      color: "#94a3b8", glow: "from-slate-300/30" },
-  newbie:    { label: "Newbie",    color: "#22d3ee", glow: "from-cyan-400/35" },
+  developer: { label: "Разработчик", color: "#22d3ee", glow: "from-cyan-400/35" },
+  admin: { label: "Администратор", color: "#ef4444", glow: "from-rose-400/35" },
+  moderator: { label: "Модератор", color: "#8b5cf6", glow: "from-violet-400/35" },
+  vip: { label: "VIP", color: "#eab308", glow: "from-amber-400/35" },
+  user: { label: "Участник", color: "#94a3b8", glow: "from-slate-300/30" },
+  newbie: { label: "Новичок", color: "#22d3ee", glow: "from-cyan-400/35" },
 };
 
 const ROLE_META: Record<string, {
   label: string;
-  grad: string; // РіСЂР°РґРёРµРЅС‚ С‡РёРїР°
+  grad: string; // градиент чипа
   Icon: any;
 }> = {
-  owner:     { label: "Owner",     grad: "from-amber-400 via-rose-400 to-amber-400",  Icon: Crown },
-  developer: { label: "Developer", grad: "from-cyan-400 via-fuchsia-400 to-cyan-400", Icon: Code2 },
-  admin:     { label: "Admin",     grad: "from-rose-400 via-amber-400 to-rose-400",  Icon: Shield },
-  moderator: { label: "Moderator", grad: "from-violet-400 via-sky-400 to-violet-400", Icon: Gavel },
+  owner:     { label: "Владелец",     grad: "from-amber-400 via-rose-400 to-amber-400",  Icon: Crown },
+  developer: { label: "Разработчик", grad: "from-cyan-400 via-fuchsia-400 to-cyan-400", Icon: Code2 },
+  admin:     { label: "Администратор",     grad: "from-rose-400 via-amber-400 to-rose-400",  Icon: Shield },
+  moderator: { label: "Модератор", grad: "from-violet-400 via-sky-400 to-violet-400", Icon: Gavel },
   vip:       { label: "VIP",       grad: "from-amber-400 via-rose-400 to-amber-400",  Icon: Crown },
-  user:      { label: "User",      grad: "from-slate-300 via-slate-400 to-slate-300", Icon: Shield },
-  newbie:    { label: "Newbie",    grad: "from-cyan-400 via-fuchsia-400 to-cyan-400", Icon: Code2 },
+  user:      { label: "Участник",      grad: "from-slate-300 via-slate-400 to-slate-300", Icon: Shield },
+  newbie:    { label: "Новичок",    grad: "from-cyan-400 via-fuchsia-400 to-cyan-400", Icon: Code2 },
 };
 
 // ====== SMALL UI ======
 
 function Stat({ value, label }: { value: number; label: string }) {
   return (
-    <div className="card p-4 text-center">
+    <div className={`${SOFT_PANEL} text-center`}>
       <div className="text-3xl font-extrabold text-white">{value}</div>
-      <div className="mt-1 text-xs uppercase tracking-[0.3em] text-zinc-400/80">{label}</div>
+      <div className="mt-1 text-xs uppercase tracking-[0.3em] text-zinc-300/80">{label}</div>
     </div>
   );
 }
 
 function InfoRow({ title, children, right }: { title: string; children: React.ReactNode; right?: React.ReactNode }) {
   return (
-    <div className="card p-4">
-      <div className="mb-2 flex items-center justify-between">
-        <div className="text-xs uppercase tracking-[0.28em] text-zinc-400/70">{title}</div>
+    <div className={PANEL_CLASS}>
+      <div className="mb-3 flex items-center justify-between">
+        <div className="text-xs uppercase tracking-[0.3em] text-zinc-400/75">{title}</div>
         {right}
       </div>
       {children}
@@ -83,7 +84,7 @@ function InfoRow({ title, children, right }: { title: string; children: React.Re
   );
 }
 
-// РљСЂСѓРїРЅС‹Р№ РєСЂР°СЃРёРІС‹Р№ Р±РµР№РґР¶ СЂРѕР»Рё вЂ” РїРѕРґ РёРјРµРЅРµРј
+// Крупный красивый бейдж роли — под именем
 function RoleBadgePro({ role }: { role: string }) {
   const meta = ROLE_META[role] ?? ROLE_META.user;
   const Icon = meta.Icon;
@@ -100,7 +101,7 @@ function RoleBadgePro({ role }: { role: string }) {
   );
 }
 
-// РњР°Р»РµРЅСЊРєР°СЏ РїР»Р°С€РєР° СЂРѕР»Рё РЅР° Р°РІР°С‚Р°СЂРµ
+// Маленькая плашка роли на аватаре
 function RoleMini({ role }: { role: string }) {
   const meta = ROLE_META[role] ?? ROLE_META.user;
   return (
@@ -121,6 +122,72 @@ const BADGE_PALETTE: Record<string, string> = {
   VIP: "from-amber-500/25 to-amber-400/10 text-amber-200",
   Designer: "from-violet-500/25 to-violet-400/10 text-violet-200",
 };
+
+const PANEL_CLASS =
+  "rounded-3xl border border-white/10 bg-[#101321]/85 p-5 shadow-[0_40px_120px_-70px_rgba(15,23,42,0.9)] backdrop-blur";
+const SOFT_PANEL =
+  "rounded-3xl border border-white/10 bg-white/[0.05] p-4 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.85)] backdrop-blur";
+const profileDateFormatter = new Intl.DateTimeFormat("ru-RU", {
+  day: "2-digit",
+  month: "long",
+  year: "numeric",
+});
+
+function adaptRemoteAccount(pack: RemoteProfilePayload): Account {
+  const rawProfile: any = pack.profile || {};
+  const stats: any = pack.stats || {};
+  const posts = typeof stats.posts === "number" ? stats.posts : 0;
+  const likes = typeof stats.likes === "number" ? stats.likes : 0;
+  const topics = typeof stats.topics === "number" ? stats.topics : 0;
+  const accentFrom = rawProfile.accentFrom || "#8b5cf6";
+  const accentTo = rawProfile.accentTo || "#0ea5e9";
+  const avatarData =
+    rawProfile.avatarData || rawProfile.avatar || rawProfile.avatarUrl || undefined;
+  const bannerData =
+    rawProfile.bannerData || rawProfile.banner || rawProfile.bannerUrl || undefined;
+
+  const profile = {
+    bio: rawProfile.bio || "",
+    signature: rawProfile.signature || "",
+    links: rawProfile.links ? { ...rawProfile.links } : {},
+    accentFrom,
+    accentTo,
+    avatarData,
+    bannerData,
+    badges: Array.isArray(rawProfile.badges) ? rawProfile.badges : [],
+    privacy: {
+      showEmail: false,
+      showStats: true,
+      showLinks: true,
+      allowComments: true,
+      showFollowers: true,
+      ...(rawProfile.privacy || {}),
+    },
+  } as Account["profile"] & { labels?: string[] };
+
+  if (Array.isArray(rawProfile.labels)) profile.labels = rawProfile.labels;
+
+  const account: Account = {
+    id: pack.user.id,
+    username: pack.user.username,
+    email: pack.user.email,
+    createdAt: pack.user.createdAt,
+    role: pack.user.role,
+    userNumber: pack.user.userNumber,
+    posts,
+    likes,
+    topics,
+    profile,
+    bans: null,
+    mutes: null,
+  };
+
+  if (typeof stats.score === "number") {
+    (account as any).score = stats.score;
+  }
+
+  return account;
+}
 
 function BadgesRow({ badges }: { badges?: string[] }) {
   if (!badges || badges.length === 0) return null;
@@ -158,28 +225,18 @@ export default function ProfilePage() {
         if (me) {
           setRemote(true);
           setSession({ id: me.id, username: me.username });
-          try { const rows = await listPublicMembers(); const map: Record<string,string> = {}; for (const m of rows as any) map[(m as any).id] = (m as any).username; setMemberMap(map); } catch {}
+          try {
+            const rows = await listPublicMembers();
+            const map: Record<string, string> = {};
+            for (const m of rows as any) map[(m as any).id] = (m as any).username;
+            setMemberMap(map);
+          } catch {}
           const pack = await getProfileByUsername(username);
           if (pack) {
-            const acc: Account = {
-              id: pack.user.id,
-              username: pack.user.username,
-              email: pack.user.email,
-              createdAt: pack.user.createdAt,
-              role: pack.user.role,
-              userNumber: pack.user.userNumber,
-              posts: 0,
-              likes: 0,
-              topics: 0,
-              profile: (pack.profile as any) || {
-                bio: "", signature: "", links: {},
-                accentFrom: "#8b5cf6", accentTo: "#0ea5e9",
-                badges: [], privacy: { showEmail: false, showStats: true, showLinks: true, allowComments: true, showFollowers: true }
-              },
-              bans: null, mutes: null,
-            };
-            setUser(acc);
-            try { setIsOwnerRemote(!!(pack as any).user?.owner); } catch {}
+            setUser(adaptRemoteAccount(pack));
+            try {
+              setIsOwnerRemote(!!pack.user?.owner);
+            } catch {}
             return;
           }
         }
@@ -231,9 +288,17 @@ export default function ProfilePage() {
 
   if (!user) {
     return (
-      <main className="min-h-screen bg-slate-950 text-slate-200">
-        <div className="mx-auto max-w-3xl px-4 py-12">
-          <div className="card p-6 text-center text-sm text-zinc-300">Profile not found.</div>
+      <main
+        className="min-h-screen text-slate-200"
+        style={{
+          background:
+            "radial-gradient(1100px 680px at 15% -10%, rgba(56,189,248,0.18), transparent 65%), radial-gradient(1000px 720px at 90% -6%, rgba(167,139,250,0.14), transparent 70%), linear-gradient(180deg, #04060d 0%, #090b16 100%)",
+        }}
+      >
+        <div className="mx-auto max-w-3xl px-4 py-16">
+          <div className={`${PANEL_CLASS} text-center text-sm text-zinc-300`}>
+            Профиль не найден.
+          </div>
         </div>
       </main>
     );
@@ -246,78 +311,68 @@ export default function ProfilePage() {
 
   return (
     <main
-      className="min-h-screen"
+      className="min-h-screen text-slate-100"
       style={{
         background:
-          "radial-gradient(900px 600px at 20% -10%, rgba(59,130,246,0.18), transparent 65%), radial-gradient(1100px 760px at 95% 8%, rgba(236,72,153,0.16), transparent 68%), #0d0d12",
-        color: "#f8fafc",
+          "radial-gradient(1200px 700px at 12% -10%, rgba(56,189,248,0.18), transparent 65%), radial-gradient(1000px 720px at 90% -6%, rgba(167,139,250,0.14), transparent 70%), linear-gradient(180deg, #04060d 0%, #090b16 100%)",
       }}
     >
-      <div className="mx-auto max-w-5xl px-4 py-6">
+      <div className="mx-auto max-w-5xl px-4 py-8 space-y-6">
         {/* ===== HERO ===== */}
-        <div className="card overflow-hidden">
-          <div className="relative">
-            <div
-              className="h-[200px] w-full"
-              style={{
-                background: user.profile.bannerData
-                  ? `url(${user.profile.bannerData}) center/cover`
-                  : `linear-gradient(135deg, ${accentFrom}, ${accentTo})`,
-              }}
-            />
-            {/* soft overlays */}
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/15 via-transparent to-black/50" />
-            <div className="pointer-events-none absolute inset-0">
-              <div className="absolute right-8 top-6 h-24 w-24 rounded-full bg-gradient-to-br from-white/15 to-transparent blur-2xl" />
-            </div>
-          </div>
+        <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#101321]/85 shadow-[0_50px_140px_-80px_rgba(15,23,42,0.9)] backdrop-blur">
+          <div
+            className="h-[220px] w-full"
+            style={{
+              background: user.profile.bannerData
+                ? `url(${user.profile.bannerData}) center/cover`
+                : `linear-gradient(135deg, ${accentFrom}, ${accentTo})`,
+            }}
+          />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/15 via-transparent to-black/70" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-white/10 to-transparent mix-blend-overlay" />
 
-          <div className="flex flex-wrap items-end gap-4 px-4 pb-5 -mt-16">
+          <div className="relative -mt-16 flex flex-wrap items-end gap-5 px-6 pb-6">
             <div className="relative">
               <div
-                className="h-24 w-24 rounded-full ring-4 ring-[rgba(13,19,33,0.85)] shadow-2xl"
+                className="h-24 w-24 overflow-hidden rounded-full border-4 border-[#101321] shadow-[0_25px_70px_-35px_rgba(15,23,42,0.9)]"
                 style={{
                   background: user.profile.avatarData
                     ? `url(${user.profile.avatarData}) center/cover`
                     : `linear-gradient(135deg, ${accentFrom}, ${accentTo})`,
                 }}
               />
-              {/* РјСЏРіРєРѕРµ СЃРІРµС‡РµРЅРёРµ Р°РІР°С‚Р°СЂР° РїРѕ СЂРѕР»Рё */}
               <div className={`absolute -inset-1 -z-10 rounded-full bg-gradient-to-br ${roleStyle.glow} to-transparent blur-lg`} />
-              {/* РјРёРЅРё-РїР»Р°С€РєР° СЂРѕР»Рё РЅР° Р°РІР°С‚Р°СЂРµ */}
               <div className="absolute -bottom-2 left-1">
                 <RoleMini role={user.role} />
               </div>
             </div>
 
-            <div className="flex-1 min-w-0">
-              {/* РёРјСЏ Рё РЅРѕРјРµСЂ */}
+            <div className="min-w-0 flex-1 space-y-3">
               <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-2xl font-extrabold text-white">{user.username}</h1>
-                <span className="text-xs text-zinc-400/80">#{user.userNumber}</span>
+                <h1 className="text-3xl font-extrabold tracking-tight text-white">{user.username}</h1>
+                <span className="rounded-full border border-white/10 bg-white/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.28em] text-zinc-200/80">
+                  #{user.userNumber}
+                </span>
                 <Badge points={(user as any).score ?? computePoints({ posts: user.posts, likes: user.likes, topics: user.topics })} />
               </div>
-              {/* РєСЂСѓРїРЅС‹Р№ Р±РµР№РґР¶ СЂРѕР»Рё РїРѕРґ РёРјРµРЅРµРј */}
-              <div className="mt-2 flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {isOwnerRemote && <RoleBadgePro role="owner" />}
                 {user.profile?.privacy?.showSecondaryRole !== false && (
                   <RoleBadgePro role={user.role} />
                 )}
               </div>
-              {/* РґР°С‚Р°/РїРѕС‡С‚Р° */}
-              <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-zinc-400/90">
-                <span>Joined {new Date(user.createdAt).toLocaleDateString()}</span>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-300/90">
+                <span>С нами с {profileDateFormatter.format(new Date(user.createdAt))}</span>
                 {user.profile.privacy?.showEmail && user.email ? (
-                  <span className="rounded-full bg-white/[0.04] px-2 py-1">{user.email}</span>
+                  <span className="rounded-full border border-white/10 bg-white/10 px-2 py-1">{user.email}</span>
                 ) : null}
               </div>
-              {/* РїРѕР»СЊР·РѕРІР°С‚РµР»СЊСЃРєРёРµ Р±РµР№РґР¶Рё */}
-              <div className="mt-2">
+              <div className="space-y-2">
                 <BadgesRow badges={user.profile.badges} />
                 {Array.isArray((user as any).profile?.labels) && (user as any).profile.labels.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {(user as any).profile.labels.slice(0,7).map((label: string, i: number) => (
-                      <span key={i} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs">
+                  <div className="flex flex-wrap gap-2">
+                    {(user as any).profile.labels.slice(0, 7).map((label: string, i: number) => (
+                      <span key={i} className="rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-xs text-white/85">
                         {label}
                       </span>
                     ))}
@@ -332,16 +387,7 @@ export default function ProfilePage() {
                 onUpdated={async () => {
                   if (remote) {
                     const pack = await getProfileByUsername(username);
-                    if (pack) setUser({
-                      id: pack.user.id,
-                      username: pack.user.username,
-                      email: pack.user.email,
-                      createdAt: pack.user.createdAt,
-                      role: pack.user.role,
-                      userNumber: pack.user.userNumber,
-                      posts: 0, likes: 0, topics: 0,
-                      profile: (pack.profile as any), bans: null, mutes: null,
-                    });
+                    if (pack) setUser(adaptRemoteAccount(pack));
                   } else {
                     setUser(findAccountByUsername(username) || null);
                   }
@@ -362,17 +408,25 @@ export default function ProfilePage() {
                     setFollowers(listFollowers(user.id));
                   }}
                 >
-                  {iFollow ? (<><UserMinus size={16} /> Unfollow</>) : (<><UserPlus size={16} /> Follow</>)}
+                  {iFollow ? (
+                    <>
+                      <UserMinus size={16} /> Отписаться
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus size={16} /> Подписаться
+                    </>
+                  )}
                 </button>
               </div>
             )}
           </div>
-        </div>
+        </section>
 
         {remote && canEdit && isOwnerRemote && (
-          <div className="card mt-4 p-4">
-            <div className="mb-2 text-xs uppercase tracking-[0.28em] text-zinc-400/80">Secondary Role</div>
-            <div className="flex items-center gap-2">
+          <div className={PANEL_CLASS}>
+            <div className="mb-3 text-xs uppercase tracking-[0.3em] text-zinc-400/80">Вторая роль</div>
+            <div className="flex flex-wrap items-center gap-3">
               <select
                 className="input"
                 value={user.profile?.privacy?.showSecondaryRole === false ? 'none' : user.role}
@@ -389,67 +443,67 @@ export default function ProfilePage() {
                       setUser({ ...user, role: next, profile: { ...user.profile, privacy: { ...prev, showSecondaryRole: true } } });
                     }
                   } catch (err: any) {
-                    alert(err?.message || 'Failed to change role');
+                    alert(err?.message || 'Не удалось изменить роль');
                   }
                 }}
               >
-                <option value="none">none</option>
-                <option value="developer">developer</option>
-                <option value="admin">admin</option>
-                <option value="moderator">moderator</option>
-                <option value="vip">vip</option>
-                <option value="user">user</option>
-                <option value="newbie">newbie</option>
+                <option value="none">Не показывать</option>
+                <option value="developer">Разработчик</option>
+                <option value="admin">Администратор</option>
+                <option value="moderator">Модератор</option>
+                <option value="vip">VIP</option>
+                <option value="user">Участник</option>
+                <option value="newbie">Новичок</option>
               </select>
-              <div className="text-xs opacity-70">Owner is permanent; this is your secondary role.</div>
+              <div className="text-xs text-zinc-300/80">
+                Роль владельца постоянна; здесь можно выбрать отображаемую.
+              </div>
             </div>
           </div>
         )}
 
         {/* ===== STATS ===== */}
         {user.profile?.privacy?.showStats !== false && (
-          <div className="mt-6 grid gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/[0.02] p-4 text-center">
-              <Stat value={user.posts} label="Posts" />
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/[0.02] p-4 text-center">
-              <Stat value={user.topics} label="Topics" />
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-white/[0.02] p-4 text-center">
-              <Stat value={user.likes} label="Likes" />
-            </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Stat value={user.posts} label="Посты" />
+            <Stat value={user.topics} label="Темы" />
+            <Stat value={user.likes} label="Лайки" />
           </div>
         )}
 
         {/* ===== ABOUT + LINKS ===== */}
-        <div className="mt-6 grid gap-4 lg:grid-cols-[1.35fr_.85fr]">
-          <InfoRow title="About">
+        <div className="grid gap-4 lg:grid-cols-[1.35fr_.85fr]">
+          <InfoRow title="О себе">
             <p className="whitespace-pre-wrap text-sm text-zinc-200/85">
-              {user.profile.bio || "No bio yet."}
+              {user.profile.bio || "Пока нет описания."}
             </p>
           </InfoRow>
 
           {user.profile?.privacy?.showLinks !== false && (
-            <InfoRow title="Links">
+            <InfoRow title="Ссылки">
               <div className="flex flex-wrap gap-2 text-sm text-zinc-200/90">
                 {user.profile.links?.website && (
-                  <a className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 hover:bg-white/[0.08]"
-                     href={user.profile.links.website} target="_blank" rel="noreferrer">
-                    <Globe size={14} /> Website
+                  <a
+                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 hover:border-white/30"
+                    href={user.profile.links.website}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <Globe size={14} /> Сайт
                   </a>
                 )}
                 {user.profile.links?.discord && (
-                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1">
                     <LinkIcon size={14} /> {user.profile.links.discord}
                   </span>
                 )}
                 {user.profile.links?.telegram && (
-                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1">
                     <LinkIcon size={14} /> {user.profile.links.telegram}
                   </span>
                 )}
                 {!user.profile.links?.website && !user.profile.links?.discord && !user.profile.links?.telegram && (
-                  <span className="opacity-70">No links added.</span>
+                  <span className="opacity-70">Ссылки ещё не добавлены.</span>
                 )}
               </div>
             </InfoRow>
@@ -457,23 +511,31 @@ export default function ProfilePage() {
         </div>
 
         {/* ===== SIGNATURE ===== */}
-        <InfoRow title="Signature">
+        <InfoRow title="Подпись">
           <div className="whitespace-pre-wrap text-sm text-zinc-200/85">
-            {user.profile.signature || "No signature."}
+            {user.profile.signature || "Подпись не заполнена."}
           </div>
         </InfoRow>
 
         {/* ===== FOLLOWERS ===== */}
         {user.profile?.privacy?.showFollowers !== false && (
-          <InfoRow title={`Followers (${followers.length})`}>
+          <InfoRow title={`Подписчики (${followers.length})`}>
             <div className="flex flex-wrap gap-2 text-sm text-zinc-200/90">
-              {followers.length === 0 ? <span className="opacity-70">No followers yet.</span> : (
-                followers.slice(0, 18).map(fid => {
+              {followers.length === 0 ? (
+                <span className="opacity-70">Подписчиков пока нет.</span>
+              ) : (
+                followers.slice(0, 18).map((fid) => {
                   const acc = findAccountById(fid);
                   const uname = acc?.username || memberMap[fid];
                   return (
-                    <span key={fid} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">
-                      {uname ? <a href={`/forum/profile/${uname}`} className="hover:underline">{uname}</a> : 'User'}
+                    <span key={fid} className="rounded-full border border-white/10 bg-white/10 px-3 py-1">
+                      {uname ? (
+                        <a href={`/forum/profile/${uname}`} className="hover:underline">
+                          {uname}
+                        </a>
+                      ) : (
+                        'Участник'
+                      )}
                     </span>
                   );
                 })
@@ -484,7 +546,7 @@ export default function ProfilePage() {
 
         {/* ===== COMMENTS ===== */}
         {user.profile?.privacy?.allowComments !== false && (
-          <InfoRow title="Profile comments">
+          <InfoRow title="Комментарии профиля">
             <div className="grid gap-3">
               {session?.id && (
                 <CommentComposer
@@ -496,7 +558,7 @@ export default function ProfilePage() {
                 />
               )}
               <div className="grid gap-2">
-                {comments.length === 0 && <div className="text-sm text-zinc-400/80">No comments yet.</div>}
+                {comments.length === 0 && <div className="text-sm text-zinc-400/80">Комментариев пока нет.</div>}
                 {buildTree(comments).map(node => (
                   <CommentItem
                     key={node.comment.id}
@@ -530,7 +592,7 @@ function CustomizeButton({ user, onUpdated, saveProfile }: { user: Account; onUp
   return (
     <>
       <button className="btn" onClick={() => setOpen(true)}>
-        <Pencil size={16} /> Settings
+        <Pencil size={16} /> Настроить профиль
       </button>
       {open && (
         <CustomizeModal
@@ -599,15 +661,15 @@ function CustomizeModal({
 
   return (
     <div className="fixed inset-0 z-[120] grid place-items-center bg-black/70 px-4 py-6">
-      <div className="card w-[min(780px,96vw)] max-h-[90vh] overflow-y-auto p-5">
+      <div className={`${PANEL_CLASS} w-[min(820px,96vw)] max-h-[90vh] overflow-y-auto space-y-5`}>
         <div className="flex items-center justify-between">
-          <div className="text-lg font-semibold text-white">Customize profile</div>
-          <button className="btn" onClick={onClose}>Close</button>
+          <div className="text-lg font-semibold text-white">Настройка профиля</div>
+          <button className="btn" onClick={onClose}>Закрыть</button>
         </div>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <div className="card p-4">
-            <div className="text-xs uppercase tracking-[0.28em] text-zinc-400/80">Avatar</div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className={SOFT_PANEL}>
+            <div className="text-xs uppercase tracking-[0.28em] text-zinc-400/80">Аватар</div>
             <div className="mt-3 flex items-center gap-3">
               <div
                 className="h-20 w-20 rounded-full"
@@ -617,43 +679,45 @@ function CustomizeModal({
               />
               <div className="flex flex-col gap-2">
                 <label className="btn flex items-center gap-2">
-                  <Camera size={16} /> Upload
+                  <Camera size={16} /> Загрузить
                   <input type="file" accept="image/*" hidden onChange={pick(setAvatar)} />
                 </label>
-                {avatar && <button className="btn" onClick={() => setAvatar("")}>Remove</button>}
+                {avatar && <button className="btn" onClick={() => setAvatar("")}>Удалить</button>}
               </div>
             </div>
           </div>
 
-          <div className="card p-4">
-            <div className="text-xs uppercase tracking-[0.28em] text-zinc-400/80">Banner</div>
-            <div className="mt-3 h-20 w-full rounded-xl"
-                 style={{ background: banner ? `url(${banner}) center/cover` : `linear-gradient(135deg, ${from}, ${to})` }} />
+          <div className={SOFT_PANEL}>
+            <div className="text-xs uppercase tracking-[0.28em] text-zinc-400/80">Баннер</div>
+            <div
+              className="mt-3 h-20 w-full rounded-xl"
+              style={{ background: banner ? `url(${banner}) center/cover` : `linear-gradient(135deg, ${from}, ${to})` }}
+            />
             <div className="mt-3 flex gap-2">
               <label className="btn flex items-center gap-2">
-                <Camera size={16} /> Upload
+                <Camera size={16} /> Загрузить
                 <input type="file" accept="image/*" hidden onChange={pick(setBanner)} />
               </label>
-              {banner && <button className="btn" onClick={() => setBanner("")}>Remove</button>}
+              {banner && <button className="btn" onClick={() => setBanner("")}>Удалить</button>}
             </div>
           </div>
 
-          <div className="card p-4">
-            <div className="text-xs uppercase tracking-[0.28em] text-zinc-400/80">Accent</div>
-            <div className="mt-3 flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-zinc-400/80">From</span>
+          <div className={SOFT_PANEL}>
+            <div className="text-xs uppercase tracking-[0.28em] text-zinc-400/80">Градиент</div>
+            <div className="mt-3 flex items-center gap-4">
+              <label className="flex items-center gap-2 text-xs text-zinc-400/80">
+                <span>От</span>
                 <input type="color" value={from} onChange={(e) => setFrom(e.target.value)} />
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-zinc-400/80">To</span>
+              </label>
+              <label className="flex items-center gap-2 text-xs text-zinc-400/80">
+                <span>До</span>
                 <input type="color" value={to} onChange={(e) => setTo(e.target.value)} />
-              </div>
+              </label>
             </div>
           </div>
 
-          <div className="card p-4">
-            <div className="text-xs uppercase tracking-[0.28em] text-zinc-400/80">Badges (max 3)</div>
+          <div className={SOFT_PANEL}>
+            <div className="text-xs uppercase tracking-[0.28em] text-zinc-400/80">Бейджи (до 3)</div>
             <div className="mt-3 flex flex-wrap gap-2">
               {BADGE_OPTIONS.map((badge) => {
                 const active = badges.includes(badge);
@@ -663,7 +727,7 @@ function CustomizeModal({
                     className={`btn flex items-center gap-2 ${active ? "btn-primary" : ""}`}
                     onClick={() => toggleBadge(badge)}
                     type="button"
-                    title={active ? "Click to remove" : "Click to add"}
+                    title={active ? "Нажмите, чтобы убрать" : "Нажмите, чтобы добавить"}
                   >
                     <BadgeCheck size={16} /> {badge}
                   </button>
@@ -672,18 +736,28 @@ function CustomizeModal({
             </div>
           </div>
 
-          <div className="card p-4 sm:col-span-2">
-            <div className="text-xs uppercase tracking-[0.28em] text-zinc-400/80">Bio</div>
-            <textarea className="input mt-2 min-h-[120px]" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell the community a bit about yourself" />
+          <div className={`${SOFT_PANEL} sm:col-span-2`}>
+            <div className="text-xs uppercase tracking-[0.28em] text-zinc-400/80">О себе</div>
+            <textarea
+              className="input mt-2 min-h-[120px]"
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              placeholder="Расскажите сообществу немного о себе"
+            />
           </div>
 
-          <div className="card p-4 sm:col-span-2">
-            <div className="text-xs uppercase tracking-[0.28em] text-zinc-400/80">Signature</div>
-            <textarea className="input mt-2 min-h-[90px]" value={signature} onChange={(e) => setSignature(e.target.value)} placeholder="Signature displayed under your posts" />
+          <div className={`${SOFT_PANEL} sm:col-span-2`}>
+            <div className="text-xs uppercase tracking-[0.28em] text-zinc-400/80">Подпись</div>
+            <textarea
+              className="input mt-2 min-h-[90px]"
+              value={signature}
+              onChange={(e) => setSignature(e.target.value)}
+              placeholder="Текст, который появится под вашими сообщениями"
+            />
           </div>
 
-          <div className="card p-4 sm:col-span-2">
-            <div className="text-xs uppercase tracking-[0.28em] text-zinc-400/80">Links</div>
+          <div className={`${SOFT_PANEL} sm:col-span-2`}>
+            <div className="text-xs uppercase tracking-[0.28em] text-zinc-400/80">Ссылки</div>
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
               <input className="input" placeholder="https://website" value={website} onChange={(e) => setWebsite(e.target.value)} />
               <input className="input" placeholder="discord username" value={discord} onChange={(e) => setDiscord(e.target.value)} />
@@ -691,21 +765,21 @@ function CustomizeModal({
             </div>
           </div>
 
-          <div className="card p-4 sm:col-span-2">
-            <div className="text-xs uppercase tracking-[0.28em] text-zinc-400/80">Privacy</div>
+          <div className={`${SOFT_PANEL} sm:col-span-2`}>
+            <div className="text-xs uppercase tracking-[0.28em] text-zinc-400/80">Приватность</div>
             <div className="mt-3 grid gap-2 text-sm">
-              <label className="flex items-center gap-2"><input type="checkbox" checked={showEmail} onChange={(e) => setShowEmail(e.target.checked)} /> Show email</label>
-              <label className="flex items-center gap-2"><input type="checkbox" checked={showStats} onChange={(e) => setShowStats(e.target.checked)} /> Show stats</label>
-              <label className="flex items-center gap-2"><input type="checkbox" checked={showLinks} onChange={(e) => setShowLinks(e.target.checked)} /> Show links</label>
-              <label className="flex items-center gap-2"><input type="checkbox" checked={showFollowers} onChange={(e) => setShowFollowers(e.target.checked)} /> Show followers</label>
-              <label className="flex items-center gap-2"><input type="checkbox" checked={allowComments} onChange={(e) => setAllowComments(e.target.checked)} /> Allow comments</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={showEmail} onChange={(e) => setShowEmail(e.target.checked)} /> Показывать e-mail</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={showStats} onChange={(e) => setShowStats(e.target.checked)} /> Показывать статистику</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={showLinks} onChange={(e) => setShowLinks(e.target.checked)} /> Показывать ссылки</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={showFollowers} onChange={(e) => setShowFollowers(e.target.checked)} /> Показывать подписчиков</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={allowComments} onChange={(e) => setAllowComments(e.target.checked)} /> Разрешить комментарии</label>
             </div>
           </div>
         </div>
 
-        <div className="mt-5 flex justify-end gap-2">
-          <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={save}>Save changes</button>
+        <div className="flex justify-end gap-2">
+          <button className="btn" onClick={onClose}>Отмена</button>
+          <button className="btn btn-primary" onClick={save}>Сохранить</button>
         </div>
       </div>
     </div>
@@ -717,12 +791,12 @@ function CustomizeModal({
 function CommentComposer({ onPost }: { onPost: (text: string) => void }) {
   const [text, setText] = React.useState("");
   return (
-    <div className="card p-3">
+    <div className={SOFT_PANEL}>
       <div className="flex items-start gap-2">
         <MessageSquare size={16} className="mt-1 shrink-0" />
         <textarea
           className="input min-h-[80px] flex-1"
-          placeholder="Write a comment..."
+          placeholder="Напишите комментарий..."
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
@@ -732,7 +806,7 @@ function CommentComposer({ onPost }: { onPost: (text: string) => void }) {
           className="btn btn-primary"
           onClick={() => { const t = text.trim(); if (!t) return; onPost(t); setText(""); }}
         >
-          Post comment
+          Отправить
         </button>
       </div>
     </div>
@@ -763,10 +837,17 @@ function CommentItem({
 }) {
   const [openReply, setOpenReply] = React.useState(false);
   const acc = findAccountById(node.comment.authorId);
-  const name = node.comment.authorName || acc?.username || (node.comment.authorId === ownerId ? "Owner" : (node.comment.authorId === currentUserId ? "You" : "User"));
+  const name =
+    node.comment.authorName ||
+    acc?.username ||
+    (node.comment.authorId === ownerId
+      ? "Владелец"
+      : node.comment.authorId === currentUserId
+        ? "Вы"
+        : "Участник");
   const profileUsername = acc?.username || node.comment.authorName;
   return (
-    <div className="rounded-xl border border-white/5 bg-white/3 p-3">
+    <div className={SOFT_PANEL}>
       <div className="flex items-start gap-3">
         <div className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-sky-500/60 to-violet-500/60" />
         <div className="min-w-0 flex-1">
@@ -777,10 +858,10 @@ function CommentItem({
               ) : (
                 <span className="font-semibold text-white">{name}</span>
               )}
-              <span className="opacity-70"> В· {new Date(node.comment.createdAt).toLocaleString()}</span>
+              <span className="opacity-70"> · {new Date(node.comment.createdAt).toLocaleString('ru-RU')}</span>
             </div>
             {(currentUserId === node.comment.authorId || currentUserId === ownerId) && (
-              <button className="btn" title="Delete" onClick={() => onDelete(node.comment.id)}>
+              <button className="btn" title="Удалить" onClick={() => onDelete(node.comment.id)}>
                 <Trash2 size={14} />
               </button>
             )}
@@ -788,7 +869,7 @@ function CommentItem({
           <div className="mt-1 whitespace-pre-wrap text-sm text-zinc-100/90">{node.comment.content}</div>
           <Reactions targetId={ownerId} commentId={node.comment.id} currentUserId={currentUserId} />
           <div className="mt-2 flex items-center gap-2">
-            <button className="btn" onClick={() => setOpenReply(v => !v)}>Reply</button>
+            <button className="btn" onClick={() => setOpenReply(v => !v)}>Ответить</button>
           </div>
           {openReply && (
             <div className="mt-2">
@@ -812,8 +893,18 @@ function InlineReply({ onSend }: { onSend: (text: string) => void }) {
   const [text, setText] = React.useState("");
   return (
     <div className="flex items-start gap-2">
-      <textarea className="input min-h-[60px] flex-1" placeholder="Write a reply..." value={text} onChange={(e) => setText(e.target.value)} />
-      <button className="btn btn-primary" onClick={() => { const t = text.trim(); if (!t) return; onSend(t); setText(""); }}>Send</button>
+      <textarea
+        className="input min-h-[60px] flex-1"
+        placeholder="Ответ..."
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
+      <button
+        className="btn btn-primary"
+        onClick={() => { const t = text.trim(); if (!t) return; onSend(t); setText(""); }}
+      >
+        Отправить
+      </button>
     </div>
   );
 }
@@ -832,9 +923,9 @@ function Reactions({ targetId, commentId, currentUserId }: { targetId: string; c
   );
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
-      <Btn r="like" label="рџ‘Ќ" />
-      <Btn r="smile" label="рџЉ" />
-      <Btn r="useful" label="вњ…" />
+      <Btn r="like" label="👍" />
+      <Btn r="smile" label="😊" />
+      <Btn r="useful" label="💡" />
     </div>
   );
 }
