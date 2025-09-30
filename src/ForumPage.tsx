@@ -245,7 +245,7 @@ function AuthGateX({ onDone }: { onDone: () => void }) {
 }
 
 /* ====== Header ====== */
-function Header({ me, onLogout }: { me: RemoteUser | null; onLogout: () => void }) {
+function Header({ me, onLogout }: { me: RemoteUser; onLogout: () => void }) {
   return (
     <header
       className="sticky top-0 z-50 border-b backdrop-blur"
@@ -493,7 +493,17 @@ export default function ForumPage() {
     none: { label: "Idea", className: "bg-zinc-200/10 text-zinc-200" },
   };
 
-  const guestUser = React.useMemo(() => ({ id: 'guest', username: 'guest', role: 'user', userNumber: '0000' } as any), []);
+  const guestUser = React.useMemo<RemoteUser>(
+    () => ({
+      id: 'guest',
+      username: 'guest',
+      email: '',
+      userNumber: 0,
+      role: 'user',
+      createdAt: new Date(0).toISOString(),
+    }),
+    [],
+  );
   return (
     <main
       className="min-h-screen"

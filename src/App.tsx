@@ -19,6 +19,8 @@ const TopicPage = React.lazy(() => import('./TopicPage'));
 const TagPage = React.lazy(() => import('./TagPage'));
 const QuestionsPage = React.lazy(() => import('./QuestionsPage'));
 const AdminPanel = React.lazy(() => import('./AdminPanel3'));
+const BuddyPlayground = React.lazy(() => import('./BuddyPlayground'));
+const ForumFeedsPage = React.lazy(() => import('./ForumFeedsPage'));
 import RecorderPage from './RecorderPage';
 import AboutPage from './AboutPage';
 import CommandPalette from "./CommandPalette";
@@ -114,7 +116,8 @@ export default function App() {
           <Route path="/style/liquid" element={<LiquidGlassShowcase />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/favorites" element={<FavoritesPage />} />
-                  <Route path="/forum/feeds" element={<ForumFeedsPage />} />
+          <Route path="/buddy" element={<BuddyPlayground />} />
+          <Route path="/forum/feeds" element={<ForumFeedsPage />} />
         </Routes>
       </React.Suspense>
     </BrowserRouter>
@@ -126,5 +129,4 @@ export default function App() {
 
 
 
-const ForumFeedsPage = React.lazy(() => import('./ForumFeedsPage'));
 
