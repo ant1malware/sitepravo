@@ -42,7 +42,7 @@ export type RemoteProfile = {
   bannerData?: string;
   bio?: string;
   signature?: string;
-  links?: { website?: string; discord?: string; telegram?: string };
+  links?: { website?: string };
   accentFrom?: string;
   accentTo?: string;
   badges?: string[];

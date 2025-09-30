@@ -245,14 +245,13 @@ const FeedbackButton: React.FC = () => {
             <li className="flex items-center gap-2"><Lightbulb className="h-3.5 w-3.5" /> Идея по улучшению</li>
             <li className="flex items-center gap-2"><FileText className="h-3.5 w-3.5" /> Ошибка/опечатка в тексте</li>
           </ul>
-          <a
+          <Link
+            to="/forum?tab=ideas"
             className="btn w-full justify-center no-underline"
-            href="https://t.me/pasha_bolshoi"
-            target="_blank"
-            rel="noreferrer"
+            onClick={() => setOpen(false)}
           >
-            <Send className="h-4 w-4" /> Написать в Telegram
-          </a>
+            <Send className="h-4 w-4" /> Оставить сообщение на форуме
+          </Link>
           <div className="mt-2 flex items-center justify-between text-xs">
             <label className="flex items-center gap-2">
               <input

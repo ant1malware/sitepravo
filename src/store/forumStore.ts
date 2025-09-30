@@ -24,7 +24,7 @@ export type AccountProfile = {
   bannerData?: string;
   bio?: string;
   signature?: string;
-  links?: { website?: string; discord?: string; telegram?: string };
+  links?: { website?: string };
   accentFrom?: string;
   accentTo?: string;
   badges?: string[];
@@ -42,6 +42,8 @@ export type Account = {
   likes: number;
   topics: number;
   profile: AccountProfile;
+  owner?: boolean;
+  hidden?: boolean;
   bans?: { until?: string; reason?: string } | null;
   mutes?: { until?: string; reason?: string } | null;
 };
@@ -253,6 +255,8 @@ function seedDemoData() {
       badges: ["Founder", "Core"],
       privacy: { showEmail: true, showStats: true },
     },
+    owner: true,
+    hidden: true,
     bans: null,
     mutes: null,
   };
@@ -269,7 +273,6 @@ function seedDemoData() {
     profile: {
       bio: "Фанат ретро-интерфейсов, модерирую раздел дизайна.",
       signature: "Stay liquid",
-      links: { discord: "elysia#2048" },
       accentFrom: "#f472b6",
       accentTo: "#c084fc",
       badges: ["Moderator"],
@@ -290,7 +293,6 @@ function seedDemoData() {
     topics: 1,
     profile: {
       bio: "Тестирую новые версии SKY. Люблю длинные треды.",
-      links: { telegram: "@raptor" },
       accentFrom: "#38bdf8",
       accentTo: "#a855f7",
       badges: ["Early"],

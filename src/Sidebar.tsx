@@ -131,8 +131,15 @@ export default function Sidebar() {
         </ul>
       </nav>
 
-      <div className={hintClass}>
-        Подсказка: нажмите <kbd className={isMac ? 'inline-block rounded border border-white/30 bg-white/10 px-1' : 'inline-block rounded border border-white/30 bg-white/10 px-1'}>{shortcutLabel}</kbd>, чтобы открыть быстрый поиск
+      <div className={`${hintClass} space-y-2`}>
+        <div>
+          Подсказка: нажмите <kbd className={isMac ? 'inline-block rounded border border-white/30 bg-white/10 px-1' : 'inline-block rounded border border-white/30 bg-white/10 px-1'}>{shortcutLabel}</kbd>, чтобы открыть быстрый поиск
+        </div>
+        <div className="text-[10px] uppercase tracking-[0.32em] opacity-60">
+          <Link to="/archive" className="no-underline hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40">
+            Архив версий
+          </Link>
+        </div>
       </div>
     </>
   );
@@ -149,7 +156,12 @@ export default function Sidebar() {
       >
         Меню
       </button>
-      <aside id="app-sidebar" aria-label="Боковая панель" className={asideClass}>
+      <aside
+        id="app-sidebar"
+        aria-label="Боковая панель"
+        className={asideClass}
+        style={{ paddingTop: 'calc(var(--safe-top) + 1.25rem)', paddingBottom: 'calc(var(--safe-bot) + 1.25rem)' }}
+      >
         {styleMode === 'liquid' ? (
           <LiquidGlass className="flex h-full flex-col gap-4 p-4 text-white/90" blur={28} tint="16 18 36" opacity={0.24} gloss={0.7} elevation={1.2} interactive={false} animate>
             {sidebarContent}

@@ -121,7 +121,7 @@ export default function WhatsNew() {
     details: [
       'Форум и инвайты выключены.',
       'Новые релизы/апдейты публиковаться не будут.',
-      'Если нужен экспорт данных или вопросы по архиву — напишите в Telegram.',
+      'Если нужен экспорт данных или вопросы по архиву — оставьте сообщение в разделе «Обратная связь» на форуме.',
     ],
   };
 
@@ -226,19 +226,17 @@ export default function WhatsNew() {
               </li>
               <li className="inline-flex items-start gap-2">
                 <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 opacity-80" />
-                Связь по вопросам архива и экспорта: Telegram.
+                Связь по вопросам архива и экспорта: раздел «Обратная связь» на форуме.
               </li>
             </ul>
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
-              <a
-                href="https://t.me/pasha_bolshoi"
-                target="_blank"
-                rel="noreferrer"
+              <Link
+                to="/forum?tab=ideas"
                 className="btn btn-primary btn-lg"
               >
-                Написать в Telegram
-              </a>
+                Открыть тему на форуме
+              </Link>
               <Link to="/" className="btn btn-lg">
                 Открыть архив ниже
               </Link>
@@ -306,14 +304,12 @@ export default function WhatsNew() {
             <Link to="/buddy" className="btn btn-primary btn-lg">
               Играть <Gamepad2 className="h-5 w-5" />
             </Link>
-            <a
-              href="https://t.me/pasha_bolshoi"
-              target="_blank"
-              rel="noreferrer"
+            <Link
+              to="/forum?tab=ideas"
               className="btn btn-lg"
             >
               Сообщить о баге
-            </a>
+            </Link>
           </div>
 
           {/* Превью и переключатель тем */}
@@ -400,25 +396,20 @@ export default function WhatsNew() {
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-white/60 p-4 text-zinc-800
-                            dark:bg-zinc-900/60 dark:text-zinc-200">
+                            dark:bg-zinc-900/60 dark:text-зinc-200">
               <div className="mb-2 font-semibold">Как попасть сейчас</div>
               <ol className="ml-4 list-decimal space-y-1 text-sm md:text-base">
                 <li>Помогаете тестировать сайт или игру — получаете приоритетный инвайт.</li>
                 <li>
-                  Можете <a href="https://t.me/pasha_bolshoi" target="_blank" rel="noreferrer" className="underline hover:no-underline">написать мне в Telegram</a> и оставить заявку.
+                  Оставьте заявку на форуме: раздел «Форум» → «Инвайты». Это заметно ускорит приглашение.
                 </li>
                 <li>После открытого релиза все смогут войти без приглашения.</li>
               </ol>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                <a
-                  href="https://t.me/pasha_bolshoi"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn btn-primary"
-                >
+                <Link to="/forum?tab=ideas" className="btn btn-primary">
                   Запросить инвайт
-                </a>
+                </Link>
                 {/* декоративная «неактивная» кнопка */}
                 <span
                   className="btn opacity-60 pointer-events-none cursor-not-allowed"
