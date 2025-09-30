@@ -1,6 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import LiquidGlass from './components/LiquidGlass';
+import { setBuddySkin } from './uiSettings';
+import { CHEBZIK_DEFAULT_GRADIENT, getChebPaletteGradient } from './data/chebPalette';
 
 /* =========================================================
    Types
@@ -2908,16 +2910,30 @@ export default function BuddyPlayground() {
     });
   }
   function getPaletteAccent(paletteId?: string) {
+    const gradient = getChebPaletteGradient(paletteId);
+    if (gradient) return gradient[1];
     const pal = COSMETICS.find(c => c.id === paletteId);
-    return pal?.data?.grad?.[1] ?? '#8B5CF6';
+    const grad = pal?.data?.grad;
+    if (Array.isArray(grad) && grad.length >= 2) return grad[1];
+    return '#8B5CF6';
   }
   function applyPaletteAccent(paletteId?: string) {
     try {
       const style = document.documentElement.style;
       if (paletteId) {
-        style.setProperty('--accent', getPaletteAccent(paletteId));
+        const gradient = getChebPaletteGradient(paletteId);
+        if (gradient) {
+          setBuddySkin(gradient[0], gradient[1]);
+          style.setProperty('--accent', gradient[1]);
+        } else {
+          style.setProperty('--accent', getPaletteAccent(paletteId));
+          const [defA, defB] = CHEBZIK_DEFAULT_GRADIENT;
+          setBuddySkin(defA, defB);
+        }
       } else {
         style.removeProperty('--accent');
+        const [defA, defB] = CHEBZIK_DEFAULT_GRADIENT;
+        setBuddySkin(defA, defB);
       }
     } catch {}
   }

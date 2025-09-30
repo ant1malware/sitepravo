@@ -4,7 +4,7 @@ import { applyStyleMode, getStoredStyleMode, type StyleMode } from './theme';
 function readCurrentStyle(): StyleMode {
   if (typeof document !== 'undefined') {
     const ds = document.documentElement.dataset.styleMode;
-    if (ds === 'classic' || ds === 'liquid' || ds === 'beta') return ds as StyleMode;
+    if (ds === 'classic' || ds === 'liquid') return ds as StyleMode;
   }
   try {
     return getStoredStyleMode() ?? 'classic';
@@ -24,7 +24,7 @@ export function useStyleMode(): [StyleMode, (mode: StyleMode) => void] {
 
     const handleChange = (event: Event) => {
       const detail = (event as CustomEvent<StyleMode>).detail;
-      if (detail === 'classic' || detail === 'liquid' || detail === 'beta') {
+      if (detail === 'classic' || detail === 'liquid') {
         setMode(detail);
       } else {
         syncFromDom();

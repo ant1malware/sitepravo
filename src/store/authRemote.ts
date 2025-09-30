@@ -234,11 +234,23 @@ export async function updateServerSettings(patch: ServerSettings): Promise<Serve
 }
 
 // Profiles
-export async function getProfileByUsername(username: string): Promise<{ user: RemoteUser; profile: RemoteProfile } | null> {
+export type RemoteProfilePayload = {
+  user: RemoteUser;
+  profile: RemoteProfile | null;
+  stats?: { posts?: number; topics?: number; likes?: number; score?: number } | null;
+};
+
+export async function getProfileByUsername(username: string): Promise<RemoteProfilePayload | null> {
   try {
     const data = await api(`/profiles/by-username/${encodeURIComponent(username)}`);
-    return { user: data.user as RemoteUser, profile: data.profile as RemoteProfile };
-  } catch { return null; }
+    return {
+      user: data.user as RemoteUser,
+      profile: (data.profile || null) as RemoteProfile | null,
+      stats: (data.stats || null) as RemoteProfilePayload["stats"],
+    };
+  } catch {
+    return null;
+  }
 }
 export async function updateMyProfile(profile: RemoteProfile): Promise<RemoteProfile> {
   const { profile: saved } = await api(`/profiles/me`, { method: 'PATCH', body: JSON.stringify(profile) });
@@ -264,7 +276,12 @@ export async function unsetVip(id: string): Promise<RemoteUser> {
   return user as RemoteUser;
 }
 
-export type PublicMember = Pick<RemoteUser, 'id'|'username'|'role'|'createdAt'|'userNumber'>;
+export type PublicMember = Pick<RemoteUser, 'id'|'username'|'role'|'createdAt'|'userNumber'> & {
+  profile?: Pick<RemoteProfile,
+    'avatarData' | 'bannerData' | 'bio' | 'signature' | 'links' | 'accentFrom' | 'accentTo' | 'badges' | 'labels' | 'privacy'
+  > | null;
+  stats?: { posts?: number; topics?: number; likes?: number; score?: number } | null;
+};
 export async function listPublicMembers(): Promise<PublicMember[]> {
   const { members } = await api(`/members`);
   return members as PublicMember[];

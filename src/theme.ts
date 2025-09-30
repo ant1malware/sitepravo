@@ -2,7 +2,7 @@
 export type Accent = 'indigo' | 'violet' | 'blue' | 'custom';
 export type Background = 'none' | 'bg1' | 'bg2' | 'bg3' | 'bg4' | 'bg5' | 'custom';
 
-export type StyleMode = 'classic' | 'liquid' | 'beta';
+export type StyleMode = 'classic' | 'liquid';
 export type LiquidTone = 'dark' | 'light';
 
 
@@ -85,7 +85,7 @@ export function getStoredCustomBackground(): string | null {
 
 export function getStoredStyleMode(): StyleMode | null {
   const v = safeGet(STYLE_MODE_KEY);
-  return v === 'classic' || v === 'liquid' || v === 'beta' ? v as StyleMode : null;
+  return v === 'classic' || v === 'liquid' ? (v as StyleMode) : null;
 }
 
 export function getStoredLiquidTone(): LiquidTone {
@@ -107,9 +107,8 @@ export function applyLiquidTone(tone: LiquidTone) {
 export function applyStyleMode(mode: StyleMode) {
   const root = document.documentElement;
   root.classList.toggle('theme-liquid', mode === 'liquid');
-  root.classList.toggle('theme-beta', mode === 'beta');
   root.dataset.styleMode = mode;
-  if (mode === 'liquid' || mode === 'beta') {
+  if (mode === 'liquid') {
     // Force dark theme for Liquid mode and remember previous theme
     try {
       const prev = getStoredTheme() ?? (systemPrefersDark() ? 'dark' : 'light');

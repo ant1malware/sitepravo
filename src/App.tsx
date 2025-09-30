@@ -8,10 +8,10 @@ const PrintSheet = React.lazy(() => import('./PrintSheet'));
 const RolePage = React.lazy(() => import('./RolePage'));
 const LawPage = React.lazy(() => import('./LawPage'));
 const VuPage = React.lazy(() => import('./VuPage'));
-const BuddyPlayground = React.lazy(() => import('./BuddyPlayground'));
+// Beta playground removed
 const HomePage = React.lazy(() => import('./HomePage'));
 const ForumPage = React.lazy(() => import('./ForumPage'));
-const DevSeed = React.lazy(() => import('./DevSeed')); 
+// Dev seed removed
 const ProfilePage = React.lazy(() => import('./ProfilePage'));
 const MembersPage = React.lazy(() => import('./ForumMembers'));
 const SectionPage = React.lazy(() => import('./SectionPage'));
@@ -25,6 +25,8 @@ import CommandPalette from "./CommandPalette";
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { track } from "./track";
+import { getSessionAccount as getSessionRemote } from './store/authRemote';
+import { recordLastActive } from './utils/lastActive';
 import { pushRecent } from "./recent";
 const SettingsPage = React.lazy(() => import('./SettingsPage'));
 const FavoritesPage = React.lazy(() => import('./FavoritesPage'));
@@ -35,6 +37,7 @@ import MobileMenu from "./MobileMenu";
 import { useStyleMode } from './useStyleMode';
 import Buddy from './components/Buddy';
 import { getBuddyEnabled } from './uiSettings';
+import ClosureNotice from './components/ClosureNotice';
 
 // Tracks page views on route change
 function RouteTracker() {
@@ -42,6 +45,10 @@ function RouteTracker() {
   useEffect(() => {
     track('page_view');
     try { pushRecent(location.pathname + location.search + location.hash, document.title || undefined); } catch {}
+    // Touch last-active for the current session user
+    (async () => {
+      try { const me = await getSessionRemote(); if (me) recordLastActive(me.id); } catch {}
+    })();
   }, [loc.pathname, loc.search, loc.hash]);
   return null;
 }
@@ -57,21 +64,17 @@ function BuddyGate() {
 export default function App() {
   const [styleMode] = useStyleMode();
   return (
-  <div className={(styleMode === 'liquid' || styleMode === 'beta') ? "min-h-dvh w-full" : "min-h-dvh w-full"}>
-    {(styleMode === 'liquid' || styleMode === 'beta') && (
+  <div className={(styleMode === 'liquid') ? "min-h-dvh w-full" : "min-h-dvh w-full"}>
+    {(styleMode === 'liquid') && (
       // background layers only for Liquid/Beta
       <div className="pointer-events-none fixed inset-0 -z-10" aria-hidden>
         <div className="absolute inset-0" style={{
-          background: styleMode === 'beta'
-            ? 'radial-gradient(900px 600px at 10% -5%, rgba(0,255,240,.16), transparent 60%),'
-              + 'radial-gradient(1100px 780px at 92% 8%, rgba(168,85,247,.18), transparent 65%),'
-              + 'linear-gradient(180deg, rgba(255,255,255,.03), rgba(0,0,0,.45))'
-            : 'radial-gradient(800px 540px at 8% 0%, rgba(90,110,180,.10), transparent 60%),'
+          background: 'radial-gradient(800px 540px at 8% 0%, rgba(90,110,180,.10), transparent 60%),'
               + 'radial-gradient(900px 560px at 85% 10%, rgba(160,110,200,.08), transparent 65%),'
               + 'linear-gradient(180deg, rgba(0,0,0,.60), rgba(0,0,0,.88))'
         }} />
         <div className="absolute inset-0" style={{
-          opacity: styleMode === 'beta' ? 0.02 : 0.015,
+          opacity: 0.015,
           backgroundSize: '32px 32px',
           backgroundImage: 'linear-gradient(to right, rgba(255,255,255,.7) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,.7) 1px, transparent 1px)'
         }} />
@@ -82,6 +85,7 @@ export default function App() {
       <Sidebar />
       <GlobalTopbar />
       <MobileMenu />
+      <ClosureNotice />
       <BuddyGate />
       {/* Offset notifications button below topbar on small screens; keep under full-screen overlays */}
       <div className="fixed right-2 top-14 z-[60] sm:top-2"><NotificationsBell /></div>
@@ -108,11 +112,9 @@ export default function App() {
           <Route path="/recorders/:id" element={<RecorderPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/style/liquid" element={<LiquidGlassShowcase />} />
-          <Route path="/buddy" element={<BuddyPlayground />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/favorites" element={<FavoritesPage />} />
                   <Route path="/forum/feeds" element={<ForumFeedsPage />} />
-                  <Route path="/dev/seed" element={<DevSeed />} />
         </Routes>
       </React.Suspense>
     </BrowserRouter>

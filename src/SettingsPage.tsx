@@ -39,7 +39,7 @@ import {
   getAnimationsOn,
 } from './uiSettings';
 // Buddy (Chebzik) controls
-import { getBuddyEnabled, setBuddyEnabled, getBuddySkin, setBuddySkin } from './uiSettings';
+import { getBuddyEnabled, setBuddyEnabled, getBuddySkin } from './uiSettings';
 
 // Classic background previews
 type BgKey = keyof typeof BACKGROUNDS;
@@ -323,9 +323,9 @@ export default function SettingsPage() {
               <div className="settings-seg">
                 <button type="button" className={`settings-seg__item ${styleMode === 'classic' ? 'is-active' : ''}`} onClick={() => onStyleMode('classic')}>Classic</button>
                 <button type="button" className={`settings-seg__item ${styleMode === 'liquid' ? 'is-active' : ''}`} onClick={() => onStyleMode('liquid')}>Liquid Glass</button>
-                <button type="button" className={`settings-seg__item ${styleMode === 'beta' ? 'is-active' : ''}`} onClick={() => onStyleMode('beta')}>Beta</button>
+                {/* Beta mode removed */}
               </div>
-              <p className="settings-help">Liquid Glass — глубина и мягкий свет. Beta — экспериментальные неоновые акценты.</p>
+              <p className="settings-help">Liquid Glass — глубина и мягкий свет.</p>
 
               {isLiquid && (
                 <div className="mt-3 flex flex-col gap-2">
@@ -396,7 +396,7 @@ export default function SettingsPage() {
 
           <Panel title="Чебзик" desc="Летает по сайту и подсказывает. Можно отключить при желании.">
             <div className="flex flex-wrap items-center gap-2">
-              <Link to="/buddy" className="btn btn-primary">Показать сцену</Link>
+              {/* Beta playground removed */}
               <label className="settings-checkbox">
                 <input
                   type="checkbox"
@@ -405,23 +405,27 @@ export default function SettingsPage() {
                 />
                 Показывать Чебзика
               </label>
-              <span className="text-sm text-[color:var(--text-2)]">Можно отключить. Синхронизируйте цвета со скином из игры.</span>
+              <span className="text-sm text-[color:var(--text-2)]">Можно отключить. Цвет синхронизируется со скином из игры.</span>
             </div>
             <div className="mt-3 grid items-center gap-3 sm:grid-cols-[auto_auto_1fr]">
               <div className="flex items-center gap-2">
                 <span className="text-xs opacity-70">Цвет A</span>
                 <input
                   type="color"
-                  defaultValue={(getBuddySkin() as any).a}
-                  onChange={(e) => { try { const s = getBuddySkin(); setBuddySkin(e.target.value, s.b); } catch {} }}
+                  value={(getBuddySkin() as any).a}
+                  disabled
+                  readOnly
+                  title="Цвет управляется сценой Чебзика"
                 />
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs opacity-70">Цвет B</span>
                 <input
                   type="color"
-                  defaultValue={(getBuddySkin() as any).b}
-                  onChange={(e) => { try { const s = getBuddySkin(); setBuddySkin(s.a, e.target.value); } catch {} }}
+                  value={(getBuddySkin() as any).b}
+                  disabled
+                  readOnly
+                  title="Цвет управляется сценой Чебзика"
                 />
               </div>
               <div
@@ -540,7 +544,7 @@ export default function SettingsPage() {
 
           <Panel title="Чебзик" desc="Мини-игра с нашим мультяшным другом. Кормите его и общайтесь!">
             <div className="flex flex-wrap items-center gap-2">
-              <Link to="/buddy" className="btn btn-primary">Открыть игру</Link>
+              {/* Beta playground removed */}
               <span className="text-sm text-[color:var(--text-2)]">Игра открывается на отдельной странице.</span>
             </div>
           </Panel>

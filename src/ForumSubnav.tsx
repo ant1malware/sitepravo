@@ -89,18 +89,18 @@ export default function ForumSubnav() {
 
   // Supported feeds (cast to FeedType to satisfy TS if union differs)
   const feedOptions: Array<{ key: FeedType; label: string }> = [
-    { key: ("latest" as unknown) as FeedType, label: t("feed.latest", "Latest") },
-    { key: ("hot" as unknown) as FeedType, label: t("feed.hot", "Hot") },
-    { key: ("new" as unknown) as FeedType, label: t("feed.new", "New") },
+    { key: ("latest" as unknown) as FeedType, label: t("Свежие", "Latest") },
+    { key: ("hot" as unknown) as FeedType, label: t("Топ", "Hot") },
+    { key: ("new" as unknown) as FeedType, label: t("Новые", "New") },
     {
       key: ("following" as unknown) as FeedType,
-      label: t("feed.following", "Following"),
+      label: t("Подписки", "Following"),
     },
   ];
 
   const labelForFeed = (key: string | null) =>
     feedOptions.find((f) => f.key === key)?.label ||
-    t("feed.default", "Feed");
+    t("Лента", "Feed");
 
   // Build URLs while preserving/setting ?feed=
   const withFeed = (basePath: string, feedKey: FeedType | null) => {
@@ -125,7 +125,7 @@ export default function ForumSubnav() {
         active={isForums}
         icon={<PanelsTopLeft size={16} />}
       >
-        {t("nav.forums", "Forums")}
+        {t("Форум", "Forums")}
       </Btn>
 
       <Btn
@@ -136,21 +136,21 @@ export default function ForumSubnav() {
         title={
           workshopId
             ? ""
-            : t("nav.workshopMissing", "Workshop section is not created yet")
+            : t("Раздел Workshop ещё не создан", "Workshop section is not created yet")
         }
       >
-        {t("nav.workshop", "Workshop")}
+        {t("Мастерская", "Workshop")}
       </Btn>
 
       <Btn to={membersUrl} active={isMembers} icon={<Users size={16} />}>
-        {t("nav.members", "Members")}
+        {t("Участники", "Members")}
       </Btn>
 
       {/* Feed filter */}
       <div
         className="relative ml-auto"
         onClick={(e) => e.stopPropagation()}
-        aria-label={t("feed.chooser", "Choose feed")}
+        aria-label={t("Выбрать ленту", "Choose feed")}
       >
         <button
           type="button"

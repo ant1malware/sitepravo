@@ -269,15 +269,7 @@ export default function AboutPage() {
           </p>
           <p>
             Написать автору можно в Telegram:{' '}
-            <a
-              href="https://t.me/pasha_bolshoi"
-              target="_blank"
-              rel="noreferrer"
-              className="underline decoration-dotted hover:no-underline"
-            >
-              @pasha_bolshoi
-            </a>
-            .
+            {/* contact removed */}
           </p>
         </Card>
 

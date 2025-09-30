@@ -25,7 +25,7 @@ export default function GlobalTopbar() {
   }
 
   const innerClasses = 'global-topbar__inner mx-auto flex max-w-6xl items-center justify-between gap-1 px-4 py-3 sm:gap-3';
-  const shellClass = styleMode === 'liquid' || styleMode === 'beta'
+  const shellClass = styleMode === 'liquid'
     ? 'global-topbar-shell sticky top-0 z-50 border-transparent bg-transparent px-2 sm:px-4'
     : 'global-topbar-shell sticky top-0 z-40 border-b border-zinc-200 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:border-zinc-800 dark:bg-[color:var(--surface)]/90 dark:supports-[backdrop-filter]:bg-[color:var(--surface)]/70';
 
@@ -55,10 +55,7 @@ export default function GlobalTopbar() {
           <Settings className="h-4 w-4" />
           <span className="hidden sm:inline">Настройки</span>
         </Link>
-        <a href="https://t.me/pasha_bolshoi" target="_blank" rel="noreferrer" className="btn" aria-label="Связаться в Telegram">
-          <MessageSquare className="h-4 w-4" />
-          <span className="hidden sm:inline">Связаться</span>
-        </a>
+        {/* Contacts removed per closure policy */}
       </div>
     </>
   );

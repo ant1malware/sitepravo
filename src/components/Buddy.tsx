@@ -1,5 +1,5 @@
 import React from 'react';
-import { getBuddySkin } from '../uiSettings';
+import { getBuddySkin, setBuddyEnabled } from '../uiSettings';
 
 // A tiny, friendly ghost-like buddy that wanders around the viewport.
 // Non-intrusive: small, semi-transparent, respects reduced motion and the global anim-off switch.
@@ -13,7 +13,8 @@ const PHRASES = [
   'Сегодня отличный день!',
   'Хочешь поиграть? → вкладка Чебзик',
   'Сияю и не мешаю ✨',
-  'Кликни ещё!'
+  'Кликни ещё!',
+  'Я ❤️ Катю'
 ];
 
 function usePrefersReducedMotion(): boolean {
@@ -38,10 +39,12 @@ function usePrefersReducedMotion(): boolean {
 
 export default function Buddy() {
   const [bubble, setBubble] = React.useState<string | null>(null);
+  const [visible, setVisible] = React.useState(true);
   const phraseIdx = React.useRef<number>(Math.floor(Math.random() * PHRASES.length));
 
   // avoid in print
   if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('print').matches) return null;
+  if (!visible) return null;
 
   const prefersReduced = usePrefersReducedMotion();
   const animOff = typeof document !== 'undefined' && document.documentElement.classList.contains('anim-off');
@@ -49,6 +52,7 @@ export default function Buddy() {
 
   const ref = React.useRef<HTMLDivElement | null>(null);
   const pressTimer = React.useRef<number | null>(null);
+  const hideTriggered = React.useRef(false);
 
   React.useEffect(() => {
     const el = ref.current; if (!el) return;
@@ -86,6 +90,10 @@ export default function Buddy() {
     return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', onResize); };
   }, [movingAllowed]);
 
+  React.useEffect(() => () => {
+    if (pressTimer.current) window.clearTimeout(pressTimer.current);
+  }, []);
+
   function speak(custom?: string) {
     const text = custom ?? PHRASES[(phraseIdx.current++) % PHRASES.length];
     setBubble(text);
@@ -94,15 +102,40 @@ export default function Buddy() {
   }
 
   function onClick(e: React.MouseEvent) {
+    if (hideTriggered.current) {
+      hideTriggered.current = false;
+      e.preventDefault();
+      return;
+    }
+    if (e.altKey) {
+      e.preventDefault();
+      hideBuddy();
+      return;
+    }
     speak();
   }
 
-  function onPointerDown() {
+  function hideBuddy() {
+    hideTriggered.current = true;
+    setBubble(null);
+    setVisible(false);
+    try { setBuddyEnabled(false); } catch {}
+  }
+
+  function onPointerDown(e: React.PointerEvent) {
     if (pressTimer.current) window.clearTimeout(pressTimer.current);
-    pressTimer.current = window.setTimeout(() => speak('Просто нажми, чтобы я говорил!'), 600) as unknown as number;
+    if (e.altKey) return;
+    pressTimer.current = window.setTimeout(() => {
+      hideBuddy();
+      pressTimer.current = null;
+    }, 650) as unknown as number;
   }
   function onPointerUp() {
-    if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; }
+    if (pressTimer.current) {
+      window.clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+      hideTriggered.current = false;
+    }
   }
 
   const skin = getBuddySkin();
