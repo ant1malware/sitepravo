@@ -294,7 +294,7 @@ function Header({ me, onLogout }: { me: RemoteUser; onLogout: () => void }) {
 /* ====== Page ====== */
 export default function ForumPage() {
   const [, force] = React.useReducer((x) => x + 1, 0);
-  const [me, setMe] = React.useState<RemoteUser | null | undefined>(undefined);
+  const [me, setMe] = React.useState<RemoteUser | null>(null);
 
   const [sectionsState, setSectionsState] = React.useState<any[]>([]);
   const [latestPosts, setLatestPosts] = React.useState<any[]>([]);
@@ -478,8 +478,6 @@ export default function ForumPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  if (me === undefined) return <div style={{ minHeight: "100vh", background: "#0c0d12" }} />;
-
   const sectionsList = Array.isArray(sectionsState) ? sectionsState : [];
   const latestList = Array.isArray(latestPosts) ? latestPosts : [];
 
@@ -516,6 +514,7 @@ export default function ForumPage() {
         me={me ?? guestUser}
         onLogout={() => {
           clearSession();
+          setMe(null);
           force();
         }}
       />
