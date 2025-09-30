@@ -245,7 +245,7 @@ function AuthGateX({ onDone }: { onDone: () => void }) {
 }
 
 /* ====== Header ====== */
-function Header({ me, onLogout }: { me: RemoteUser | null; onLogout: () => void }) {
+function Header({ me, onLogout }: { me: RemoteUser; onLogout: () => void }) {
   return (
     <header
       className="sticky top-0 z-50 border-b backdrop-blur"
@@ -294,7 +294,7 @@ function Header({ me, onLogout }: { me: RemoteUser | null; onLogout: () => void 
 /* ====== Page ====== */
 export default function ForumPage() {
   const [, force] = React.useReducer((x) => x + 1, 0);
-  const [me, setMe] = React.useState<RemoteUser | null | undefined>(undefined);
+  const [me, setMe] = React.useState<RemoteUser | null>(null);
 
   const [sectionsState, setSectionsState] = React.useState<any[]>([]);
   const [latestPosts, setLatestPosts] = React.useState<any[]>([]);
@@ -478,8 +478,6 @@ export default function ForumPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  if (me === undefined) return <div style={{ minHeight: "100vh", background: "#0c0d12" }} />;
-
   const sectionsList = Array.isArray(sectionsState) ? sectionsState : [];
   const latestList = Array.isArray(latestPosts) ? latestPosts : [];
 
@@ -493,7 +491,17 @@ export default function ForumPage() {
     none: { label: "Idea", className: "bg-zinc-200/10 text-zinc-200" },
   };
 
-  const guestUser = React.useMemo(() => ({ id: 'guest', username: 'guest', role: 'user', userNumber: '0000' } as any), []);
+  const guestUser = React.useMemo<RemoteUser>(
+    () => ({
+      id: 'guest',
+      username: 'guest',
+      email: '',
+      userNumber: 0,
+      role: 'user',
+      createdAt: new Date(0).toISOString(),
+    }),
+    [],
+  );
   return (
     <main
       className="min-h-screen"
@@ -506,6 +514,7 @@ export default function ForumPage() {
         me={me ?? guestUser}
         onLogout={() => {
           clearSession();
+          setMe(null);
           force();
         }}
       />
