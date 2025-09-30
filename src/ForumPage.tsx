@@ -273,14 +273,16 @@ function Header({ me, onLogout }: { me: RemoteUser | null; onLogout: () => void 
           </Link>
         )}
 
-        <Link
-          to={`/forum/profile/${me.username}`}
-          className="ml-2 flex items-center gap-2 rounded-xl border px-3 py-2 card"
-        >
-          <Badge role={me.role} />
-          <div className="text-sm font-semibold">{me.username}</div>
-          <div className="border-l pl-2 text-xs opacity-70">#{me.userNumber}</div>
-        </Link>
+        {me && (
+          <Link
+            to={`/forum/profile/${me.username}`}
+            className="ml-2 flex items-center gap-2 rounded-xl border px-3 py-2 card"
+          >
+            <Badge role={me.role} />
+            <div className="text-sm font-semibold">{me.username}</div>
+            <div className="border-l pl-2 text-xs opacity-70">#{me.userNumber}</div>
+          </Link>
+        )}
 
         <div className="flex-1" />
         <button type="button" className="btn" onClick={onLogout}>

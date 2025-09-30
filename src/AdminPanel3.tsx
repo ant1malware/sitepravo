@@ -29,6 +29,7 @@ import {
   getProfileById,
   type Role,
 } from "./store/authRemote";
+import { canViewerSee } from "./forumHidden";
 
 function getActorId(): string {
   try {
@@ -103,11 +104,13 @@ function UsersTab({ meRole, meId, meOwner }: { meRole?: string; meId?: string; m
 
   const load = React.useCallback(async () => {
     try {
-      setRows(await listAccounts());
+      const data = await listAccounts();
+      const viewerId = meId || null;
+      setRows(data.filter((u) => canViewerSee({ id: u.id, userNumber: u.userNumber, owner: u.owner }, viewerId)));
     } catch (e: any) {
       alert(e?.message || "Failed to load users");
     }
-  }, []);
+  }, [meId]);
 
   React.useEffect(() => {
     load();

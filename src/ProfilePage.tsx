@@ -32,11 +32,12 @@ import {
   type Reaction,
 } from "./store/socialStore";
 import {
-  Camera, Pencil, Globe, Link as LinkIcon, BadgeCheck, UserPlus, UserMinus,
+  Camera, Pencil, Globe, BadgeCheck, UserPlus, UserMinus,
   MessageSquare, Trash2, Shield, Code2, Gavel, Crown
 } from "lucide-react";
 import Badge, { computePoints } from "./components/Badge";
 import { getLastActive, formatRelative as formatLastActive } from "./utils/lastActive";
+import { canViewerSee, isSensitive } from "./forumHidden";
 
 // ====== ROLE META (для красивого бейджа и подсветки) ======
 const ROLE_STYLES: Record<string, { label: string; color: string; glow: string }> = {
@@ -159,10 +160,13 @@ function adaptRemoteAccount(pack: RemoteProfilePayload): Account {
   const bannerData =
     rawProfile.bannerData || rawProfile.banner || rawProfile.bannerUrl || undefined;
 
+  const websiteLink = typeof rawProfile.links?.website === "string" && rawProfile.links.website
+    ? String(rawProfile.links.website)
+    : undefined;
   const profile = {
     bio: rawProfile.bio || "",
     signature: rawProfile.signature || "",
-    links: rawProfile.links ? { ...rawProfile.links } : {},
+    links: websiteLink ? { website: websiteLink } : {},
     accentFrom,
     accentTo,
     avatarData,
@@ -198,6 +202,13 @@ function adaptRemoteAccount(pack: RemoteProfilePayload): Account {
   if (typeof stats.score === "number") {
     (account as any).score = stats.score;
   }
+  account.owner = !!pack.user.owner;
+  account.hidden = isSensitive({
+    id: pack.user.id,
+    userNumber: pack.user.userNumber,
+    owner: pack.user.owner,
+    hidden: (pack as any).hidden,
+  });
   if (lastActiveAt) (account as any).lastActiveAt = lastActiveAt;
 
   return account;
@@ -230,6 +241,7 @@ export default function ProfilePage() {
   const [remote, setRemote] = React.useState<boolean>(false);
   const [isOwnerRemote, setIsOwnerRemote] = React.useState<boolean>(false);
   const [memberMap, setMemberMap] = React.useState<Record<string,string>>({});
+  const [sessionReady, setSessionReady] = React.useState<boolean>(false);
 
   // load
   React.useEffect(() => {
@@ -259,7 +271,8 @@ export default function ProfilePage() {
       setUser(findAccountByUsername(username) || null);
       const meLocal = getLocalSession();
       setSession(meLocal ? { id: meLocal.id, username: meLocal.username } : null);
-    })();
+    })()
+      .finally(() => setSessionReady(true));
   }, [username]);
 
   // session sync
@@ -268,6 +281,7 @@ export default function ProfilePage() {
       try { const me = await getRemoteSession(); if (me) { setSession({ id: me.id, username: me.username }); return; } } catch {}
       const meLocal = getLocalSession();
       setSession(meLocal ? { id: meLocal.id, username: meLocal.username } : null);
+      setSessionReady(true);
     };
     window.addEventListener("forum:session", sync as any);
     window.addEventListener("storage", sync as any);
@@ -300,21 +314,41 @@ export default function ProfilePage() {
     return () => window.removeEventListener("forum:social-change", onSocial as any);
   }, [targetId]);
 
+  const viewerId = session?.id || null;
+  const hidden = user ? isSensitive(user) : false;
+  const renderShell = (children: React.ReactNode) => (
+    <main
+      className="min-h-screen text-slate-200"
+      style={{
+        background:
+          "radial-gradient(1100px 680px at 15% -10%, rgba(56,189,248,0.18), transparent 65%), radial-gradient(1000px 720px at 90% -6%, rgba(167,139,250,0.14), transparent 70%), linear-gradient(180deg, #04060d 0%, #090b16 100%)",
+      }}
+    >
+      <div className="mx-auto max-w-3xl px-4 py-16">{children}</div>
+    </main>
+  );
+
   if (!user) {
-    return (
-      <main
-        className="min-h-screen text-slate-200"
-        style={{
-          background:
-            "radial-gradient(1100px 680px at 15% -10%, rgba(56,189,248,0.18), transparent 65%), radial-gradient(1000px 720px at 90% -6%, rgba(167,139,250,0.14), transparent 70%), linear-gradient(180deg, #04060d 0%, #090b16 100%)",
-        }}
-      >
-        <div className="mx-auto max-w-3xl px-4 py-16">
-          <div className={`${PANEL_CLASS} text-center text-sm text-zinc-300`}>
-            Профиль не найден.
-          </div>
-        </div>
-      </main>
+    return renderShell(
+      <div className={`${PANEL_CLASS} text-center text-sm text-zinc-300`}>
+        Профиль не найден.
+      </div>,
+    );
+  }
+
+  if (hidden && !sessionReady) {
+    return renderShell(
+      <div className={`${PANEL_CLASS} text-center text-sm text-zinc-300`}>
+        Загрузка профиля…
+      </div>,
+    );
+  }
+
+  if (hidden && sessionReady && !canViewerSee(user, viewerId)) {
+    return renderShell(
+      <div className={`${PANEL_CLASS} text-center text-sm text-zinc-300`}>
+        Профиль не найден.
+      </div>,
     );
   }
 
@@ -345,7 +379,7 @@ export default function ProfilePage() {
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/15 via-transparent to-black/70" />
           <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-white/10 to-transparent mix-blend-overlay" />
 
-          <div className="relative -mt-16 flex flex-wrap items-end gap-5 px-6 pb-6">
+          <div className="relative -mt-16 flex flex-col gap-5 px-6 pb-6 sm:flex-row sm:flex-wrap sm:items-end">
             <div className="relative">
               <div
                 className="h-24 w-24 overflow-hidden rounded-full border-4 border-[#101321] shadow-[0_25px_70px_-35px_rgba(15,23,42,0.9)]"
@@ -501,7 +535,7 @@ export default function ProfilePage() {
           {user.profile?.privacy?.showLinks !== false && (
             <InfoRow title="Ссылки">
               <div className="flex flex-wrap gap-2 text-sm text-zinc-200/90">
-                {user.profile.links?.website && (
+                {user.profile.links?.website ? (
                   <a
                     className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 hover:border-white/30"
                     href={user.profile.links.website}
@@ -510,18 +544,7 @@ export default function ProfilePage() {
                   >
                     <Globe size={14} /> Сайт
                   </a>
-                )}
-                {user.profile.links?.discord && (
-                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1">
-                    <LinkIcon size={14} /> {user.profile.links.discord}
-                  </span>
-                )}
-                {user.profile.links?.telegram && (
-                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1">
-                    <LinkIcon size={14} /> {user.profile.links.telegram}
-                  </span>
-                )}
-                {!user.profile.links?.website && !user.profile.links?.discord && !user.profile.links?.telegram && (
+                ) : (
                   <span className="opacity-70">Ссылки ещё не добавлены.</span>
                 )}
               </div>
@@ -639,14 +662,14 @@ function CustomizeModal({
   const [bio, setBio] = React.useState(user.profile.bio || "");
   const [signature, setSignature] = React.useState(user.profile.signature || "");
   const [website, setWebsite] = React.useState(user.profile.links?.website || "");
-  const [discord, setDiscord] = React.useState(user.profile.links?.discord || "");
-  const [telegram, setTelegram] = React.useState(user.profile.links?.telegram || "");
   const [badges, setBadges] = React.useState<string[]>(user.profile.badges || []);
   const [showEmail, setShowEmail] = React.useState<boolean>(user.profile.privacy?.showEmail ?? false);
   const [showStats, setShowStats] = React.useState<boolean>(user.profile.privacy?.showStats ?? true);
   const [showLinks, setShowLinks] = React.useState<boolean>(user.profile.privacy?.showLinks ?? true);
   const [allowComments, setAllowComments] = React.useState<boolean>(user.profile.privacy?.allowComments ?? true);
   const [showFollowers, setShowFollowers] = React.useState<boolean>(user.profile.privacy?.showFollowers ?? true);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
   const toggleBadge = (badge: string) => {
     setBadges((prev) => {
@@ -665,17 +688,27 @@ function CustomizeModal({
   };
 
   const save = async () => {
-    await saveProfile({
+    const payload = {
       avatarData: avatar || undefined,
       bannerData: banner || undefined,
-      accentFrom: from, accentTo: to,
+      accentFrom: from,
+      accentTo: to,
       bio: bio.trim() || undefined,
       signature: signature.trim() || undefined,
-      links: { website: website.trim() || undefined, discord: discord.trim() || undefined, telegram: telegram.trim() || undefined },
+      links: website.trim() ? { website: website.trim() } : undefined,
       badges,
       privacy: { showEmail, showStats, showLinks, allowComments, showFollowers },
-    });
-    onSaved();
+    } as const;
+    try {
+      setSaving(true);
+      setError(null);
+      await saveProfile(payload);
+      onSaved();
+    } catch (err: any) {
+      setError(err?.message || 'Не удалось сохранить изменения.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -778,9 +811,10 @@ function CustomizeModal({
           <div className={`${SOFT_PANEL} sm:col-span-2`}>
             <div className="text-xs uppercase tracking-[0.28em] text-zinc-400/80">Ссылки</div>
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
-              <input className="input" placeholder="https://website" value={website} onChange={(e) => setWebsite(e.target.value)} />
-              <input className="input" placeholder="discord username" value={discord} onChange={(e) => setDiscord(e.target.value)} />
-              <input className="input" placeholder="@telegram" value={telegram} onChange={(e) => setTelegram(e.target.value)} />
+              <input className="input sm:col-span-1" placeholder="https://website" value={website} onChange={(e) => setWebsite(e.target.value)} />
+              <div className="sm:col-span-2 text-xs text-zinc-400/80">
+                Укажите персональный сайт или страницу с портфолио. Соцсети скрыты для гостей.
+              </div>
             </div>
           </div>
 
@@ -796,9 +830,13 @@ function CustomizeModal({
           </div>
         </div>
 
+        {error && <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div>}
+
         <div className="flex justify-end gap-2">
-          <button className="btn" onClick={onClose}>Отмена</button>
-          <button className="btn btn-primary" onClick={save}>Сохранить</button>
+          <button className="btn" onClick={onClose} disabled={saving}>Отмена</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving}>
+            {saving ? 'Сохранение…' : 'Сохранить'}
+          </button>
         </div>
       </div>
     </div>

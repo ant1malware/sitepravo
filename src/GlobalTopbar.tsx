@@ -65,7 +65,7 @@ export default function GlobalTopbar() {
   }
 
   return (
-    <div className={shellClass}>
+    <div className={shellClass} style={{ paddingTop: 'var(--safe-top)' }}>
       {styleMode === 'liquid' ? (
         <LiquidGlass className={`${innerClasses} global-topbar__glass`} blur={26} tint="16 18 34" opacity={0.24} gloss={0.65} elevation={1.2} interactive={false} animate>
           {content}

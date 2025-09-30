@@ -81,6 +81,11 @@ export default function MobileMenu() {
             <Link to="/settings" className="btn btn-secondary"><Settings className="h-4 w-4" /> РќР°СЃС‚СЂРѕР№РєРё</Link>
           </div>
         </nav>
+        <div className="px-4 pb-4 text-center text-[11px] uppercase tracking-[0.32em] text-zinc-500/80">
+          <Link to="/archive" className="no-underline opacity-70 hover:opacity-100" onClick={() => setOpen(false)}>
+            Архив версий
+          </Link>
+        </div>
       </div>
     </div>
   );

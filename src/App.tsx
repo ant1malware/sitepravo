@@ -19,6 +19,7 @@ const TopicPage = React.lazy(() => import('./TopicPage'));
 const TagPage = React.lazy(() => import('./TagPage'));
 const QuestionsPage = React.lazy(() => import('./QuestionsPage'));
 const AdminPanel = React.lazy(() => import('./AdminPanel3'));
+const ArchivePage = React.lazy(() => import('./ArchivePage'));
 import RecorderPage from './RecorderPage';
 import AboutPage from './AboutPage';
 import CommandPalette from "./CommandPalette";
@@ -64,7 +65,7 @@ function BuddyGate() {
 export default function App() {
   const [styleMode] = useStyleMode();
   return (
-  <div className={(styleMode === 'liquid') ? "min-h-dvh w-full" : "min-h-dvh w-full"}>
+  <div className={(styleMode === 'liquid') ? "min-h-dvh w-full" : "min-h-dvh w-full"} style={{ paddingTop: 'var(--safe-top)', paddingBottom: 'var(--safe-bot)' }}>
     {(styleMode === 'liquid') && (
       // background layers only for Liquid/Beta
       <div className="pointer-events-none fixed inset-0 -z-10" aria-hidden>
@@ -114,6 +115,7 @@ export default function App() {
           <Route path="/style/liquid" element={<LiquidGlassShowcase />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/favorites" element={<FavoritesPage />} />
+          <Route path="/archive" element={<ArchivePage />} />
                   <Route path="/forum/feeds" element={<ForumFeedsPage />} />
         </Routes>
       </React.Suspense>

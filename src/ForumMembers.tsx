@@ -5,6 +5,7 @@ import ForumSubnav from "./ForumSubnav";
 import Badge, { computePoints } from "./components/Badge";
 import { listAccounts as listLocalAccounts, getSessionAccount as getLocalSession, type Account } from "./store/forumStore";
 import { listPublicMembers, getSessionAccount as getRemoteSession, type PublicMember } from "./store/authRemote";
+import { filterVisible, isSensitive, OWNER_USER_NUMBER } from "./forumHidden";
 import { formatRelative as formatAgo } from "./utils/lastActive";
 
 const ROLE_STYLES: Record<string, { label: string; color: string }> = {
@@ -146,8 +147,19 @@ function MemberCard({ member, highlight }: { member: Account; highlight: boolean
   );
 }
 
+function normalizeAccount(account: Account): Account {
+  const owner = account.owner ?? (Number(account.userNumber) === OWNER_USER_NUMBER);
+  const hidden = isSensitive({
+    id: account.id,
+    userNumber: account.userNumber,
+    owner,
+    hidden: account.hidden,
+  });
+  return { ...account, owner, hidden };
+}
+
 export default function ForumMembers() {
-  const [members, setMembers] = React.useState<Account[]>(() => listLocalAccounts());
+  const [members, setMembers] = React.useState<Account[]>(() => listLocalAccounts().map(normalizeAccount));
   const [query, setQuery] = React.useState("");
   const [session, setSession] = React.useState<{ id: string; username: string } | null>(null);
 
@@ -184,7 +196,7 @@ export default function ForumMembers() {
               profile: {
                 bio: profile?.bio || "",
                 signature: profile?.signature || "",
-                links: profile?.links || {},
+                links: profile?.links?.website ? { website: profile.links.website } : {},
                 accentFrom,
                 accentTo,
                 avatarData: avatar,
@@ -205,15 +217,22 @@ export default function ForumMembers() {
               }
             }
             if (lastActiveAt) (account as any).lastActiveAt = lastActiveAt;
+            account.owner = (u as any).owner ?? (Number(u.userNumber) === OWNER_USER_NUMBER);
+            account.hidden = isSensitive({
+              id: account.id,
+              userNumber: account.userNumber,
+              owner: account.owner,
+              hidden: (profile as any)?.hidden,
+            });
             return account;
           });
-          setMembers(adapted);
+          setMembers(adapted.map(normalizeAccount));
           if (meRemote) setSession({ id: meRemote.id, username: meRemote.username }); else setSession(null);
           return;
         }
       } catch {}
       // Local fallback
-      setMembers(listLocalAccounts());
+      setMembers(listLocalAccounts().map(normalizeAccount));
       const meLocal = getLocalSession();
       setSession(meLocal ? { id: meLocal.id, username: meLocal.username } : null);
     };
@@ -228,7 +247,8 @@ export default function ForumMembers() {
   }, []);
 
   const normalized = query.trim().toLowerCase();
-  const filtered = members
+  const visibleMembers = React.useMemo(() => filterVisible(members, session?.id || null), [members, session?.id]);
+  const filtered = visibleMembers
     .filter((member) => {
       if (!normalized) return true;
       return (
@@ -244,9 +264,9 @@ export default function ForumMembers() {
     });
 
   // Quick featured groups
-  const devs = members.filter((m) => m.role === "developer");
-  const admins = members.filter((m) => m.role === "admin");
-  const mods = members.filter((m) => m.role === "moderator");
+  const devs = visibleMembers.filter((m) => m.role === "developer");
+  const admins = visibleMembers.filter((m) => m.role === "admin");
+  const mods = visibleMembers.filter((m) => m.role === "moderator");
 
   return (
     <main
@@ -276,7 +296,7 @@ export default function ForumMembers() {
             </div>
             <div className="grid gap-3 text-right text-xs uppercase tracking-[0.32em] text-zinc-300/70 sm:text-sm">
               <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 shadow-inner shadow-black/40">
-                <div className="text-2xl font-bold tracking-tight text-white">{members.length}</div>
+                <div className="text-2xl font-bold tracking-tight text-white">{visibleMembers.length}</div>
                 <div>участников</div>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 shadow-inner shadow-black/40">
@@ -290,7 +310,7 @@ export default function ForumMembers() {
         {(() => {
           const now = Date.now();
           const five = 5 * 60 * 1000;
-          const online = members.filter((m) => {
+          const online = visibleMembers.filter((m) => {
             const la = (m as any).lastActiveAt as string | undefined;
             if (!la) return false;
             const t = new Date(la).getTime();
@@ -378,7 +398,7 @@ export default function ForumMembers() {
             />
           </div>
           <div className="text-xs uppercase tracking-[0.32em] text-zinc-400">
-            Показано {filtered.length} / {members.length}
+            Показано {filtered.length} / {visibleMembers.length}
           </div>
         </div>
 
