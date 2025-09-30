@@ -245,7 +245,7 @@ function AuthGateX({ onDone }: { onDone: () => void }) {
 }
 
 /* ====== Header ====== */
-function Header({ me, onLogout }: { me: RemoteUser | null; onLogout: () => void }) {
+function Header({ me, onLogout }: { me: RemoteUser; onLogout: () => void }) {
   return (
     <header
       className="sticky top-0 z-50 border-b backdrop-blur"
@@ -478,6 +478,11 @@ export default function ForumPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  const guestUser = React.useMemo(
+    () => ({ id: "guest", username: "guest", role: "user", userNumber: "0000" } as any),
+    []
+  );
+
   if (me === undefined) return <div style={{ minHeight: "100vh", background: "#0c0d12" }} />;
 
   const sectionsList = Array.isArray(sectionsState) ? sectionsState : [];
@@ -492,8 +497,6 @@ export default function ForumPage() {
     done: { label: "Done", className: "bg-emerald-400/10 text-emerald-300" },
     none: { label: "Idea", className: "bg-zinc-200/10 text-zinc-200" },
   };
-
-  const guestUser = React.useMemo(() => ({ id: 'guest', username: 'guest', role: 'user', userNumber: '0000' } as any), []);
   return (
     <main
       className="min-h-screen"
