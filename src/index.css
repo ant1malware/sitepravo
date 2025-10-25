@@ -135,8 +135,8 @@ header.sticky.top-0,
   }
   .btn:focus-visible { --tw-ring-color: var(--accent); }
   .btn:disabled { @apply opacity-60 pointer-events-none; }
-  .btn-primary { @apply text-white border-transparent; background: var(--accent); }
-  .btn-primary:hover { background: var(--accent-600); }
+  .btn-primary { @apply border-transparent; background: linear-gradient(180deg, var(--accent-500, var(--accent)) 0%, var(--accent-600, var(--accent)) 100%); color: var(--accent-contrast, #fff); }
+  .btn-primary:hover { filter: brightness(0.98); }
   .btn-ghost { @apply border-transparent bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800; }
   .btn-secondary { @apply bg-white dark:bg-zinc-900; border-color: var(--border); }
   .input {
@@ -531,32 +531,38 @@ section, [id] { scroll-margin-top: 72px; }
 .dark .hero-spotlight{ opacity: 1; }
 
 html.theme-liquid.liquid-dark {
-  --bg-1: #0b1020;
-  --bg-2: rgba(12, 12, 18, 0.88);
-  --surface: rgba(16, 16, 24, 0.78);
-  --surface-2: rgba(24, 24, 36, 0.54);
-  --card: rgba(8, 8, 18, 0.62);
-  --border: rgba(132, 140, 196, 0.22);
-  --card-border: rgba(132, 140, 196, 0.24);
-  --text-1: #f4f5ff;
-  --text-2: #a7aecb;
-  --muted: #8389a4;
-  --ring: rgba(122, 148, 255, 0.4);
-  --accent: #7e9dff;
-  --accent-600: #4f7cff;
+  /* Liquid dark tone tokens are set in theme.ts */
   color-scheme: dark;
-  background-color: #0b1020;
+  background-color: var(--bg-1);
   background-image:
-    radial-gradient(1200px 680px at 18% -5%, rgba(126, 158, 255, 0.18), transparent 65%),
-    radial-gradient(1000px 720px at 90% 10%, rgba(60, 84, 210, 0.16), transparent 70%);
+    radial-gradient(1200px 680px at 18% -5%, var(--liquid-a), transparent 65%),
+    radial-gradient(1000px 720px at 90% 10%, var(--liquid-b), transparent 70%);
   background-attachment: fixed;
 }
 
 html.theme-liquid.liquid-dark body {
-  background-color: #0b1020 !important;
+  background-color: var(--bg-1) !important;
   background-image:
-    radial-gradient(1100px 620px at 20% -10%, rgba(126, 158, 255, 0.16), transparent 65%),
-    radial-gradient(1200px 820px at 90% 15%, rgba(60, 84, 210, 0.2), transparent 70%);
+    radial-gradient(1100px 620px at 20% -10%, var(--liquid-a), transparent 65%),
+    radial-gradient(1200px 820px at 90% 15%, var(--liquid-b), transparent 70%);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  color: var(--text-1);
+}
+
+/* Liquid light background uses the same two soft halos from tokens */
+html.theme-liquid.liquid-light {
+  background-color: var(--bg-1);
+  background-image:
+    radial-gradient(1200px 680px at 18% -5%, var(--liquid-a), transparent 65%),
+    radial-gradient(1000px 720px at 90% 10%, var(--liquid-b), transparent 70%);
+  background-attachment: fixed;
+}
+html.theme-liquid.liquid-light body {
+  background-color: var(--bg-1) !important;
+  background-image:
+    radial-gradient(1100px 620px at 20% -10%, var(--liquid-a), transparent 65%),
+    radial-gradient(1200px 820px at 90% 15%, var(--liquid-b), transparent 70%);
   background-repeat: no-repeat;
   background-attachment: fixed;
   color: var(--text-1);
@@ -657,6 +663,7 @@ html.theme-liquid.liquid-dark .bg-white\/60 {
   display: block;
   isolation: isolate;
   overflow: hidden;
+  contain: paint;
   border-radius: clamp(20px, calc(var(--radius-3xl, 1.25rem) + 0px), 28px);
   background-color: rgba(var(--lg-tint, 8 8 12) / var(--lg-opacity, 0.18));
   background-image:
