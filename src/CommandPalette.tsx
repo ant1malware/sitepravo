@@ -85,13 +85,29 @@ export default function CommandPalette() {
           const key = curId ? `${l.slug}#${curId}` : l.slug;
           if (!added.has(key)) {
             const snippet = s.length > 140 ? s.slice(0, 137) + '…' : s;
-  const Panel: React.FC<React.PropsWithChildren<{}>> = ({ children }) => (
-    <div className="w-full max-w-2xl rounded-2xl border border-zinc-200 bg-white p-3 text-zinc-900 shadow-softLg dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
-      {children}
-    </div>
-  );
+            const title = curId ? `${l.title} — ${curHead}` : l.title;
+            const url = curId
+              ? baseUrl(`/laws/${l.slug}?q=${encodeURIComponent(qq)}#${curId}`)
+              : baseUrl(`/laws/${l.slug}?q=${encodeURIComponent(qq)}`);
+            const row: Row = { kind: 'law', id: key, title, subtitle: snippet, url };
+            (row as any).__boost = 5;
+            out.push(row);
+            added.add(key);
+          }
+        }
+      }
+    }
+    const seen = new Set<string>();
+    return out.filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true)));
+  }
+
+  function go(to: string) {
     setOpen(false);
-    try { window.location.href = to; } catch { location.assign(to); }
+    try {
+      window.location.href = to;
+    } catch {
+      location.assign(to);
+    }
   }
 
   function onKeyList(e: React.KeyboardEvent) {
@@ -101,20 +117,11 @@ export default function CommandPalette() {
     if (e.key === 'Enter') { e.preventDefault(); go(rows[idx].url); }
   }
 
-  const Panel: React.FC<React.PropsWithChildren<{}>> = ({ children }) => {
-    if (styleMode === 'liquid') {
-      return (
-        <LiquidGlass className="w-full max-w-2xl p-3 text-white" blur={26} tint="16 18 34" opacity={0.24} gloss={0.7} elevation={1.2} interactive={false}>
-          {children}
-        </LiquidGlass>
-      );
-    }
-    return (
-      <div className="w-full max-w-2xl rounded-2xl border border-zinc-200 bg-white p-3 text-zinc-900 shadow-softLg dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
-        {children}
-      </div>
-    );
-  };
+  const Panel: React.FC<React.PropsWithChildren<{}>> = ({ children }) => (
+    <div className="w-full max-w-2xl rounded-2xl border border-zinc-200 bg-white p-3 text-zinc-900 shadow-softLg dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+      {children}
+    </div>
+  );
 
   return (
     <>
