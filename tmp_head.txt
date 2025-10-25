@@ -1,451 +1,260 @@
-export interface Env {
-  // уведомления
-  NOTIF_KV: KVNamespace
-  NOTIFY_SECRET: string
+// src/ForumPage.tsx
+import React from "react";
+import { Link } from "react-router-dom";
+import SimpleChat from "./components/SimpleChat";
 
-  // чат
-  ROOM: DurableObjectNamespace
-  ADMIN_KEY: string
+import {
+  registerAccount,
+  authenticateAccount,
+  clearSession,
+  getSessionAccount,
+  type Role,
+  type RemoteUser,
+} from "./store/authRemote";
 
-  // +++ ДОБАВЛЕНО: авторизация/роли
-  AUTH_KV?: KVNamespace               // KV для пользователей и сессий
-  USER_COUNTER?: DurableObjectNamespace // DO-счётчик userNumber
-  API_BASE?: string                   // префикс API (напр. "/skyapi")
-  CORS_ORIGINS?: string               // (необяз.) список разрешённых Origin через запятую
+import { listSections, listLatestPosts, listTopics } from "./store/forumRemote";
+
+import { Shield, ChevronRight, Lock } from "lucide-react";
+import RecaptchaGate from "./components/RecaptchaGate";
+import { requestEmailCode, verifyEmailCode } from "./store/emailVerifyLocal";
+import ForumSubnav from "./ForumSubnav";
+import ForumSearch from "./components/ForumSearch";
+
+/* ====== UI helpers ====== */
+function Badge({ role }: { role: Role }) {
+  const map: Record<Role, { color: string; text: string }> = {
+    developer: { color: "#22d3ee", text: "Разработчик" },
+    admin: { color: "#ef4444", text: "Администратор" },
+    moderator: { color: "#8b5cf6", text: "Модератор" },
+    vip: { color: "#eab308", text: "VIP" },
+    user: { color: "#94a3b8", text: "Участник" },
+    newbie: { color: "#22d3ee", text: "Новичок" },
+  };
+  return (
+    <span
+      style={{
+        border: "1px solid rgba(255,255,255,.1)",
+        background: "rgba(255,255,255,.05)",
+        color: map[role].color,
+        padding: "2px 8px",
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 700,
+      }}
+    >
+      {map[role].text}
+    </span>
+  );
 }
 
-/* ============================ УВЕДОМЛЕНИЯ ============================ */
-
-type Notif = { id: string; title?: string; text: string; date: string; url?: string }
-type Feed = { items: Notif[] }
-
-const FEED_KEY = 'feed.json'
-const NICK_EPOCH_KEY = 'nick:epoch'
-
-// динамический CORS: эхо Origin + креды, иначе '*'
-function corsHeaders(req: Request): Record<string, string> {
-  const origin = req.headers.get('Origin') || ''
-  const h: Record<string, string> = {
-    'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Telegram-Bot-Api-Secret-Token, x-admin-secret, Authorization',
-  }
-  if (origin) {
-    h['Access-Control-Allow-Origin'] = origin
-    h['Access-Control-Allow-Credentials'] = 'true'
-    h['Vary'] = 'Origin'
-  } else {
-    h['Access-Control-Allow-Origin'] = '*'
-  }
-  return h
+function projectStatus(title: string): "wip" | "review" | "done" | "none" {
+  const lower = String(title || "").toLowerCase();
+  if (lower.startsWith("[wip]")) return "wip";
+  if (lower.startsWith("[review]")) return "review";
+  if (lower.startsWith("[done]")) return "done";
+  return "none";
 }
 
-function json(req: Request, body: unknown, init: ResponseInit = {}) {
-  const headers = new Headers({ 'Content-Type': 'application/json', ...corsHeaders(req), ...(init.headers || {}) })
-  return new Response(JSON.stringify(body), { ...init, headers })
-}
+/* ====== Auth (extended) ====== */
+function AuthGateX({ onDone }: { onDone: () => void }) {
+  const [mode, setMode] = React.useState<"login" | "signup">("login");
+  const [nick, setNick] = React.useState("");
+  const [email, setEmail] = React.useState("");
+  const [pass, setPass] = React.useState("");
+  const [invite, setInvite] = React.useState("");
+  const [remember, setRemember] = React.useState(true);
+  const [err, setErr] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const [captchaToken, setCaptchaToken] = React.useState<string | null>(null);
+  const [otp, setOtp] = React.useState("");
+  const [verifyMode, setVerifyMode] = React.useState<false | "email">(false);
+  const [verifyCode, setVerifyCode] = React.useState("");
 
-function text(req: Request, body: string, init: ResponseInit = {}) {
-  const headers = new Headers({ 'Content-Type': 'text/plain; charset=utf-8', ...corsHeaders(req), ...(init.headers || {}) })
-  return new Response(body, { ...init, headers })
-}
+  const ascii = /^[A-Za-z0-9_]{3,16}$/;
+  const needInvite = true;
 
-async function readFeed(env: Env): Promise<Feed> {
-  const raw = await env.NOTIF_KV.get(FEED_KEY)
-  if (!raw) return { items: [] }
-  try { return JSON.parse(raw) as Feed } catch { return { items: [] } }
-}
-
-async function writeFeed(env: Env, feed: Feed) {
-  await env.NOTIF_KV.put(FEED_KEY, JSON.stringify(feed))
-}
-
-async function readNickEpoch(env: Env): Promise<number> {
-  const v = await env.NOTIF_KV.get(NICK_EPOCH_KEY)
-  const n = v ? parseInt(v, 10) : 1
-  return Number.isFinite(n) && n > 0 ? n : 1
-}
-
-async function writeNickEpoch(env: Env, value: number) {
-  const v = Math.max(1, Math.min(10_000_000, Math.floor(value)))
-  await env.NOTIF_KV.put(NICK_EPOCH_KEY, String(v))
-}
-
-function parseTelegramBody(body: any) {
-  const update = body || {}
-  const msg = update?.message || update?.edited_message
-  const text: string = msg?.text || ''
-  if (!text) return null
-
-  let title: string | undefined
-  let url: string | undefined
-  let bodyText = text
-  const firstLine = text.split('\n')[0]
-  const m = /^\s*\[(.*?)\]\s*(?:\((https?:[^\s]+)\))?\s*$/m.exec(firstLine)
-  if (m) {
-    title = m[1] || undefined
-    url = m[2] || undefined
-    bodyText = text.split('\n').slice(1).join('\n').trim() || title || text
-  }
-
-  const id = String(update.update_id || Date.now())
-  return { id, title, text: bodyText, date: new Date().toISOString(), url } as Notif
-}
-
-/* ============================ ADMIN cookie ============================ */
-
-function getCookie(header: string | null | undefined, name: string): string | undefined {
-  if (!header) return
-  const parts = header.split(/; */)
-  for (const p of parts) {
-    const idx = p.indexOf('=')
-    if (idx === -1) continue
-    const k = decodeURIComponent(p.slice(0, idx).trim())
-    if (k === name) return decodeURIComponent(p.slice(idx + 1).trim())
-  }
-}
-
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
-  let out = 0
-  for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return out === 0
-}
-
-async function hmac(env: Env, data: string): Promise<string> {
-  const keyRaw = new TextEncoder().encode(env.ADMIN_KEY || '')
-  const cryptoKey = await crypto.subtle.importKey('raw', keyRaw, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
-  const sig = await crypto.subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(data))
-  const bin = String.fromCharCode(...new Uint8Array(sig))
-  // @ts-ignore
-  return btoa(bin)
-}
-
-async function makeAdminToken(env: Env): Promise<string> {
-  const ts = Date.now().toString()
-  const sig = await hmac(env, `v1|${ts}`)
-  return `v1.${ts}.${sig}`
-}
-
-async function checkAdminToken(env: Env, token?: string): Promise<boolean> {
-  if (!token || !env.ADMIN_KEY) return false
-  const [v, tsStr, sig] = token.split('.')
-  if (v !== 'v1' || !tsStr || !sig) return false
-  const ts = parseInt(tsStr, 10); if (!ts) return false
-  if (Date.now() - ts > 30 * 24 * 60 * 60 * 1000) return false
-  const expect = await hmac(env, `v1|${tsStr}`)
-  return timingSafeEqual(sig, expect)
-}
-
-/* ============================ ЧАТ (WS + Durable Object) ============================ */
-
-type ChatMessage = { id: string; author: string; text: string; ts: number }
-type Session = { ws: WebSocket; name: string; isAdmin: boolean; last: number[] }
-
-function uid(): string {
-  try {
-    // @ts-ignore
-    const f = (crypto && (crypto as any).randomUUID) || (self as any)?.crypto?.randomUUID
-    if (typeof f === 'function') return f()
-  } catch {}
-  return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`
-}
-
-/* ===================== АВТОРИЗАЦИЯ/РОЛИ (добавлено) ===================== */
-
-type Role = 'developer'|'admin'|'moderator'|'vip'|'user'|'newbie'
-type UserFull = {
-  id: string; username: string; email: string;
-  passwordHash: string; salt: string;
-  userNumber: number; role: Role; createdAt: string;
-  invitedById?: string | null; invitedByName?: string | null;
-  // moderation flags
-  bannedUntil?: string | null;
-  mutedUntil?: string | null;
-}
-type UserPublic = Omit<UserFull, 'passwordHash'|'salt'>
-
-const USERNAME = /^[A-Za-z0-9_]{3,16}$/
-
-// base64 helpers
-function b64(bytes: ArrayBuffer | Uint8Array) {
-  const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
-  let s = ''; for (let i=0;i<u8.length;i++) s += String.fromCharCode(u8[i])
-  // @ts-ignore
-  return btoa(s)
-}
-function b64dec(s: string) {
-  const bin = atob(s)
-  const u8 = new Uint8Array(bin.length)
-  for (let i=0;i<bin.length;i++) u8[i] = bin.charCodeAt(i)
-  return u8
-}
-function randB64(n=16) { const u8=new Uint8Array(n); crypto.getRandomValues(u8); return b64(u8) }
-
-async function pbkdf2(password: string, saltB64: string) {
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), {name:'PBKDF2'}, false, ['deriveBits'])
-  const bits = await crypto.subtle.deriveBits({name:'PBKDF2', hash:'SHA-256', iterations:100_000, salt: b64dec(saltB64)}, key, 256)
-  return b64(bits)
-}
-
-// KV keys
-const U_BY_ID = (id: string) => `auth:user:${id}`
-const IDX_U = (u: string) => `auth:idx:u:${u.toLowerCase()}`
-const IDX_E = (e: string) => `auth:idx:e:${e.toLowerCase()}`
-const SESS = (t: string) => `auth:sess:${t}`
-// Invites
-const INV = (code: string) => `auth:invite:${code}`
-
-// CRUD users in KV
-async function getUserByIdKV(env: Env, id: string): Promise<UserFull|null> {
-  const raw = await env.AUTH_KV!.get(U_BY_ID(id))
-  return raw ? JSON.parse(raw) as UserFull : null
-}
-async function getIdByUsername(env: Env, username: string) {
-  return env.AUTH_KV!.get(IDX_U(username))
-}
-async function getIdByEmail(env: Env, email: string) {
-  return env.AUTH_KV!.get(IDX_E(email))
-}
-async function putUserKV(env: Env, u: UserFull) {
-  await env.AUTH_KV!.put(U_BY_ID(u.id), JSON.stringify(u))
-  await env.AUTH_KV!.put(IDX_U(u.username), u.id)
-  await env.AUTH_KV!.put(IDX_E(u.email), u.id)
-}
-async function listUsersKV(env: Env): Promise<UserPublic[]> {
-  const out: UserPublic[] = []
-  let cursor: string | undefined = undefined
-  do {
-    const page = await env.AUTH_KV!.list({ prefix: 'auth:user:', cursor })
-    for (const k of page.keys) {
-      const raw = await env.AUTH_KV!.get(k.name)
-      if (!raw) continue
-      const u = JSON.parse(raw) as UserFull
-      const { passwordHash, salt, ...pub } = u
-      out.push(pub as UserPublic)
-    }
-    cursor = page.list_complete ? undefined : page.cursor
-  } while (cursor)
-  out.sort((a,b)=> (a.userNumber||0) - (b.userNumber||0))
-  return out
-}
-
-// ----- Invites in KV -----
-type Invite = { code: string; createdAt: string; createdBy: string; note?: string; usedBy?: string|null; usedAt?: string|null }
-
-function normalizeInvite(code: string) { return (code||'').toString().replace(/[^A-Za-z0-9]/g,'').toUpperCase() }
-function randomInvite(len=16) { const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<len;i++) s+=a[Math.floor(Math.random()*a.length)]; return s }
-async function putInvite(env: Env, inv: Invite) { await env.AUTH_KV!.put(INV(inv.code), JSON.stringify(inv)) }
-async function getInvite(env: Env, code: string): Promise<Invite|null> { const raw = await env.AUTH_KV!.get(INV(code)); return raw? JSON.parse(raw) as Invite : null }
-async function listInvitesKV(env: Env): Promise<Invite[]> { const out: Invite[]=[]; let cursor: string|undefined=undefined; do{ const page=await env.AUTH_KV!.list({prefix:'auth:invite:',cursor}); for(const k of page.keys){ const raw=await env.AUTH_KV!.get(k.name); if(!raw) continue; out.push(JSON.parse(raw) as Invite) } cursor = page.list_complete? undefined : page.cursor } while(cursor); out.sort((a,b)=> (b.createdAt||'').localeCompare(a.createdAt||'')); return out }
-async function markInviteUsed(env: Env, code: string, userId: string) { const inv = await getInvite(env, code); if (!inv) throw new Error('invite not found'); inv.usedBy=userId; inv.usedAt=new Date().toISOString(); await putInvite(env, inv) }
-
-// Forum global settings
-type ForumCfg = { registrationMode?: 'invite'|'open'; allowGuestRead?: boolean }
-const CFG = 'forum:cfg'
-async function readForumCfg(env: Env): Promise<ForumCfg> {
-  const raw = await env.AUTH_KV!.get(CFG)
-  if (!raw) return { registrationMode: 'invite', allowGuestRead: false }
-  try {
-    const cfg = JSON.parse(raw) as ForumCfg
-    return { registrationMode: cfg.registrationMode || 'invite', allowGuestRead: !!cfg.allowGuestRead }
-  } catch { return { registrationMode: 'invite', allowGuestRead: false } }
-}
-async function writeForumCfg(env: Env, cfg: ForumCfg) { await env.AUTH_KV!.put(CFG, JSON.stringify(cfg)) }
-
-/* ===================== Forum: Sections/Topics/Posts in KV ===================== */
-
-type Section = { id: string; title: string; description?: string; icon?: string; createdAt: string; order: number; moderatorIds: string[]; topicCount: number; postCount: number }
-type Topic = { id: string; sectionId: string; title: string; authorId: string; createdAt: string; updatedAt: string; pinned: boolean; locked: boolean; viewCount: number; replyCount: number; lastPostAt: string; lastPostBy: string }
-type Post = { id: string; topicId: string; authorId: string; content: string; createdAt: string; editedAt?: string|null; pinned?: boolean; likes?: string[] }
-
-const F_SEC = (id: string) => `forum:section:${id}`
-const F_TOP = (id: string) => `forum:topic:${id}`
-const F_POS = (id: string) => `forum:post:${id}`
-const IDX_T_S = (sectionId: string, id: string) => `forum:idx:topics:section:${sectionId}:${id}`
-const IDX_P_T = (topicId: string, id: string) => `forum:idx:posts:topic:${topicId}:${id}`
-
-async function listSectionsKV(env: Env): Promise<Section[]> {
-  const out: Section[] = []
-  let cursor: string | undefined = undefined
-  do {
-    const page = await env.AUTH_KV!.list({ prefix: 'forum:section:', cursor })
-    for (const k of page.keys) {
-      const raw = await env.AUTH_KV!.get(k.name)
-      if (!raw) continue
-      out.push(JSON.parse(raw) as Section)
-    }
-    cursor = page.list_complete ? undefined : page.cursor
-  } while (cursor)
-  out.sort((a,b)=> (a.order||0)-(b.order||0))
-  return out
-}
-async function putSectionKV(env: Env, s: Section) { await env.AUTH_KV!.put(F_SEC(s.id), JSON.stringify(s)) }
-async function getSectionKV(env: Env, id: string) { const raw = await env.AUTH_KV!.get(F_SEC(id)); return raw? JSON.parse(raw) as Section : null }
-async function deleteSectionKV(env: Env, id: string) { await env.AUTH_KV!.delete(F_SEC(id)) }
-
-async function listTopicsKV(env: Env, sectionId?: string): Promise<Topic[]> {
-  if (sectionId) {
-    const out: Topic[] = []
-    let cursor: string | undefined = undefined
-    const prefix = `forum:idx:topics:section:${sectionId}:`
-    do {
-      const page = await env.AUTH_KV!.list({ prefix, cursor })
-      for (const k of page.keys) {
-        const id = k.name.slice(prefix.length)
-        const raw = await env.AUTH_KV!.get(F_TOP(id)); if (!raw) continue
-        out.push(JSON.parse(raw) as Topic)
-      }
-      cursor = page.list_complete ? undefined : page.cursor
-    } while (cursor)
-    out.sort((a,b)=> new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    return out
-  }
-  const out: Topic[] = []
-  let cursor: string | undefined = undefined
-  do { const page = await env.AUTH_KV!.list({ prefix:'forum:topic:', cursor });
-    for (const k of page.keys) { const raw = await env.AUTH_KV!.get(k.name); if (!raw) continue; out.push(JSON.parse(raw) as Topic) }
-    cursor = page.list_complete ? undefined : page.cursor
-  } while (cursor)
-  out.sort((a,b)=> new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-  return out
-}
-async function putTopicKV(env: Env, t: Topic) { await env.AUTH_KV!.put(F_TOP(t.id), JSON.stringify(t)); await env.AUTH_KV!.put(IDX_T_S(t.sectionId, t.id), '1') }
-async function deleteTopicKV(env: Env, t: Topic) { await env.AUTH_KV!.delete(F_TOP(t.id)); await env.AUTH_KV!.delete(IDX_T_S(t.sectionId, t.id)) }
-
-async function listPostsKV(env: Env, topicId: string, limit=200): Promise<Post[]> {
-  const out: Post[] = []
-  let cursor: string | undefined = undefined
-  const prefix = `forum:idx:posts:topic:${topicId}:`
-  do {
-    const page = await env.AUTH_KV!.list({ prefix, cursor })
-    for (const k of page.keys) { const id = k.name.slice(prefix.length); const raw = await env.AUTH_KV!.get(F_POS(id)); if (!raw) continue; out.push(JSON.parse(raw) as Post) }
-    cursor = page.list_complete ? undefined : page.cursor
-    if (out.length >= limit) break
-  } while (cursor)
-  // default pinned/likes for legacy posts
-  for (const p of out) { if (typeof (p as any).pinned !== 'boolean') (p as any).pinned = false; if (!Array.isArray((p as any).likes)) (p as any).likes = [] }
-  // keep pinned first, then by createdAt asc
-  out.sort((a,b)=> {
-    const ap = a.pinned ? 1 : 0, bp = b.pinned ? 1 : 0
-    if (ap !== bp) return bp - ap
-    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-  })
-  return out.slice(0, limit)
-}
-async function putPostKV(env: Env, p: Post) { await env.AUTH_KV!.put(F_POS(p.id), JSON.stringify(p)); await env.AUTH_KV!.put(IDX_P_T(p.topicId, p.id), '1') }
-async function deletePostKV(env: Env, p: Post) { await env.AUTH_KV!.delete(F_POS(p.id)); await env.AUTH_KV!.delete(IDX_P_T(p.topicId, p.id)) }
-
-async function deleteTopicDeep(env: Env, t: Topic): Promise<number> {
-  // returns number of posts removed
-  let removed = 0
-  const prefix = `forum:idx:posts:topic:${t.id}:`
-  let cursor: string | undefined = undefined
-  do {
-    const page = await env.AUTH_KV!.list({ prefix, cursor })
-    for (const k of page.keys) {
-      const id = k.name.slice(prefix.length)
-      const raw = await env.AUTH_KV!.get(F_POS(id))
-      if (raw) {
-        const p = JSON.parse(raw) as Post
-        await deletePostKV(env, p)
-        removed += 1
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr(null);
+    setBusy(true);
+    try {
+      if (mode === "login") {
+        await authenticateAccount({
+          usernameOrEmail: nick.trim() || email.trim(),
+          password: pass,
+          remember,
+          otp: otp.trim() || undefined,
+          captchaToken,
+        });
+        onDone();
       } else {
-        await env.AUTH_KV!.delete(k.name)
+        if (!ascii.test(nick.trim())) {
+          throw new Error("Логин: 3–16 символов (латиница, цифры, _)");
+        }
+        await registerAccount({
+          username: nick.trim(),
+          email: email.trim(),
+          password: pass || undefined,
+          inviteCode: needInvite ? invite.trim() : "",
+          remember,
+          captchaToken,
+        } as any);
+        try {
+          requestEmailCode(email.trim());
+        } catch {
+          /* ignore */
+        }
+        setVerifyMode("email");
       }
+    } catch (e: any) {
+      setErr(e?.message || "Что-то пошло не так");
+    } finally {
+      setBusy(false);
     }
-    cursor = page.list_complete ? undefined : page.cursor
-  } while (cursor)
-  await deleteTopicKV(env, t)
-  return removed
+  };
+
+  return (
+    <div className="fixed inset-0 z-[90] grid place-items-center bg-black/70 p-4">
+      <form onSubmit={submit} className="w-[min(560px,92vw)] card p-5">
+        <div className="flex items-center gap-2">
+          <Lock size={18} />
+          <b>{mode === "login" ? "Вход" : "Регистрация"}</b>
+        </div>
+
+        {!verifyMode && (
+          <div className="grid gap-3 mt-3">
+            <input
+              className="input"
+              placeholder={mode === "login" ? "Логин или e-mail" : "Логин (латиница/цифры/_ )"}
+              value={nick}
+              onChange={(e) => setNick(e.target.value)}
+              disabled={busy}
+              required
+            />
+            {mode === "signup" && (
+              <input
+                className="input"
+                placeholder="E-mail"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={busy}
+                required
+              />
+            )}
+            {mode === "signup" && needInvite && (
+              <input
+                className="input"
+                placeholder="Инвайт-код"
+                value={invite}
+                onChange={(e) => setInvite(e.target.value)}
+                disabled={busy}
+                required
+              />
+            )}
+            <input
+              className="input"
+              type="password"
+              placeholder="Пароль"
+              value={pass}
+              onChange={(e) => setPass(e.target.value)}
+              disabled={busy}
+              required
+            />
+            {mode === "login" && (
+              <input
+                className="input"
+                placeholder="2FA код (если включено)"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                disabled={busy}
+              />
+            )}
+            <RecaptchaGate onToken={setCaptchaToken} />
+            {err && <div style={{ color: "#ef4444", fontSize: 13 }}>{err}</div>}
+
+            <div className="flex items-center gap-2 text-xs opacity-80">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  disabled={busy}
+                />
+                Запомнить меня
+              </label>
+            </div>
+
+            <div className="flex gap-2">
+              <button className="btn btn-primary" type="submit" disabled={busy}>
+                {mode === "login" ? "Войти" : "Зарегистрироваться"}
+              </button>
+              <button
+                className="btn"
+                type="button"
+                onClick={() => setMode(mode === "login" ? "signup" : "login")}
+                disabled={busy}
+              >
+                {mode === "login" ? "Нет аккаунта? Регистрация" : "Уже есть? Войти"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {verifyMode === "email" && (
+          <div className="grid gap-3 mt-3">
+            <div className="text-sm text-zinc-300">
+              Мы отправили код подтверждения на {email}. Введите код ниже.
+            </div>
+            <input
+              className="input"
+              placeholder="Код подтверждения"
+              value={verifyCode}
+              onChange={(e) => setVerifyCode(e.target.value)}
+            />
+            {!!err && <div style={{ color: "#ef4444", fontSize: 13 }}>{err}</div>}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  if (verifyEmailCode(email, verifyCode)) {
+                    setVerifyMode(false);
+                    onDone();
+                  } else {
+                    setErr("Неверный код");
+                  }
+                }}
+              >
+                Подтвердить
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  requestEmailCode(email);
+                }}
+              >
+                Отправить код ещё раз
+              </button>
+            </div>
+          </div>
+        )}
+      </form>
+    </div>
+  );
 }
 
-// ====== Profiles storage ======
-type Profile = {
-  avatarData?: string; bannerData?: string; bio?: string; signature?: string;
-  links?: { website?: string; discord?: string; telegram?: string };
-  accentFrom?: string; accentTo?: string; badges?: string[];
-  privacy?: { showEmail?: boolean; showStats?: boolean; showSecondaryRole?: boolean };
-}
-function defaultProfile(): Profile { return { bio:'', signature:'', links:{}, accentFrom:'#8b5cf6', accentTo:'#0ea5e9', badges:[], privacy:{ showEmail:false, showStats:true } } }
-function sanitizeProfile(p: any): Profile {
-  const out: Profile = defaultProfile()
-  if (typeof p?.avatarData === 'string' && p.avatarData.length < 2_000_000) out.avatarData = p.avatarData
-  if (typeof p?.bannerData === 'string' && p.bannerData.length < 4_000_000) out.bannerData = p.bannerData
-  if (typeof p?.bio === 'string') out.bio = String(p.bio).slice(0, 2000)
-  if (typeof p?.signature === 'string') out.signature = String(p.signature).slice(0, 800)
-  if (p?.links && typeof p.links === 'object') {
-    out.links = { website: p.links.website ? String(p.links.website).slice(0,200) : undefined, discord: p.links.discord ? String(p.links.discord).slice(0,100) : undefined, telegram: p.links.telegram ? String(p.links.telegram).slice(0,100) : undefined }
-  }
-  if (typeof p?.accentFrom === 'string') out.accentFrom = p.accentFrom
-  if (typeof p?.accentTo === 'string') out.accentTo = p.accentTo
-  if (Array.isArray(p?.badges)) out.badges = p.badges.slice(0,3).map((x:any)=> String(x).slice(0,32))
-  if (p?.privacy && typeof p.privacy === 'object') out.privacy = { showEmail: !!p.privacy.showEmail, showStats: p.privacy.showStats !== false, showSecondaryRole: p.privacy.showSecondaryRole !== false }
-  return out
-}
-const F_PROF = (id: string) => `forum:profile:${id}`
-async function getProfileKV(env: Env, id: string): Promise<Profile|null> { const raw = await env.AUTH_KV!.get(F_PROF(id)); return raw ? JSON.parse(raw) as Profile : null }
-async function putProfileKV(env: Env, id: string, profile: Profile) { await env.AUTH_KV!.put(F_PROF(id), JSON.stringify(profile)) }
-
-// Durable Object: глобальный счётчик userNumber
-export class UserCounter {
-  constructor(private state: DurableObjectState) {}
-  async fetch(req: Request) {
-    const url = new URL(req.url)
-    if (req.method === 'POST' && url.pathname === '/next') {
-      let n = (await this.state.storage.get<number>('n')) ?? 0
-      n += 1
-      await this.state.storage.put('n', n)
-      return new Response(JSON.stringify({ n }), { status: 200 })
-    }
-    return new Response('not found', { status: 404 })
-  }
-}
-async function nextUserNumber(env: Env) {
-  const id = env.USER_COUNTER!.idFromName('global')
-  const stub = env.USER_COUNTER!.get(id)
-  const r = await stub.fetch('https://counter/next', { method: 'POST' })
-  const data = await r.json()
-  return Number(data.n) || 1
-}
-
-// sessions in KV
-async function createSession(env: Env, userId: string) {
-  const token = crypto.randomUUID()
-  await env.AUTH_KV!.put(SESS(token), userId, { expirationTtl: 60*60*24*7 }) // 7 дней
-  return token
-}
-async function readSession(env: Env, req: Request) {
-  const h = req.headers.get('Authorization') || ''
-  const token = h.startsWith('Bearer ') ? h.slice(7) : ''
-  if (!token) return null
-  const uid = await env.AUTH_KV!.get(SESS(token))
-  return uid ? { token, userId: uid } : null
-}
-
-// API handler (/skyapi/*)
-async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
-  const base = env.API_BASE || '/skyapi'
-  const url = new URL(req.url)
-  if (!url.pathname.startsWith(base)) return null
-  const method = req.method
-
-  if (!env.AUTH_KV || !env.USER_COUNTER) {
-    return json(req, { error: 'auth service not configured' }, { status: 501 })
-  }
-
-  if (method === 'OPTIONS') return json(req, { ok: true })
-
-  const sub = url.pathname.slice(base.length) // "/register", "/login", ...
-  try {
-    // POST /register
-    if (sub === '/register' && method === 'POST') {
-      const { username, email, password='1234', inviteCode='' } = await req.json().catch(()=> ({}))
-      if (!USERNAME.test(String(username||''))) return json(req, { error:'bad username' }, { status: 400 })
-      if (!email || !String(email).includes('@')) return json(req, { error:'bad email' }, { status: 400 })
-      if (!password || String(password).length < 4) return json(req, { error:'bad password' }, { status: 400 })
-      // тут можно проверить inviteCode, если нужно
-
-      const cfg = await readForumCfg(env)
-      if ((cfg.registrationMode || 'invite') === 'invite') {
-        const norm = normalizeInvite(String(inviteCode||''))
-
+/* ====== Header ====== */
+function Header({ me, onLogout }: { me: RemoteUser; onLogout: () => void }) {
+  return (
+    <header
+      className="sticky top-0 z-50 border-b backdrop-blur"
+      style={{ background: "rgba(10,10,14,.6)", borderColor: "var(--border)" }}
+    >
+      <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
+        <Link to="/forum" className="flex items-center gap-3">
+          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[color:var(--accent)]/20 text-[color:var(--accent)] shadow">
+            <Shield size={18} />
+          </div>
+          <div>
+            <div

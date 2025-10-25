@@ -36,6 +36,7 @@ export type RemoteUser = {
   invitedById?: string | null;
   invitedByName?: string | null;
   owner?: boolean;
+  lastSeenAt?: string | null;
 };
 export type RemoteProfile = {
   avatarData?: string;
@@ -47,7 +48,7 @@ export type RemoteProfile = {
   accentTo?: string;
   badges?: string[];
   labels?: string[];
-  privacy?: { showEmail?: boolean; showStats?: boolean; showLinks?: boolean; allowComments?: boolean; showFollowers?: boolean };
+  privacy?: { showEmail?: boolean; showStats?: boolean; showLinks?: boolean; allowComments?: boolean; showFollowers?: boolean; hiddenProfile?: boolean };
 };
 export type Invite = {
   code: string;
@@ -80,6 +81,20 @@ export function clearSession() {
   }
 }
 
+function saveBanLock(until?: string | null) {
+  try {
+    const payload = { until: until || null, setAt: new Date().toISOString() };
+    localStorage.setItem('forum:ban_lock', JSON.stringify(payload));
+  } catch {}
+}
+
+function readBanLock(): { until: string | null } | null {
+  try {
+    const raw = localStorage.getItem('forum:ban_lock');
+    return raw ? (JSON.parse(raw) as { until: string | null }) : null;
+  } catch { return null; }
+}
+
 async function api(path: string, init: RequestInit = {}) {
   const token = readToken();
   const headers: any = {
@@ -98,6 +113,14 @@ async function api(path: string, init: RequestInit = {}) {
     data = { error: text || res.statusText };
   }
   if (!res.ok) {
+    try {
+      if (res.status === 401 || res.status === 403) {
+        if (typeof data?.error === 'string' && /ban/i.test(data.error)) {
+          saveBanLock(null);
+        }
+        clearSession();
+      }
+    } catch {}
     throw new Error(data?.error || `${res.status} ${res.statusText}`);
   }
   return data;
@@ -132,7 +155,16 @@ export async function registerAccount(input: {
   localStorage.setItem(SESSION_KEY, JSON.stringify(ses));
   window.dispatchEvent(new Event("forum:session"));
 
-  return user as RemoteUser;
+  const u = user as RemoteUser;
+  try {
+    if (u?.bannedUntil && new Date(u.bannedUntil).getTime() > Date.now()) {
+      saveBanLock(u.bannedUntil);
+      clearSession();
+      throw new Error('banned');
+    }
+  } catch {}
+
+  return u;
 }
 
 export async function authenticateAccount(input: {
@@ -168,11 +200,21 @@ export async function getSessionAccount(): Promise<RemoteUser | null> {
   if (!token) return null;
   try {
     const { user } = await api("/me");
-    return user as RemoteUser;
+    const u = user as RemoteUser;
+    if (u?.bannedUntil && new Date(u.bannedUntil).getTime() > Date.now()) {
+      saveBanLock(u.bannedUntil);
+      clearSession();
+      return null;
+    }
+    return u;
   } catch {
     clearSession();
     return null;
   }
+}
+
+export function getBanLock(): { until: string | null } | null {
+  return readBanLock();
 }
 
 // Только для админа
@@ -285,6 +327,16 @@ export type PublicMember = Pick<RemoteUser, 'id'|'username'|'role'|'createdAt'|'
 export async function listPublicMembers(): Promise<PublicMember[]> {
   const { members } = await api(`/members`);
   return members as PublicMember[];
+}
+
+// Presence
+export async function pingPresence(): Promise<string | null> {
+  try {
+    const { lastSeenAt } = await api(`/presence/ping`, { method: 'POST' });
+    return (lastSeenAt as string) || null;
+  } catch {
+    return null;
+  }
 }
 
 // Bootstrap Pavel (one-time). Requires ADMIN_KEY via query param; call from browser/curl.

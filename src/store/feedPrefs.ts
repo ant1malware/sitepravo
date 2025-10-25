@@ -1,10 +1,30 @@
-﻿export type FeedType = 'hot' | 'new' | 'questions';
+export const FEED_TYPES = [
+  'latest',
+  'hot',
+  'new',
+  'following',
+  'unanswered',
+  'unread',
+  'questions',
+] as const;
+export type FeedType = (typeof FEED_TYPES)[number];
 const KEY = 'forum:default_feed';
 
-export function getDefaultFeed(): FeedType {
-  try { const v = localStorage.getItem(KEY) as FeedType | null; if (v === 'hot' || v === 'new' || v === 'questions') return v; } catch {}
-  return 'hot';
+export function isFeedType(value: unknown): value is FeedType {
+  return typeof value === 'string' && (FEED_TYPES as readonly string[]).includes(value);
 }
+
+export function getDefaultFeed(): FeedType {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (isFeedType(raw)) return raw;
+  } catch {}
+  return 'latest';
+}
+
 export function setDefaultFeed(feed: FeedType) {
-  try { localStorage.setItem(KEY, feed); } catch {}
+  if (!isFeedType(feed)) return;
+  try {
+    localStorage.setItem(KEY, feed);
+  } catch {}
 }

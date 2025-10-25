@@ -1,5 +1,5 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Search, ChevronRight, Sparkles } from "lucide-react";
 import ForumSubnav from "./ForumSubnav";
 import Badge, { computePoints } from "./components/Badge";
@@ -147,6 +147,7 @@ function MemberCard({ member, highlight }: { member: Account; highlight: boolean
 }
 
 export default function ForumMembers() {
+  const navigate = useNavigate();
   const [members, setMembers] = React.useState<Account[]>(() => listLocalAccounts());
   const [query, setQuery] = React.useState("");
   const [session, setSession] = React.useState<{ id: string; username: string } | null>(null);
@@ -216,6 +217,7 @@ export default function ForumMembers() {
       setMembers(listLocalAccounts());
       const meLocal = getLocalSession();
       setSession(meLocal ? { id: meLocal.id, username: meLocal.username } : null);
+      if (!meLocal) { try { navigate('/forum', { replace: true }); } catch {} }
     };
     refresh();
     const h = () => refresh();
@@ -401,5 +403,4 @@ export default function ForumMembers() {
     </main>
   );
 }
-
 

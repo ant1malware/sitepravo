@@ -2,30 +2,31 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <!-- НЕ НУЖЕН <base>. Пути для GH Pages задаём в vite.config.ts через base:'/pravo/'. -->
+    <!-- ⚠️ Базовый <base>. Нужен для GH Pages — см. vite.config.ts с base:'/pravo/'. -->
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" href="favicon.ico" />
 
-    <!-- просим браузер чаще проверять новую версию index.html -->
+    <!-- Принудительный no-cache для статического index.html -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
 
-    <title>Правительство — Памятка (SKY)</title>
+    <title>Право и форум (SKY)</title>
 
-    <!-- (необязательно) preconnect под ваши шрифты/ресурсы -->
+    <!-- (опционально) preconnect шрифтов и прочего -->
     <!-- <link rel="preconnect" href="https://rsms.me" crossorigin> -->
-    <script type="module" crossorigin src="/assets/index-CxIyExD8.js"></script>
+    <script type="module" crossorigin src="/assets/index-vomXrRRA.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/react-vendor-DTkXckhQ.js">
-    <link rel="modulepreload" crossorigin href="/assets/icons-BPBp9R4S.js">
-    <link rel="stylesheet" crossorigin href="/assets/index-BPL1qxW4.css">
+    <link rel="modulepreload" crossorigin href="/assets/icons-vKdVo13Z.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-A1GQaGFJ.css">
   </head>
 
   <body class="bg-zinc-50 text-zinc-900">
+    <a href="#main" class="skip-link" style="position:absolute;left:-9999px;top:0;background:#111;color:#fff;padding:8px;border-radius:6px;z-index:1000">Skip to content</a>
     <div id="root"></div>
 
-    <!-- убиваем любой старый service worker и его кэши (чтоб не прилипала старая версия) -->
+    <!-- Отключение старых service worker-ов и кэша (на всякий случай) -->
     <script>
       (function killSW() {
         try {
@@ -39,6 +40,14 @@
       })();
     </script>
 
-    <!-- dev-скрипт; при билде Vite сам заменит на /pravo/assets/index-*.js и подключит CSS -->
+    <!-- dev-сборка; Vite сам подставит /pravo/assets/index-*.js и инлайн CSS -->
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        try { var m = document.querySelector('main'); if (m && !m.id) m.id = 'main'; } catch {}
+      });
+    </script>
   </body>
 </html>
+
+
+

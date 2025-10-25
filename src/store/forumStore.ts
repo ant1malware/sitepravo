@@ -28,7 +28,7 @@ export type AccountProfile = {
   accentFrom?: string;
   accentTo?: string;
   badges?: string[];
-  privacy?: { showEmail: boolean; showStats: boolean; showLinks?: boolean; allowComments?: boolean; showFollowers?: boolean; showSecondaryRole?: boolean };
+  privacy?: { showEmail: boolean; showStats: boolean; showLinks?: boolean; allowComments?: boolean; showFollowers?: boolean; showSecondaryRole?: boolean; hiddenProfile?: boolean };
 };
 
 export type Account = {
@@ -828,6 +828,7 @@ export function updateAccountProfile(id: string, profile: AccountProfile) {
         showLinks: profile.privacy?.showLinks ?? accounts[idx].profile.privacy?.showLinks ?? true,
         allowComments: profile.privacy?.allowComments ?? accounts[idx].profile.privacy?.allowComments ?? true,
         showFollowers: profile.privacy?.showFollowers ?? accounts[idx].profile.privacy?.showFollowers ?? true,
+        hiddenProfile: profile.privacy?.hiddenProfile ?? accounts[idx].profile.privacy?.hiddenProfile ?? false,
       },
     },
   };
@@ -1398,4 +1399,3 @@ export function isBanned(account: Account | null): boolean {
   if (!account) return false;
   return isRestrictionActive(account.bans || undefined);
 }
-

@@ -15,7 +15,7 @@ const ForumPage = React.lazy(() => import('./ForumPage'));
 const ProfilePage = React.lazy(() => import('./ProfilePage'));
 const MembersPage = React.lazy(() => import('./ForumMembers'));
 const SectionPage = React.lazy(() => import('./SectionPage'));
-const TopicPage = React.lazy(() => import('./TopicPage'));
+const TopicPage = React.lazy(() => import('./TopicPage2'));
 const TagPage = React.lazy(() => import('./TagPage'));
 const QuestionsPage = React.lazy(() => import('./QuestionsPage'));
 const AdminPanel = React.lazy(() => import('./AdminPanel3'));
@@ -32,11 +32,8 @@ const SettingsPage = React.lazy(() => import('./SettingsPage'));
 const FavoritesPage = React.lazy(() => import('./FavoritesPage'));
 import Sidebar from "./Sidebar";
 import GlobalTopbar from "./GlobalTopbar";
-import NotificationsBell from "./NotificationsBell";
 import MobileMenu from "./MobileMenu";
 import { useStyleMode } from './useStyleMode';
-import Buddy from './components/Buddy';
-import { getBuddyEnabled } from './uiSettings';
 import ClosureNotice from './components/ClosureNotice';
 
 // Tracks page views on route change
@@ -53,13 +50,7 @@ function RouteTracker() {
   return null;
 }
 
-// Renders Buddy on all routes except the playground
-function BuddyGate() {
-  const loc = useLocation();
-  if ((loc.pathname || '').startsWith('/buddy')) return null;
-  try { if (!getBuddyEnabled()) return null; } catch {}
-  return <Buddy />;
-}
+// Buddy (Chebzik) disabled for all
 
 export default function App() {
   const [styleMode] = useStyleMode();
@@ -86,9 +77,7 @@ export default function App() {
       <GlobalTopbar />
       <MobileMenu />
       <ClosureNotice />
-      <BuddyGate />
-      {/* Offset notifications button below topbar on small screens; keep under full-screen overlays */}
-      <div className="fixed right-2 top-14 z-[60] sm:top-2"><NotificationsBell /></div>
+      {/* Buddy and notifications removed by request */}
       <RouteTracker />
       <React.Suspense fallback={<div className="p-4 text-sm text-zinc-300">Р—Р°РіСЂСѓР·РєР°вЂ¦</div>}>
         <Routes>
@@ -127,4 +116,3 @@ export default function App() {
 
 
 const ForumFeedsPage = React.lazy(() => import('./ForumFeedsPage'));
-

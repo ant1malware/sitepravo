@@ -110,13 +110,6 @@ export default function ImportantRecordingBlock() {
             <div className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
               <div className="mb-2 text-xs font-semibold opacity-70">Как подавать рапорты (видео)</div>
               <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
-                <SmartVideo
-                  className="block h-auto w-full bg-black"
-                  sources={[
-                    { src: assetPath('img/gide.mp4'), type: 'video/mp4' },
-                    { src: assetPath('img/gide.MOV'), type: 'video/quicktime' },
-                  ]}
-                />
               </div>
             </div>
           </div>

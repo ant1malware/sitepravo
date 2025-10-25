@@ -38,8 +38,7 @@ import {
   applyAnimations,
   getAnimationsOn,
 } from './uiSettings';
-// Buddy (Chebzik) controls
-import { getBuddyEnabled, setBuddyEnabled, getBuddySkin } from './uiSettings';
+import { getDefaultFeed, setDefaultFeed, type FeedType } from './store/feedPrefs';
 
 // Classic background previews
 type BgKey = keyof typeof BACKGROUNDS;
@@ -348,103 +347,6 @@ export default function SettingsPage() {
             </div>
           </Panel>
 
-          <Panel title="Безопасность" desc="Антиспам и двухфакторная защита (клиентская)">
-            <div className="settings-field">
-              <span className="settings-label">Двухфакторная аутентификация</span>
-              {!twoFAEnabled ? (
-                <div className="grid gap-2">
-                  <button type="button" className="btn" onClick={onEnable2FA}>Сгенерировать секрет</button>
-                  {twoFASecret && (
-                    <>
-                      <div className="text-xs opacity-80">Секрет (введите в приложение-аутентификатор):</div>
-                      <div className="rounded-xl bg-white/5 p-2 text-sm select-all">{twoFASecret}</div>
-                      <div className="flex items-center gap-2">
-                        <input className="input w-40" placeholder="Код из приложения" value={twoFATestCode} onChange={(e)=>setTwoFATestCode(e.target.value)} />
-                        <button type="button" className="btn btn-primary" onClick={onConfirm2FA}>Подтвердить</button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">2FA включена</span>
-                  <button type="button" className="btn" onClick={onDisable2FA}>Выключить</button>
-                </div>
-              )}
-            </div>
-
-            <div className="settings-field">
-              <span className="settings-label">Отключить трекинг</span>
-              <div className="settings-seg">
-                <button
-                  type="button"
-                  className="settings-seg__item"
-                  onClick={() => { try { localStorage.setItem('telemetry_disabled', '1'); alert('Трекинг отключён'); } catch {} }}
-                >
-                  Отключить
-                </button>
-                <button
-                  type="button"
-                  className="settings-seg__item"
-                  onClick={() => { try { localStorage.removeItem('telemetry_disabled'); alert('Трекинг включён'); } catch {} }}
-                >
-                  Включить
-                </button>
-              </div>
-            </div>
-          </Panel>
-
-          <Panel title="Чебзик" desc="Летает по сайту и подсказывает. Можно отключить при желании.">
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Beta playground removed */}
-              <label className="settings-checkbox">
-                <input
-                  type="checkbox"
-                  checked={(() => { try { return getBuddyEnabled(); } catch { return true; } })()}
-                  onChange={(e) => { try { setBuddyEnabled(e.target.checked); } catch {} }}
-                />
-                Показывать Чебзика
-              </label>
-              <span className="text-sm text-[color:var(--text-2)]">Можно отключить. Цвет синхронизируется со скином из игры.</span>
-            </div>
-            <div className="mt-3 grid items-center gap-3 sm:grid-cols-[auto_auto_1fr]">
-              <div className="flex items-center gap-2">
-                <span className="text-xs opacity-70">Цвет A</span>
-                <input
-                  type="color"
-                  value={(getBuddySkin() as any).a}
-                  disabled
-                  readOnly
-                  title="Цвет управляется сценой Чебзика"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs opacity-70">Цвет B</span>
-                <input
-                  type="color"
-                  value={(getBuddySkin() as any).b}
-                  disabled
-                  readOnly
-                  title="Цвет управляется сценой Чебзика"
-                />
-              </div>
-              <div
-                className="justify-self-start rounded-xl p-2"
-                style={{ background: `linear-gradient(135deg, ${(getBuddySkin() as any).a}, ${(getBuddySkin() as any).b})` }}
-              >
-                <svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
-                  <defs>
-                    <radialGradient id="g2" cx="50%" cy="30%" r="70%">
-                      <stop offset="0%" stopColor={(getBuddySkin() as any).a} stopOpacity="0.95"/>
-                      <stop offset="100%" stopColor={(getBuddySkin() as any).b} stopOpacity="0.85"/>
-                    </radialGradient>
-                  </defs>
-                  <path d="M18 2c6.2 0 11 4.8 11 11v8.5c0 2-1.7 3.7-3.7 3.7-1.3 0-2.6-.7-3.3-1.8-.6 1.1-1.8 1.8-3 1.8s-2.4-.7-3-1.8c-.7 1.1-2 1.8-3.3 1.8-2 0-3.7-1.7-3.7-3.7V13C5 6.8 10 2 16.2 2H18z" fill="url(#g2)" />
-                </svg>
-              </div>
-            </div>
-          </Panel>
-
           <Panel title="Геометрия и эффекты" desc="Настройте плотность интерфейса, радиусы элементов и глубину стекла.">
             <div className="settings-field">
               <span className="settings-label">Плотность элементов</span>
@@ -495,64 +397,8 @@ export default function SettingsPage() {
             </div>
           </Panel>
 
-          <Panel title="Фон и обои" desc="Настройте фон для классического стиля. В режиме Liquid фон не изменяется.">
-            {isLiquid && (<p className="settings-help">В режиме Liquid Glass фон берётся из темы/настроек пользователя.</p>)}
-
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <button type="button" onClick={() => onBgPreset('none')} className={`settings-bg-tile ${bgSel === 'none' ? 'is-active' : ''}`}>
-                <span>Без фона</span>
-              </button>
-              {BG_KEYS.map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  title={id.toUpperCase()}
-                  onClick={() => onBgPreset(id)}
-                  className={`settings-bg-tile ${bgSel === id ? 'is-active' : ''}`}
-                  style={{ backgroundImage: `url("${PRESET_BG[id]}")` }}
-                />
-              ))}
-            </div>
-
-            {!isLiquid && (
-              <div className="settings-bg-controls">
-                <div>
-                  <span className="settings-label">Интенсивность затемнения</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={0.85}
-                    step={0.05}
-                    value={bgOverlay}
-                    onChange={(e) => onOverlayChange(parseFloat(e.target.value))}
-                    className="slider"
-                  />
-                </div>
-                <label className="settings-checkbox">
-                  <input type="checkbox" checked={bgFixed} onChange={(e) => onFixedToggle(e.target.checked)} /> Фиксированный фон
-                </label>
-                <label className="settings-checkbox">
-                  <input type="checkbox" checked={bgSmart} onChange={(e) => onSmartToggle(e.target.checked)} /> Умное затемнение
-                </label>
-              </div>
-            )}
-          </Panel>
-
           <Panel title="Сброс" desc="Сбросить настройки темы и интерфейса к значениям по умолчанию.">
             <button type="button" onClick={onReset} className="btn btn-primary">Сбросить персонализацию</button>
-          </Panel>
-
-          <Panel title="Чебзик" desc="Мини-игра с нашим мультяшным другом. Кормите его и общайтесь!">
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Beta playground removed */}
-              <span className="text-sm text-[color:var(--text-2)]">Игра открывается на отдельной странице.</span>
-            </div>
-          </Panel>
-
-          <Panel title="Лента форума" desc="Выберите ленту по умолчанию для /forum.">
-            <div className="flex items-center gap-2">
-              <FeedSelector />
-            </div>
           </Panel>
         </main>
       </div>
@@ -560,19 +406,33 @@ export default function SettingsPage() {
   );
 }
 
+const FEED_CHOICES: Array<{ id: FeedType; label: string; title?: string }> = [
+  { id: 'latest', label: 'свежее', title: 'Свежие обсуждения по активности' },
+  { id: 'hot', label: 'горячее', title: 'Темы с наибольшим откликом' },
+  { id: 'new', label: 'новые темы', title: 'Самые свежие публикации' },
+  { id: 'following', label: 'подписки', title: 'Обновления от тех, на кого вы подписаны' },
+  { id: 'questions', label: 'вопросы', title: 'При входе будет открываться страница вопросов' },
+];
+
 function FeedSelector() {
-  const [def, setDef] = React.useState<string>(() => { try { return localStorage.getItem('forum:default_feed') || 'hot'; } catch { return 'hot'; } });
-  const set = (v: string) => { setDef(v); try { localStorage.setItem('forum:default_feed', v); } catch {} };
+  const [def, setDef] = React.useState<FeedType>(() => {
+    try { return getDefaultFeed(); } catch { return 'latest'; }
+  });
+  const select = (value: FeedType) => {
+    setDef(value);
+    setDefaultFeed(value);
+  };
   return (
-    <div className="flex items-center gap-2">
-      {(['hot','new','questions'] as const).map(id => (
+    <div className="flex flex-wrap items-center gap-2">
+      {FEED_CHOICES.map(({ id, label, title }) => (
         <button
           key={id}
           type="button"
-          className={`tab ${def===id ? 'tab-active' : ''}`}
-          onClick={() => set(id)}
+          className={`tab ${def === id ? 'tab-active' : ''}`}
+          onClick={() => select(id)}
+          title={title}
         >
-          {id==='hot'?'горячее':id==='new'?'новое':'вопросы'}
+          {label}
         </button>
       ))}
     </div>

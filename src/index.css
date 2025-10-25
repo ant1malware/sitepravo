@@ -166,6 +166,13 @@ header.sticky.top-0,
   );
 }
 
+/* Forum alerts (neon style) */
+.forum-alert { border:1px solid var(--border); border-radius:14px; padding:10px 12px; }
+.forum-alert--green { background: rgba(16,40,18,.35); border-color: rgba(34,197,94,.55); box-shadow: 0 14px 40px -20px rgba(34,197,94,.35) inset; }
+.forum-alert--orange { background: rgba(45,26,6,.35); border-color: rgba(249,115,22,.55); box-shadow: 0 14px 40px -20px rgba(249,115,22,.35) inset; }
+.forum-alert__title { font-size:12px; text-transform:uppercase; letter-spacing:.28em; opacity:.9; }
+.forum-alert__text { font-size:13px; opacity:.95; }
+
 /* Print helpers */
 @media print {
   .print:hidden { display: none !important; }

@@ -1,5 +1,5 @@
 ﻿import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { getSessionAccount, type RemoteUser } from './store/authRemote';
 import { listSections, listTopics, listPosts, createTopic, createPost, updateTopic, updatePost, deletePost, toggleLikePost, type Section, type Topic, type Post } from './store/forumRemote';
 import { Paperclip, Pin, Lock, Unlock, CheckCircle2 } from 'lucide-react';
@@ -7,6 +7,7 @@ import MarkdownEditor from './components/MarkdownEditor';
 import ReactionBar from './components/ReactionBar';
 
 export default function QuestionsPage() {
+  const navigate = useNavigate();
   const [me, setMe] = React.useState<RemoteUser | null>(null);
   const [section, setSection] = React.useState<Section | null>(null);
   const [topics, setTopics] = React.useState<Topic[]>([]);
@@ -19,7 +20,7 @@ export default function QuestionsPage() {
 
   React.useEffect(() => {
     (async () => {
-      try { const u = await getSessionAccount(); setMe(u); } catch {}
+      try { const u = await getSessionAccount(); setMe(u); if (!u) { try { navigate('/forum', { replace: true }); } catch {} } } catch {}
       try {
         const sections = await listSections();
         const s = sections.find(s => (s.title || '').toLowerCase() === 'questions' || (s.title || '').toLowerCase() === 'вопросы');

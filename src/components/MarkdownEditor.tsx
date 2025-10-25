@@ -33,6 +33,20 @@ export default function MarkdownEditor({ value, onChange, onSubmit, placeholder,
     try { localStorage.setItem(draftKey, value || ''); } catch {}
   }, [value, draftKey]);
 
+  // Warn on unload if draft has unsaved content
+  React.useEffect(() => {
+    if (!draftKey) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      const hasContent = (value || '').trim().length > 0;
+      if (hasContent) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [draftKey, value]);
+
   function insert(before: string, after: string = ''): string {
     const el = textareaRef.current; const text = value || '';
     const start = el ? (el.selectionStart || 0) : text.length;
@@ -135,4 +149,3 @@ export default function MarkdownEditor({ value, onChange, onSubmit, placeholder,
     </div>
   );
 }
-

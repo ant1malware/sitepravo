@@ -1,14 +1,16 @@
 ﻿import React from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { listSections, listTopics, createTopic } from "./store/forumRemote";
 import { ChevronLeft, ShoppingBag, Plus } from "lucide-react";
 import ForumSubnav from "./ForumSubnav";
 import MarkdownEditor from './components/MarkdownEditor';
 import FavStar from './FavStar';
 import { t } from './utils/i18n';
+import { getSessionAccount } from './store/authRemote';
 
 export default function SectionPage() {
   const { id = "" } = useParams();
+  const navigate = useNavigate();
   const [section, setSection] = React.useState<any | null>(null);
   const [topics, setTopics] = React.useState<any[]>([]);
   const [newTitle, setNewTitle] = React.useState("");
@@ -17,9 +19,12 @@ export default function SectionPage() {
   const [status, setStatus] = React.useState<'all'|'wip'|'review'|'done'>('all');
   const [tag, setTag] = React.useState<string>('all');
   const [show, setShow] = React.useState<number>(20);
+  const [showNew, setShowNew] = React.useState<boolean>(false);
 
   const reload = React.useCallback(async () => {
     try {
+      const me = await getSessionAccount();
+      if (!me) { try { navigate('/forum', { replace: true }); } catch {} return; }
       const [sections, t] = await Promise.all([
         listSections(),
         listTopics(id),
@@ -53,6 +58,10 @@ export default function SectionPage() {
     e.preventDefault();
     const title = newTitle.trim();
     if (!title) return;
+    if (isWorkshop && !newBody.trim()) {
+      alert('Добавьте описание проекта перед публикацией.');
+      return;
+    }
     setBusy(true);
     try {
       await createTopic({ sectionId: id, title, content: isWorkshop ? newBody : undefined as any });
@@ -117,7 +126,13 @@ export default function SectionPage() {
           </div>
         )}
 
+        {isWorkshop && !showNew && (
+          <div className="mb-3 flex justify-end">
+            <button className="btn btn-primary" onClick={() => setShowNew(true)}>Создать проект</button>
+          </div>
+        )}
         {/* New topic */}
+        {(!isWorkshop || showNew) && (
         <form onSubmit={submit} className="card mb-4 grid gap-2 p-4">
           <input className="input" placeholder={isWorkshop ? "[WIP] Короткий заголовок проекта" : "Topic title"} value={newTitle} onChange={(e) => setNewTitle(e.target.value)} disabled={busy} />
           {isWorkshop && (
@@ -127,9 +142,10 @@ export default function SectionPage() {
             <Plus size={16} /> {isWorkshop ? "Создать проект" : "Создать тему"}
           </button>
         </form>
+        )}
 
         {/* Topics */}
-        <div className="grid gap-3">
+        <div className={isWorkshop ? "grid gap-4 md:grid-cols-2 lg:grid-cols-3" : "grid gap-3"}>
           {!isWorkshop && (
             <div className="card flex flex-wrap items-center gap-2 p-2 text-xs">
               <span className="opacity-70">{t('Теги','Tags')}:</span>

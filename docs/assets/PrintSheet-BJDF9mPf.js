@@ -1,0 +1,7 @@
+import{a as l,j as e}from"./index-BT0Wx6_3.js";import{f as o,r as t,L as d}from"./react-vendor-DTkXckhQ.js";import"./icons-vKdVo13Z.js";function h(){const[a]=o(),n=a.get("role")||"",s=t.useMemo(()=>l.find(r=>r.id===n),[n]);return t.useEffect(()=>{document.title="Памятка на смену"},[]),e.jsxs("div",{className:"mx-auto max-w-3xl p-6 print:p-0",children:[e.jsxs("div",{className:"mb-4 flex items-center justify-between print:hidden",children:[e.jsx("h1",{className:"text-xl font-bold",children:"Памятка на смену"}),e.jsxs("div",{className:"flex items-center gap-2",children:[e.jsx("button",{className:"btn",onClick:()=>window.print(),children:"Печать / PDF"}),e.jsx(d,{to:"/",className:"btn",children:"Назад"})]})]}),e.jsx("div",{className:"prose prose-zinc max-w-none dark:prose-invert",children:s?e.jsxs(e.Fragment,{children:[e.jsxs("h2",{children:[s.role," ",e.jsxs("small",{children:["• ",s.salary]})]}),e.jsx("h3",{children:"Обязанности"}),e.jsx("ul",{children:s.duties.map((r,i)=>e.jsx("li",{children:r},i))}),Array.isArray(s.promotion)&&e.jsxs(e.Fragment,{children:[e.jsx("h3",{children:"Чек-лист (повышение)"}),e.jsx("ol",{children:s.promotion.map((r,i)=>e.jsx("li",{children:r},i))})]})]}):e.jsx("p",{children:"Роль не выбрана. Передайте ?role=ID в адресной строке."})}),e.jsx("style",{children:`
+        @media print {
+          @page { size: A4; margin: 14mm; }
+          body { background: white !important; }
+          .print\\:hidden { display: none !important; }
+        }
+      `})]})}export{h as default};

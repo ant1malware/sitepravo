@@ -1,5 +1,5 @@
-import React from "react";
-import { resetForumEmpty } from "./store/forumStore";
+﻿import React from "react";
+import { Link } from "react-router-dom";
 import {
   listSections,
   createSection,
@@ -9,6 +9,7 @@ import {
   moveTopic,
   deleteSection,
   deleteTopic,
+  listLatestPosts,
 } from "./store/forumRemote";
 import {
   listAccounts,
@@ -30,6 +31,8 @@ import {
   type Role,
 } from "./store/authRemote";
 
+const CHEB_LABELS: readonly string[] = ["cheb", "cheb-access", "chebzik"];
+
 function getActorId(): string {
   try {
     const raw =
@@ -44,7 +47,7 @@ function getActorId(): string {
 
 export default function AdminPanel3() {
   const [tab, setTab] = React.useState<
-    "users" | "sections" | "topics" | "invites" | "maintenance"
+    "insights" | "users" | "sections" | "topics" | "invites" | "maintenance"
   >("users");
   const [me, setMe] = React.useState<any | null>(null);
 
@@ -62,7 +65,7 @@ export default function AdminPanel3() {
   const isOwner = !!me?.owner;
   const tabs: Array<typeof tab> = (() => {
     if (isOwner || role === "developer") {
-      return ["users", "sections", "topics", "invites", "maintenance"];
+      return ["insights", "users", "sections", "topics", "invites", "maintenance"];
     }
     if (role === "admin") {
       return ["users", "topics", "invites"];
@@ -86,24 +89,237 @@ export default function AdminPanel3() {
           </button>
         ))}
       </div>
+      {tab === "insights" && <InsightsTab />}
       {tab === "users" && <UsersTab meRole={role} meId={me?.id} meOwner={isOwner} />}
       {tab === "sections" && <SectionsTab />}
       {tab === "topics" && <TopicsTab meRole={role} />}
-      {tab === "invites" && (
-        <InvitesTab meRole={role} meId={me?.id || ""} />
-      )}
+      {tab === "invites" && <InvitesTab meRole={role} meId={me?.id || ""} />}
       {tab === "maintenance" && <MaintenanceTab />}
     </div>
   );
 }
 
-/* ===== Users ===== */
-function UsersTab({ meRole, meId, meOwner }: { meRole?: string; meId?: string; meOwner?: boolean }) {
+function InsightsTab() {
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [stats, setStats] = React.useState({
+    members: 0,
+    sections: 0,
+    topics: 0,
+    replies: 0,
+    views: 0,
+  });
+  const [latestTopics, setLatestTopics] = React.useState<any[]>([]);
+  const [recentInvites, setRecentInvites] = React.useState<any[]>([]);
+  const [latestPosts, setLatestPosts] = React.useState<any[]>([]);
+
+  React.useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setError(null);
+    (async () => {
+      try {
+        const [accounts, sections, topics, invites, posts] = await Promise.all([
+          listAccounts(),
+          listSections(),
+          listTopics(),
+          listInvites().catch(() => []),
+          listLatestPosts(5).catch(() => []),
+        ]);
+        if (!alive) return;
+        const replies = topics.reduce((sum: number, t: any) => sum + (t.replyCount ?? 0), 0);
+        const views = topics.reduce((sum: number, t: any) => sum + (t.viewCount ?? 0), 0);
+        const sortedTopics = [...topics]
+          .sort(
+            (a, b) =>
+              new Date(b.updatedAt || b.createdAt || 0).getTime() -
+              new Date(a.updatedAt || a.createdAt || 0).getTime()
+          )
+          .slice(0, 5);
+        const sortedInvites = Array.isArray(invites)
+          ? [...invites].sort(
+              (a, b) =>
+                new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+            )
+          : [];
+        setStats({
+          members: accounts.length,
+          sections: sections.length,
+          topics: topics.length,
+          replies,
+          views,
+        });
+        setLatestTopics(sortedTopics);
+        setRecentInvites(sortedInvites.slice(0, 5));
+        setLatestPosts(Array.isArray(posts) ? posts : []);
+      } catch (err: any) {
+        if (!alive) return;
+        setError(err?.message || "Failed to load insights");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const formatDate = (value?: string | null) => {
+    if (!value) return "—";
+    try {
+      return new Date(value).toLocaleString();
+    } catch {
+      return value;
+    }
+  };
+
+  return (
+    <div className="grid gap-4">
+      {error && (
+        <div className="card border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-200">
+          {error}
+        </div>
+      )}
+
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: "Участники", value: stats.members },
+          { label: "Разделы", value: stats.sections },
+          { label: "Темы", value: stats.topics },
+          { label: "Ответы", value: stats.replies },
+        ].map((card) => (
+          <div key={card.label} className="card p-4">
+            <div className="text-xs uppercase tracking-[0.28em] text-zinc-400/80">
+              {card.label}
+            </div>
+            <div className="mt-2 text-2xl font-bold text-white">
+              {loading ? "…" : card.value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="card p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="font-semibold">Активные темы</div>
+            {loading && <span className="text-xs text-zinc-400/80">Обновление…</span>}
+          </div>
+          <div className="grid gap-2">
+            {!loading && latestTopics.length === 0 && (
+              <div className="text-sm text-zinc-400/80">Тем пока нет.</div>
+            )}
+            {latestTopics.map((topic: any) => (
+              <div
+                key={topic.id}
+                className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-sm"
+              >
+                <div className="font-semibold text-white">{topic.title}</div>
+                <div className="mt-1 text-xs text-zinc-400/80">
+                  Обновлено: {formatDate(topic.updatedAt || topic.createdAt)} · Ответов{" "}
+                  {topic.replyCount ?? 0}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="font-semibold">Свежие приглашения</div>
+            <span className="text-xs text-zinc-400/80">{recentInvites.length}</span>
+          </div>
+          <div className="grid gap-2">
+            {!loading && recentInvites.length === 0 && (
+              <div className="text-sm text-zinc-400/80">
+                Пока не создано ни одного приглашения.
+              </div>
+            )}
+            {recentInvites.slice(0, 5).map((invite) => (
+              <div
+                key={`${invite.code}-${invite.createdAt}`}
+                className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-sm"
+              >
+                <div className="font-mono text-xs text-cyan-300">{invite.code}</div>
+                <div className="mt-1 text-xs text-zinc-400/80">
+                  {formatDate(invite.createdAt)} {invite.note ? `· ${invite.note}` : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="card p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="font-semibold">Последние ответы</div>
+          <Link to="/forum?feed=latest" className="text-xs text-cyan-300 hover:underline">
+            Перейти в ленту
+          </Link>
+        </div>
+        <div className="grid gap-2">
+          {!loading && latestPosts.length === 0 && (
+            <div className="text-sm text-zinc-400/80">Свежих ответов нет.</div>
+          )}
+          {latestPosts.map((post: any) => (
+            <div
+              key={post.id}
+              className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-sm"
+            >
+              <div className="font-semibold text-white truncate">
+                {post.topicTitle || post.title || "Пост"}
+              </div>
+              <div className="mt-1 text-xs text-zinc-400/80">
+                {formatDate(post.createdAt || post.updatedAt)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UsersTab({
+  meRole,
+  meId,
+  meOwner,
+}: {
+  meRole?: string;
+  meId?: string;
+  meOwner?: boolean;
+}) {
   const [rows, setRows] = React.useState<any[]>([]);
+  const [query, setQuery] = React.useState("");
+  const [chebAccess, setChebAccess] = React.useState<Record<string, boolean>>({});
+  const [chebBusy, setChebBusy] = React.useState<Record<string, boolean>>({});
 
   const load = React.useCallback(async () => {
     try {
-      setRows(await listAccounts());
+      const accounts = await listAccounts();
+      setRows(accounts);
+      const pairs = await Promise.allSettled(
+        accounts.map(async (u) => {
+          try {
+            const profile = await getProfileById(u.id);
+            const labels = (profile?.labels || [])
+              .map((label) => label.trim().toLowerCase())
+              .filter(Boolean);
+            const allowed = labels.some((label) => CHEB_LABELS.includes(label));
+            return [u.id, allowed] as const;
+          } catch {
+            return [u.id, false] as const;
+          }
+        })
+      );
+      const map: Record<string, boolean> = {};
+      for (const pair of pairs) {
+        if (pair.status === "fulfilled") {
+          const [id, allowed] = pair.value;
+          map[id] = allowed;
+        }
+      }
+      setChebAccess(map);
     } catch (e: any) {
       alert(e?.message || "Failed to load users");
     }
@@ -113,9 +329,27 @@ function UsersTab({ meRole, meId, meOwner }: { meRole?: string; meId?: string; m
     load();
   }, [load]);
 
-  const canManageRoles = meOwner || meRole === "developer";
-  const canBan = meOwner || meRole === "developer" || meRole === "admin";
-  const canMute = meOwner || meRole === "developer" || meRole === "admin" || meRole === "moderator";
+  const filteredRows = React.useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((u) => {
+      const username = String(u.username || "").toLowerCase();
+      const email = String(u.email || "").toLowerCase();
+      const number = String(u.userNumber || "");
+      const invitedBy = String(u.invitedByName || "").toLowerCase();
+      return (
+        username.includes(q) ||
+        email.includes(q) ||
+        number.includes(q) ||
+        invitedBy.includes(q)
+      );
+    });
+  }, [rows, query]);
+
+  const canManageRoles = meRole === "developer";
+  const canBan = meRole === "developer" || meRole === "admin";
+  const canMute = meRole === "developer" || meRole === "admin" || meRole === "moderator";
+  const canGrantCheb = !!meOwner || meRole === "developer";
 
   const changeRole = async (id: string, role: Role) => {
     if (!canManageRoles) return;
@@ -169,13 +403,48 @@ function UsersTab({ meRole, meId, meOwner }: { meRole?: string; meId?: string; m
     }
   };
 
+  const toggleCheb = async (id: string, next: boolean) => {
+    if (!canGrantCheb) return;
+    setChebBusy((prev) => ({ ...prev, [id]: true }));
+    try {
+      const profile = await getProfileById(id);
+      const existing = new Set(
+        (profile?.labels || []).map((label) => label.trim()).filter(Boolean)
+      );
+      for (const label of CHEB_LABELS) existing.delete(label);
+      if (next) existing.add("cheb-access");
+      await setCustomLabels(id, Array.from(existing).slice(0, 7));
+      setChebAccess((prev) => ({ ...prev, [id]: next }));
+    } catch (e: any) {
+      alert(e?.message || "Failed to update Cheb access");
+    } finally {
+      setChebBusy((prev) => ({ ...prev, [id]: false }));
+    }
+  };
+
   return (
     <div className="card p-4">
       <div className="mb-3 text-sm opacity-70">
         Remote accounts fetched from the Worker API. Use this panel to adjust roles and moderation privileges.
       </div>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <input
+          className="input w-full sm:w-72"
+          placeholder="Поиск по нику, e-mail или номеру"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <button className="btn" onClick={load}>
+          Обновить
+        </button>
+        {query && (
+          <button className="btn" onClick={() => setQuery("")}>
+            Сбросить
+          </button>
+        )}
+      </div>
       <div className="grid gap-2">
-        {rows.map((u) => {
+        {filteredRows.map((u) => {
           const isOwner = Number(u.userNumber || 0) === 1;
           const roleLabel = String(u.role || "user");
           const actions: React.ReactNode[] = [];
@@ -204,33 +473,49 @@ function UsersTab({ meRole, meId, meOwner }: { meRole?: string; meId?: string; m
             );
           }
 
-          const vipBadge = u.vipUntil ? (
-            <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] uppercase tracking-wider text-amber-300" title={`VIP until ${new Date(u.vipUntil).toLocaleString()}`}>VIP</span>
-          ) : null;
+          const now = Date.now();
+          const vipActive = !!u.vipUntil && new Date(u.vipUntil).getTime() > now;
+          const isMuted = !!u.mutedUntil && new Date(u.mutedUntil).getTime() > now;
+          const isBanned = !!u.bannedUntil && new Date(u.bannedUntil).getTime() > now;
 
           const manageLabels = async () => {
             try {
               const prof = await getProfileById(u.id);
-              const current = (prof?.labels || []).join(', ');
-              const input = prompt('Custom labels (comma-separated, up to 7)', current || '');
+              const current = (prof?.labels || []).join(", ");
+              const input = prompt("Custom labels (comma-separated, up to 7)", current || "");
               if (input === null) return;
-              const labels = input.split(',').map(s => s.trim()).filter(Boolean).slice(0,7);
+              const labels = input
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean)
+                .slice(0, 7);
               await setCustomLabels(u.id, labels);
-              alert('Labels updated');
-            } catch (e: any) { alert(e?.message || 'Failed to update labels'); }
+              alert("Labels updated");
+            } catch (e: any) {
+              alert(e?.message || "Failed to update labels");
+            }
           };
 
           const giveVip = async () => {
-            const days = parseInt(prompt('VIP days', '30') || '30', 10);
-            try { await setVip(u.id, isNaN(days) ? 30 : Math.max(1, days)); await load(); } catch (e:any) { alert(e?.message || 'Failed to set VIP'); }
+            const days = parseInt(prompt("VIP days", "30") || "30", 10);
+            try {
+              await setVip(u.id, isNaN(days) ? 30 : Math.max(1, days));
+              await load();
+            } catch (e: any) {
+              alert(e?.message || "Failed to set VIP");
+            }
           };
-          const removeVip = async () => { try { await unsetVip(u.id); await load(); } catch (e:any) { alert(e?.message || 'Failed to remove VIP'); } };
+          const removeVip = async () => {
+            try {
+              await unsetVip(u.id);
+              await load();
+            } catch (e: any) {
+              alert(e?.message || "Failed to remove VIP");
+            }
+          };
 
-          // invitedBy visibility rules:
-          // - developer sees who invited anyone
-          // - admin/moderator only see "invited by: you" for accounts they invited
           const invitedSnippet = (() => {
-            if (isOwner) return 'OWNER';
+            if (isOwner) return "OWNER";
             if (meRole === "developer") {
               return u.invitedByName ? `invited by: ${u.invitedByName}` : "";
             }
@@ -240,6 +525,61 @@ function UsersTab({ meRole, meId, meOwner }: { meRole?: string; meId?: string; m
             return "";
           })();
 
+          const statusChips: React.ReactNode[] = [];
+          if (invitedSnippet) {
+            statusChips.push(
+              <span
+                key="invited"
+                className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] uppercase tracking-[0.26em] text-zinc-300"
+              >
+                {invitedSnippet}
+              </span>
+            );
+          }
+          if (vipActive) {
+            statusChips.push(
+              <span
+                key="vip"
+                className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] uppercase tracking-wider text-amber-300"
+                title={`VIP until ${new Date(u.vipUntil).toLocaleString()}`}
+              >
+                VIP
+              </span>
+            );
+          }
+          if (isBanned) {
+            statusChips.push(
+              <span
+                key="banned"
+                className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.26em] text-rose-300"
+                title={`Banned until ${u.bannedUntil ? new Date(u.bannedUntil).toLocaleString() : ""}`}
+              >
+                Banned
+              </span>
+            );
+          }
+          if (isMuted) {
+            statusChips.push(
+              <span
+                key="muted"
+                className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.26em] text-amber-300"
+                title={`Muted until ${u.mutedUntil ? new Date(u.mutedUntil).toLocaleString() : ""}`}
+              >
+                Muted
+              </span>
+            );
+          }
+          if (chebAccess[u.id]) {
+            statusChips.push(
+              <span
+                key="cheb"
+                className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.26em] text-emerald-300"
+              >
+                CHEB
+              </span>
+            );
+          }
+
           return (
             <div
               key={u.id}
@@ -248,8 +588,12 @@ function UsersTab({ meRole, meId, meOwner }: { meRole?: string; meId?: string; m
             >
               <div className="text-xs opacity-70">#{u.userNumber}</div>
               <div className="font-semibold">{u.username}</div>
-              <div className="text-sm opacity-80 truncate">{(meOwner || meRole === 'developer') ? u.email : ''}</div>
-              <div className="flex items-center gap-2 text-xs opacity-70">{invitedSnippet} {vipBadge}</div>
+              <div className="text-sm opacity-80 truncate">
+                {meOwner || meRole === "developer" ? u.email : ""}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs opacity-70">
+                {statusChips.length ? statusChips : null}
+              </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 {(canManageRoles && !isOwner) || (isOwner && meId === u.id) ? (
                   <select
@@ -269,24 +613,43 @@ function UsersTab({ meRole, meId, meOwner }: { meRole?: string; meId?: string; m
                     className="rounded-full border px-2 py-1 text-xs uppercase tracking-wider"
                     style={{ borderColor: "var(--border)" }}
                   >
-                    {isOwner ? 'OWNER' : roleLabel}
+                    {isOwner ? "OWNER" : roleLabel}
                   </span>
                 )}
-                <button className="btn" onClick={manageLabels} title="Custom labels">Labels</button>
-                <button className="btn" onClick={giveVip} title="Give VIP">Give VIP</button>
-                {u.vipUntil && (<button className="btn" onClick={removeVip} title="Remove VIP">UnVIP</button>)}
+                {canGrantCheb && !isOwner && (
+                  <button
+                    className="btn"
+                    onClick={() => toggleCheb(u.id, !chebAccess[u.id])}
+                    disabled={!!chebBusy[u.id]}
+                    title={
+                      chebAccess[u.id] ? "Убрать доступ к Чебзику" : "Выдать доступ к Чебзику"
+                    }
+                  >
+                    {chebAccess[u.id] ? "Убрать Чебзика" : "Дать Чебзика"}
+                  </button>
+                )}
+                <button className="btn" onClick={manageLabels} title="Custom labels">
+                  Labels
+                </button>
+                <button className="btn" onClick={giveVip} title="Give VIP">
+                  Give VIP
+                </button>
+                {u.vipUntil && (
+                  <button className="btn" onClick={removeVip} title="Remove VIP">
+                    UnVIP
+                  </button>
+                )}
                 {actions.length ? actions : null}
               </div>
             </div>
           );
         })}
-        {!rows.length && <div className="text-sm opacity-70">No users yet.</div>}
+        {!filteredRows.length && <div className="text-sm opacity-70">No users found.</div>}
       </div>
     </div>
   );
 }
 
-/* ===== Sections ===== */
 function SectionsTab() {
   const [rows, setRows] = React.useState<any[]>([]);
   const [title, setTitle] = React.useState("");
@@ -356,7 +719,9 @@ function SectionsTab() {
             value={desc}
             onChange={(e) => setDesc(e.target.value)}
           />
-          <button className="btn btn-primary" onClick={add}>Add</button>
+          <button className="btn btn-primary" onClick={add}>
+            Add
+          </button>
         </div>
       </div>
 
@@ -381,7 +746,9 @@ function SectionsTab() {
                 onChange={(e) => edit(s.id, "description", e.target.value)}
               />
               <div className="text-right">
-                <button className="btn" onClick={() => remove(s.id)}>Delete</button>
+                <button className="btn" onClick={() => remove(s.id)}>
+                  Delete
+                </button>
               </div>
             </div>
           ))}
@@ -392,7 +759,6 @@ function SectionsTab() {
   );
 }
 
-/* ===== Topics ===== */
 function TopicsTab({ meRole }: { meRole?: string }) {
   const [rows, setRows] = React.useState<any[]>([]);
 
@@ -534,7 +900,6 @@ function TopicsTab({ meRole }: { meRole?: string }) {
   );
 }
 
-/* ===== Invites ===== */
 function InvitesTab({ meRole, meId }: { meRole?: string; meId: string }) {
   const [rows, setRows] = React.useState<any[]>([]);
   const [count, setCount] = React.useState(5);
@@ -544,10 +909,7 @@ function InvitesTab({ meRole, meId }: { meRole?: string; meId: string }) {
   const reload = React.useCallback(async () => {
     try {
       const all = await listInvites();
-      // Visibility: dev sees all; others see only their own invites
-      const visible = isDev
-        ? all
-        : all.filter((i) => (i.createdBy || "") === (meId || ""));
+      const visible = isDev ? all : all.filter((i) => (i.createdBy || "") === (meId || ""));
       setRows(visible);
     } catch (e: any) {
       alert(e?.message || "Failed");
@@ -558,11 +920,9 @@ function InvitesTab({ meRole, meId }: { meRole?: string; meId: string }) {
     reload();
   }, [reload]);
 
-  // Quotas:
-  // - admin: max 2 codes per rolling 48h
-  // - moderator: max 1 code per rolling 72h
   const now = Date.now();
-  const windowMs = meRole === "admin" ? 48 * 3600 * 1000 : meRole === "moderator" ? 72 * 3600 * 1000 : 0;
+  const windowMs =
+    meRole === "admin" ? 48 * 3600 * 1000 : meRole === "moderator" ? 72 * 3600 * 1000 : 0;
   const windowStart = windowMs ? now - windowMs : 0;
   const recentMine = rows.filter((i) => {
     const ts = new Date(i.createdAt).getTime();
@@ -600,7 +960,6 @@ function InvitesTab({ meRole, meId }: { meRole?: string; meId: string }) {
   return (
     <div className="card p-4">
       <div className="mb-3 font-semibold">Invite codes</div>
-      {/* Generator */}
       <div className="mb-4 grid gap-2 sm:grid-cols-[120px_1fr_auto]">
         <input
           className="input"
@@ -648,22 +1007,20 @@ function InvitesTab({ meRole, meId }: { meRole?: string; meId: string }) {
             style={{ borderColor: "var(--border)" }}
           >
             <div className="font-mono text-sm">{i.code}</div>
-            <div className="text-xs opacity-70">created: {new Date(i.createdAt).toLocaleString()}</div>
+            <div className="text-xs opacity-70">
+              created: {new Date(i.createdAt).toLocaleString()}
+            </div>
             <div className="text-xs opacity-80">
-              {isDev
-                ? `by: ${i.createdByName || i.createdBy?.slice(0, 8)}`
-                : "by: you"}
+              {isDev ? `by: ${i.createdByName || i.createdBy?.slice(0, 8)}` : "by: you"}
             </div>
             <div className="text-xs">{i.note || ""}</div>
             <div className="text-xs">
-              {i.usedBy ? (
-                <span className="text-emerald-400">used</span>
-              ) : (
-                <span className="opacity-70">unused</span>
-              )}
+              {i.usedBy ? <span className="text-emerald-400">used</span> : <span className="opacity-70">unused</span>}
             </div>
             <div className="text-right">
-              <button className="btn" onClick={() => remove(i.code)}>Delete</button>
+              <button className="btn" onClick={() => remove(i.code)}>
+                Delete
+              </button>
             </div>
           </div>
         ))}
@@ -673,7 +1030,6 @@ function InvitesTab({ meRole, meId }: { meRole?: string; meId: string }) {
   );
 }
 
-/* ===== Maintenance ===== */
 function MaintenanceTab() {
   const [mode, setMode] = React.useState<"invite" | "open">("invite");
 
@@ -682,18 +1038,9 @@ function MaintenanceTab() {
       try {
         const s = await getServerSettings();
         setMode(((s as any)?.registrationMode as any) || "invite");
-      } catch {
-        /* ignore */
-      }
+      } catch {}
     })();
   }, []);
-
-  const reset = () => {
-    if (!confirm("Reset the forum (keep it empty)?")) return;
-    resetForumEmpty(getActorId());
-    alert("Done. Forum was cleared.");
-    location.reload();
-  };
 
   return (
     <div className="card p-4">
@@ -720,12 +1067,9 @@ function MaintenanceTab() {
       </div>
 
       <div className="mb-2 font-semibold">Maintenance</div>
-      <p className="mb-3 text-sm opacity-70">
-        Reset the forum when you need a clean slate before inviting the community.
+      <p className="mb-0 text-sm opacity-70">
+        All maintenance is server-driven. Contact the owner/developer to perform administrative maintenance tasks.
       </p>
-      <button className="btn btn-primary" onClick={reset}>
-        Reset forum (empty)
-      </button>
     </div>
   );
 }

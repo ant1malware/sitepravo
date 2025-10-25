@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { BookOpen, Users, LayoutList, ClipboardList, FileText, MessageSquare, Shield, ListChecks, Info, Ghost, Lock } from 'lucide-react';
+import { BookOpen, Users, LayoutList, ClipboardList, FileText, MessageSquare, Shield, ListChecks, Info, Lock } from 'lucide-react';
 import LiquidGlass from './components/LiquidGlass';
 import { useStyleMode } from './useStyleMode';
 import { useForumSessionWatcher } from './forumSession';
@@ -122,12 +122,7 @@ export default function Sidebar() {
               <span className="truncate">О нас</span>
             </Link>
           </li>
-          <li>
-            <Link to="/buddy" className={linkBaseClass} aria-label="Чебзик" onClick={() => { if (typeof window !== 'undefined' && window.innerWidth < 1024) setOpen(false); }}>
-              <Ghost className="h-4 w-4" />
-              <span className="truncate">Чебзик</span>
-            </Link>
-          </li>
+          {/* Чебзик отключён для всех */}
         </ul>
       </nav>
 

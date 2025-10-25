@@ -372,9 +372,9 @@ type Profile = {
   links?: { website?: string; discord?: string; telegram?: string };
   accentFrom?: string; accentTo?: string; badges?: string[];
   labels?: string[];
-  privacy?: { showEmail?: boolean; showStats?: boolean; showSecondaryRole?: boolean };
+  privacy?: { showEmail?: boolean; showStats?: boolean; showSecondaryRole?: boolean; showLinks?: boolean; allowComments?: boolean; showFollowers?: boolean; hiddenProfile?: boolean };
 }
-function defaultProfile(): Profile { return { bio:'', signature:'', links:{}, accentFrom:'#8b5cf6', accentTo:'#0ea5e9', badges:[], privacy:{ showEmail:false, showStats:true } } }
+function defaultProfile(): Profile { return { bio:'', signature:'', links:{}, accentFrom:'#8b5cf6', accentTo:'#0ea5e9', badges:[], privacy:{ showEmail:false, showStats:true, showSecondaryRole:true, showLinks:true, allowComments:true, showFollowers:true, hiddenProfile:false } } }
 function sanitizeProfile(p: any): Profile {
   const out: Profile = defaultProfile()
   if (typeof p?.avatarData === 'string' && p.avatarData.length < 2_000_000) out.avatarData = p.avatarData
@@ -387,7 +387,15 @@ function sanitizeProfile(p: any): Profile {
   if (typeof p?.accentFrom === 'string') out.accentFrom = p.accentFrom
   if (typeof p?.accentTo === 'string') out.accentTo = p.accentTo
   if (Array.isArray(p?.badges)) out.badges = p.badges.slice(0,3).map((x:any)=> String(x).slice(0,32))
-  if (p?.privacy && typeof p.privacy === 'object') out.privacy = { showEmail: !!p.privacy.showEmail, showStats: p.privacy.showStats !== false, showSecondaryRole: p.privacy.showSecondaryRole !== false }
+  if (p?.privacy && typeof p.privacy === 'object') out.privacy = {
+    showEmail: !!p.privacy.showEmail,
+    showStats: p.privacy.showStats !== false,
+    showSecondaryRole: p.privacy.showSecondaryRole !== false,
+    showLinks: p.privacy.showLinks !== false,
+    allowComments: p.privacy.allowComments !== false,
+    showFollowers: p.privacy.showFollowers !== false,
+    hiddenProfile: !!p.privacy.hiddenProfile,
+  }
   return out
 }
 const F_PROF = (id: string) => `forum:profile:${id}`
@@ -521,9 +529,18 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
 
     // GET /members (public) — minimal user directory
     if (sub === '/members' && method === 'GET') {
+      const s = await readSession(env, req).catch(()=>null)
+      const viewer = s ? await getUserByIdKV(env, s.userId) : null
       const all = await listUsersKV(env)
-      const members = all.map(u => ({ id: u.id, username: u.username, role: u.role, createdAt: u.createdAt, userNumber: u.userNumber }))
-      return json(req, { members })
+      const members: any[] = []
+      for (const u of all) {
+        const prof = await getProfileKV(env, u.id)
+        const hidden = !!prof?.privacy?.hiddenProfile
+        const privileged = !!viewer && ((viewer.userNumber||0) === 1 || viewer.role === 'developer' || viewer.role === 'admin' || viewer.id === u.id)
+        if (hidden && !privileged) continue
+        members.push({ id: u.id, username: u.username, role: u.role, createdAt: u.createdAt, userNumber: u.userNumber })
+      }
+      return json(req, { members }, { headers: { 'Cache-Control': 'no-store', 'Pragma': 'no-cache' } })
     }
 
     // ====== Profiles ======
@@ -537,9 +554,16 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
         const u = await getUserByIdKV(env, id)
         if (!u) return json(req, { error:'not found' }, { status: 404 })
         const profile = await getProfileKV(env, id)
+        // enforce hidden profile
+        if (profile?.privacy?.hiddenProfile) {
+          const s = await readSession(env, req).catch(()=>null)
+          const viewer = s ? await getUserByIdKV(env, s.userId) : null
+          const privileged = !!viewer && ((viewer.userNumber||0) === 1 || viewer.role === 'developer' || viewer.role === 'admin' || viewer.id === u.id)
+          if (!privileged) return json(req, { error: 'hidden' }, { status: 403, headers: { 'Cache-Control': 'no-store', 'Pragma': 'no-cache' } })
+        }
         const { passwordHash: _1, salt: _2, ...pub } = u
         ;(pub as any).owner = ((u.userNumber||0) === 1)
-        return json(req, { user: pub, profile: profile || defaultProfile() })
+        return json(req, { user: pub, profile: profile || defaultProfile() }, { headers: { 'Cache-Control': 'no-store', 'Pragma': 'no-cache' } })
       }
     }
     // GET /profiles/:id (public)
@@ -550,7 +574,13 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
         const u = await getUserByIdKV(env, id)
         if (!u) return json(req, { error:'not found' }, { status: 404 })
         const profile = await getProfileKV(env, id)
-        return json(req, { profile: profile || defaultProfile() })
+        if (profile?.privacy?.hiddenProfile) {
+          const s = await readSession(env, req).catch(()=>null)
+          const viewer = s ? await getUserByIdKV(env, s.userId) : null
+          const privileged = !!viewer && ((viewer.userNumber||0) === 1 || viewer.role === 'developer' || viewer.role === 'admin' || viewer.id === u.id)
+          if (!privileged) return json(req, { error: 'hidden' }, { status: 403, headers: { 'Cache-Control': 'no-store', 'Pragma': 'no-cache' } })
+        }
+        return json(req, { profile: profile || defaultProfile() }, { headers: { 'Cache-Control': 'no-store', 'Pragma': 'no-cache' } })
       }
     }
     // PATCH /profiles/me (auth)
@@ -560,9 +590,14 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
       const me = await getUserByIdKV(env, s.userId)
       if (!me) return json(req, { error:'unauthorized' }, { status: 401 })
       const patch = await req.json().catch(()=> ({}))
-      const profile = sanitizeProfile(patch)
+      const raw = sanitizeProfile(patch)
+      // Only owner/developer/admin can set hiddenProfile
+      const meIsOwner = ((me.userNumber||0) === 1)
+      const canHide = meIsOwner || me.role === 'developer' || me.role === 'admin'
+      if (!canHide && raw?.privacy) delete (raw.privacy as any).hiddenProfile
+      const profile = raw
       await putProfileKV(env, me.id, profile)
-      return json(req, { profile })
+      return json(req, { profile }, { headers: { 'Cache-Control': 'no-store', 'Pragma': 'no-cache' } })
     }
 
     // PATCH /profiles/:id/labels (admin/dev) — set custom cosmetic labels up to 7 items
@@ -678,10 +713,15 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
 
     /* ---------- Forum: sections/topics/posts ---------- */
 
-    // GET /sections
+    // GET /sections (respect cfg.allowGuestRead)
     if (sub === '/sections' && method === 'GET') {
+      const cfg = await readForumCfg(env)
+      if (!cfg.allowGuestRead) {
+        const s = await readSession(env, req).catch(()=>null)
+        if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
+      }
       const sections = await listSectionsKV(env)
-      return json(req, { sections })
+      return json(req, { sections }, { headers: { 'Cache-Control': 'no-store' } })
     }
     // POST /sections (admin/dev)
     if (sub === '/sections' && method === 'POST') {
@@ -716,12 +756,17 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
       }
     }
 
-    // GET /topics?sectionId=
+    // GET /topics?sectionId= (respect cfg.allowGuestRead)
     if (sub.startsWith('/topics') && method === 'GET') {
+      const cfg = await readForumCfg(env)
+      if (!cfg.allowGuestRead) {
+        const s = await readSession(env, req).catch(()=>null)
+        if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
+      }
       const u = new URL(req.url)
       const sectionId = u.searchParams.get('sectionId') || undefined
       const topics = await listTopicsKV(env, sectionId || undefined)
-      return json(req, { topics })
+      return json(req, { topics }, { headers: { 'Cache-Control': 'no-store' } })
     }
     // POST /topics (auth)
     if (sub === '/topics' && method === 'POST') {
@@ -803,13 +848,18 @@ async function handleAuthApi(req: Request, env: Env): Promise<Response|null> {
       }
     }
 
-    // GET /posts?topicId=
+    // GET /posts?topicId= (respect cfg.allowGuestRead)
     if (sub.startsWith('/posts') && method === 'GET') {
+      const cfg = await readForumCfg(env)
+      if (!cfg.allowGuestRead) {
+        const s = await readSession(env, req).catch(()=>null)
+        if (!s) return json(req, { error:'unauthorized' }, { status: 401 })
+      }
       const u = new URL(req.url); const topicId = u.searchParams.get('topicId') || ''
       const posts = await listPostsKV(env, topicId)
       // bump view counter on topic
       try { const topRaw = await env.AUTH_KV!.get(F_TOP(topicId)); if (topRaw) { const top = JSON.parse(topRaw) as Topic; top.viewCount = (top.viewCount||0)+1; await putTopicKV(env, top) } } catch {}
-      return json(req, { posts })
+      return json(req, { posts }, { headers: { 'Cache-Control': 'no-store' } })
     }
     // POST /posts (auth)
     if (sub === '/posts' && method === 'POST') {
@@ -1647,4 +1697,3 @@ export class ChatRoom {
     console.log('do:broadcast', { to: ok })
   }
 }
-
