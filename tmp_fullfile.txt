@@ -1,0 +1,142 @@
+﻿import type { LawDoc } from '../laws';
+import { lawsData } from '../laws';
+import { slugify } from './strings';
+
+export type LawSection = {
+  lawSlug: string;
+  lawTitle: string;
+  head: string;
+  anchor: string;
+  fullText: string;
+};
+
+const ARTICLE_RE = new RegExp('^\\s*(?:\\u0441\\u0442\\.?|\\u0441\\u0442\\u0430\\u0442\\u044c\\u044f)\\s*(\\d+(?:\\.\\d+)*)','i');
+const CHAPTER_RE = new RegExp('^\\s*(?:\\u0433\\u043b\\u0430\\u0432\\u0430|\\u0440\\u0430\\0437\\0434\\0435\\043b)\\s*(\\d+(?:\\.\\d+)*)','i');
+const PART_RE = new RegExp('(?:\\u0447\\u0430\\u0441\\u0442\\u044c|\\u0447\\.?)\\s*(\\d+(?:\\.\\d+)?)','i');
+const ITEM_RE = new RegExp('(?:\\u043f\\u0443\\u043d\\u043a\\u0442|\\u043f\\.?)\\s*(\\d+(?:\\.\\d+)?)','i');
+const DIACRITICS = /[\\u0300-\\u036f]/g;
+
+function defaultNormalize(s: string) {
+  return (s || '')
+    .normalize('NFKD')
+    .replace(DIACRITICS, '')
+    .toLowerCase()
+    .trim();
+}
+
+export function headingToAnchor(text: string): string {
+  const src = (text || '').trim();
+  if (!src) return '';
+  const article = src.match(ARTICLE_RE);
+  if (article) {
+    const num = article[2].replace(/\./g, '-');
+    let anchor = `\u0441\u0442\u0430\u0442\u044c\u044f-${num}`; // "статья-<num>"
+    const part = src.match(PART_RE);
+    if (part) anchor += `-\u0447\u0430\u0441\u0442\u044c-${part[1].replace(/\./g, '-')}`; // "часть-<n>"
+    const item = src.match(ITEM_RE);
+    if (item) anchor += `-\u043f\u0443\u043d\u043a\u0442-${item[1].replace(/\./g, '-')}`; // "пункт-<n>"
+    return anchor;
+  }
+  const chapter = src.match(CHAPTER_RE);
+  if (chapter) {
+    const w = (chapter[1] || '').toLowerCase();
+    const prefix = w.indexOf('\u0433\u043b\u0430\u0432\u0430') !== -1 ? '\u0433\u043b\u0430\u0432\u0430' : '\u0440\u0430\u0437\u0434\u0435\u043b';
+    return `${prefix}-${chapter[2].replace(/\./g, '-')}`;
+  }
+  return slugify(src);
+}
+export function splitLawToSections(law: LawDoc): LawSection[] {
+  const text = String(law.content || '').replace(/\r\n?/g, '\n');
+  const lines = text.split('\n');
+  const sections: LawSection[] = [];
+  let current: LawSection | null = null;
+
+  for (const raw of lines) {
+    const trimmed = raw.trim();
+    const headingMatch = /^(#{2,6})\s*(.+)$/.exec(trimmed);
+    if (headingMatch) {
+      if (current) sections.push(current);
+      const head = headingMatch[2].trim();
+      current = {
+        lawSlug: law.slug,
+        lawTitle: law.title,
+        head,
+        anchor: headingToAnchor(head),
+        fullText: '',
+      };
+      continue;
+    }
+    if (!current) {
+      if (!trimmed) continue;
+      current = {
+        lawSlug: law.slug,
+        lawTitle: law.title,
+        head: '',
+        anchor: '',
+        fullText: trimmed,
+      };
+      continue;
+    }
+    if (!trimmed) continue;
+    if (current.fullText.length < 800) {
+      current.fullText += (current.fullText ? '\n' : '') + trimmed;
+    }
+  }
+
+  if (current) sections.push(current);
+  sections.forEach((sec) => {
+    sec.fullText = sec.fullText.trim().replace(/\s+/g, ' ').slice(0, 400);
+  });
+  return sections;
+}
+
+let cachedSections: LawSection[] | null = null;
+let cachedBySlug: Map<string, LawSection[]> | null = null;
+
+function ensureCache() {
+  if (cachedSections && cachedBySlug) return;
+  const all = lawsData.flatMap((law) => splitLawToSections(law));
+  const bySlug = new Map<string, LawSection[]>();
+  all.forEach((section) => {
+    const list = bySlug.get(section.lawSlug) || [];
+    list.push(section);
+    bySlug.set(section.lawSlug, list);
+  });
+  cachedSections = all;
+  cachedBySlug = bySlug;
+}
+
+export function getAllLawSections(): LawSection[] {
+  ensureCache();
+  return cachedSections ? [...cachedSections] : [];
+}
+
+export function getLawSectionsBySlug(slug: string): LawSection[] {
+  ensureCache();
+  if (!cachedBySlug) return [];
+  return [...(cachedBySlug.get(slug) || [])];
+}
+
+export function findArticleAnchor(
+  slug: string,
+  num: string,
+  kind: 'article' | 'chapter' = 'article',
+  normalize: (s: string) => string = defaultNormalize,
+): string {
+  if (!slug || !num) return '';
+  const sections = getLawSectionsBySlug(slug);
+  if (!sections.length) return '';
+
+  const normalizedNum = normalize(num).replace(/^0+/, '');
+  const articlePattern =
+    kind === 'chapter'
+      ? new RegExp(`\b(?:\u0433\u043b(?:\u0430\u0432\u0430)?|\u0440\u0430\u0437\u0434\u0435\u043b)\s*${normalizedNum}\b`, 'i')
+      : new RegExp(`\b\u0441\u0442(?:\u0430\u0442\u044c[\u044f\u0438]|\.)?\s*${normalizedNum}\b`, 'i');
+
+  const byHead = sections.find((sec) => articlePattern.test(normalize(sec.head)));
+  if (byHead?.anchor) return byHead.anchor;
+
+  const byText = sections.find((sec) => articlePattern.test(normalize(sec.fullText)));
+  return byText?.anchor || '';
+}
+

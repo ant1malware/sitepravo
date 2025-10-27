@@ -1,10 +1,15 @@
 ﻿import React from 'react';
 import { applyStyleMode, getStoredStyleMode, type StyleMode } from './theme';
 
+function normalize(mode: StyleMode): StyleMode {
+  return mode === 'liquid' ? 'classic' : mode;
+}
+
 function readCurrentStyle(): StyleMode {
   if (typeof document !== 'undefined') {
     const ds = document.documentElement.dataset.styleMode;
-    if (ds === 'classic' || ds === 'liquid') return ds as StyleMode;
+    if (ds === 'classic') return 'classic';
+    if (ds === 'liquid') return 'classic';
   }
   try {
     return getStoredStyleMode() ?? 'classic';
@@ -23,12 +28,8 @@ export function useStyleMode(): [StyleMode, (mode: StyleMode) => void] {
     };
 
     const handleChange = (event: Event) => {
-      const detail = (event as CustomEvent<StyleMode>).detail;
-      if (detail === 'classic' || detail === 'liquid') {
-        setMode(detail);
-      } else {
-        syncFromDom();
-      }
+      const detail = normalize((event as CustomEvent<StyleMode>).detail);
+      if (detail === 'classic') setMode(detail); else syncFromDom();
     };
 
     window.addEventListener('stylemodechange', handleChange as EventListener);
@@ -42,8 +43,9 @@ export function useStyleMode(): [StyleMode, (mode: StyleMode) => void] {
   }, []);
 
   const setStyle = React.useCallback((next: StyleMode) => {
-    applyStyleMode(next);
-    setMode(next);
+    const normalized = normalize(next);
+    applyStyleMode(normalized);
+    setMode(normalized);
   }, []);
 
   return [mode, setStyle];

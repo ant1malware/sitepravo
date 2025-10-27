@@ -1,0 +1,606 @@
+import React from 'react';
+import {
+  Search, BookOpen, Users, Shield, X, Settings, Star, Link as LinkIcon,
+  CornerDownLeft, ExternalLink, Copy as CopyIcon, Filter as FilterIcon, Clock
+} from 'lucide-react';
+import { rolesData } from './roles';
+import { lawsData } from './laws';
+import { vuDocs } from './vu';
+import { getRecents } from './recent';
+import { isFeatureOn } from './uiSettings';
+import { getAllLawSections, findArticleAnchor as resolveLawAnchor, LawSection } from './utils/lawSections';
+
+type Kind = 'role' | 'law' | 'vu' | 'page' | 'recent';
+type Row = {
+  kind: Kind;
+  id: string;
+  title: string;
+  subtitle?: string;
+  url: string;
+  __boost?: number;
+  __preview?: string;
+};
+
+type LawSectionWithPreview = LawSection & { __preview?: string };
+
+function baseUrl(path: string) {
+  const b = (import.meta as any).env?.BASE_URL || import.meta.env.BASE_URL || '/';
+  return `${b.replace(/\/$/, '')}${path}`;
+}
+
+const DIACRITICS = /[\u0300-\u036f]/g;
+function normalizeBasic(s: string) {
+  return (s || '').normalize('NFKD').replace(DIACRITICS, '').toLowerCase().trim();
+}
+const ruToEnMap: Record<string, string> = {
+  'ё':'`','1':'1','2':'2','3':'3','4':'4','5':'5','6':'6','7':'7','8':'8','9':'9','0':'0','-':'-','=':'=',
+  'й':'q','ц':'w','у':'e','к':'r','е':'t','н':'y','г':'u','ш':'i','щ':'o','з':'p','х':'[','ъ':']',
+  'ф':'a','ы':'s','в':'d','а':'f','п':'g','р':'h','о':'j','л':'k','д':'l','ж':';','э':'\'',
+  'я':'z','ч':'x','с':'c','м':'v','и':'b','т':'n','ь':'m','б':',','ю':'.','/':'/'
+};
+const enToRuMap: Record<string, string> = {};
+Object.entries(ruToEnMap).forEach(([ru, en]) => { enToRuMap[en] = ru; });
+function mapLayout(s: string, map: Record<string,string>) {
+  let out = '';
+  for (const ch of normalizeBasic(s)) out += map[ch] || ch;
+  return out;
+}
+function allQueryVariants(q: string) {
+  const n = normalizeBasic(q);
+  if (!n) return [];
+  return Array.from(new Set([n, mapLayout(n, enToRuMap), mapLayout(n, ruToEnMap)])).filter(Boolean);
+}
+function tokenize(s: string) {
+  return normalizeBasic(s).split(/[^a-zа-яё0-9]+/i).filter(Boolean);
+}
+function levenshtein(a: string, b: string, cap = 3) {
+  const m = a.length, n = b.length;
+  if (Math.abs(m - n) >= cap) return cap;
+  const dp = new Array(n + 1);
+  for (let j = 0; j <= n; j++) dp[j] = j;
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    const ai = a.charCodeAt(i - 1);
+    let bestRow = dp[0];
+    for (let j = 1; j <= n; j++) {
+      const tmp = dp[j];
+      const cost = ai === b.charCodeAt(j - 1) ? 0 : 1;
+      dp[j] = Math.min(dp[j] + 1, dp[j - 1] + 1, prev + cost);
+      prev = tmp;
+      if (dp[j] < bestRow) bestRow = dp[j];
+    }
+    if (bestRow >= cap) return cap;
+  }
+  return dp[n];
+}
+function fuzzyTermScore(hay: string, term: string) {
+  if (!term || !hay) return 0;
+  if (hay.includes(term)) return hay.startsWith(term) ? 1 : 0.8;
+  const d = levenshtein(hay, term, 3);
+  if (d === 0) return 1;
+  if (d === 1) return 0.7;
+  if (d === 2) return 0.4;
+  return 0;
+}
+function bm25ishScore(text: string, queryTerms: string[]) {
+  const tokens = tokenize(text);
+  let score = 0;
+  for (const t of queryTerms) {
+    let best = 0;
+    for (const tok of tokens) {
+      const s = fuzzyTermScore(tok, t) * 1.0 || fuzzyTermScore(normalizeBasic(text), t) * 0.2;
+      if (s > best) best = s;
+      if (best >= 1) break;
+    }
+    score += best;
+  }
+  return score;
+}
+const SYNONYMS: Record<string,string[]> = {
+  'закон': ['law','кодекс','статья','ст','глава','пункт'],
+  'роль': ['должность','позиция','персона','участник','staff','role'],
+  'ву': ['приказ','указ','внутренние','docs','regulations'],
+  'форум': ['forum','tema','темы','разделы'],
+  'избранное': ['favorites','stars','закладки'],
+  'настройки': ['settings','prefs','config'],
+};
+function expandTerms(terms: string[]) {
+  const out = new Set<string>(terms);
+  for (const t of terms) (SYNONYMS[t] || []).forEach(s => out.add(s));
+  return Array.from(out);
+}
+function makeHighlighter(terms: string[]) {
+  const uniq = Array.from(new Set(terms.filter(Boolean)));
+  if (!uniq.length) return (s: string) => s as any;
+  return (s: string) => {
+    const low = normalizeBasic(s);
+    const ranges: [number, number][] = [];
+    for (const t of uniq) {
+      let pos = 0;
+      while (pos <= low.length) {
+        const idx = low.indexOf(t, pos);
+        if (idx === -1) break;
+        ranges.push([idx, idx + t.length]);
+        pos = idx + t.length;
+      }
+    }
+    if (!ranges.length) return s as any;
+    ranges.sort((a,b)=>a[0]-b[0]);
+    const merged: [number,number][] = [];
+    for (const r of ranges) {
+      if (!merged.length || r[0] > merged[merged.length-1][1]) merged.push(r);
+      else merged[merged.length-1][1] = Math.max(merged[merged.length-1][1], r[1]);
+    }
+    const parts: React.ReactNode[] = [];
+    let last = 0;
+    for (const [a,b] of merged) {
+      if (a>last) parts.push(s.slice(last,a));
+      parts.push(<mark key={a+'-'+b} className="rounded px-0.5">{s.slice(a,b)}</mark>);
+      last = b;
+    }
+    if (last < s.length) parts.push(s.slice(last));
+    return <>{parts}</>;
+  };
+}
+function parseFilter(raw: string): { filter: Kind | 'all', cleaned: string } {
+  let filter: Kind | 'all' = 'all';
+  let cleaned = raw.trim();
+  const m = cleaned.match(/\bkind:(law|role|vu|page)\b/i);
+  if (m) {
+    filter = m[1].toLowerCase() as Kind;
+    cleaned = cleaned.replace(m[0], '').trim();
+  } else if (/^@/.test(cleaned)) {
+    filter = 'role'; cleaned = cleaned.replace(/^@+/, '').trim();
+  } else if (/^#/.test(cleaned)) {
+    filter = 'law'; cleaned = cleaned.replace(/^#+/, '').trim();
+  } else if (/^!/.test(cleaned)) {
+    filter = 'vu'; cleaned = cleaned.replace(/^!+/, '').trim();
+  }
+  return { filter, cleaned };
+}
+function makeAcronym(titleNorm: string) {
+  const words = titleNorm.split(/\s+/).filter(Boolean);
+  const bad = new Set(['республики','республика','российской','российская','россии','федерации','федерация','города','области','края','ст','статья','кодекса','кодекс','закона','закон','о','об','и','область','край']);
+  const main = words.filter(w => !bad.has(w) && w.length > 1);
+  const acMain = main.map(w=>w[0]).join('');
+  const acAll = words.map(w=>w[0]).join('');
+  return Array.from(new Set([acMain, acAll].filter(Boolean)));
+}
+const HARD_ALIASES: Record<string,string[]> = {
+  'ук': ['уголовн'],
+  'упк': ['уголовно-процессуаль'],
+  'гпк': ['гражданск.*процессуаль'],
+  'каc': ['административного.*судопроизвод'],
+  'кас': ['административного.*судопроизвод'],
+  'коап': ['административн.*правонаруш'],
+  'гк': ['гражданск.*кодекс'],
+  'тк': ['трудов.*кодекс'],
+  'пдд': ['правила.*дорожн.*движ'],
+  'конституция': ['конституц'],
+  'полиция': ['о полиции'],
+  'фсб': ['федеральн.*служб.*безопасн'],
+  'фсин': ['исполнен.*наказан'],
+  'орд': ['оперативн.*розыскн'],
+  'гостайна': ['государственн.*тайн'],
+  'вертикаль': ['вертикал.*власт'],
+  'территории': ['территор.*ограниченн.*доступ']
+};
+
+export default function CommandPalette() {
+  const enabled = isFeatureOn('cmd_palette', true);
+  if (!enabled) return null;
+
+  const [open, setOpen] = React.useState(false);
+  const [q, setQ] = React.useState<string>(() => { try { return localStorage.getItem('cp_q') || ''; } catch { return ''; } });
+  const [idx, setIdx] = React.useState(0);
+  const [fltChip, setFltChip] = React.useState<'all'|'role'|'law'|'vu'>(() => (localStorage.getItem('cp_filter') as any) || 'all');
+  React.useEffect(() => { try { localStorage.setItem('cp_filter', fltChip); } catch {} }, [fltChip]);
+  React.useEffect(() => { try { localStorage.setItem('cp_q', q); } catch {} }, [q]);
+
+  const [workshopId, setWorkshopId] = React.useState<string | null>(null);
+  React.useEffect(() => { (async () => { try { const mod = await import('./store/forumRemote'); const secs = await mod.listSections(); const ws = secs.find((s:any)=> String(s.title||'').toLowerCase()==='workshop'); setWorkshopId(ws?.id || null); } catch {} })(); }, []);
+
+  const overlayRef = React.useRef<HTMLDivElement | null>(null);
+  const panelRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    (window as any).openCommandPalette = () => setOpen(true);
+    const onKey = (e: KeyboardEvent) => {
+      const mac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform);
+      if (((mac && e.metaKey) || (!mac && e.ctrlKey)) && String(e.key).toLowerCase() === 'k') { e.preventDefault(); setOpen(true); }
+      if (open && e.key === 'Escape') {
+        const input = document.getElementById('cp_input') as HTMLInputElement | null;
+        if (input && input.value) { setQ(''); setIdx(0); return; }
+        setOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => { window.removeEventListener('keydown', onKey); try { delete (window as any).openCommandPalette; } catch {} };
+  }, [open]);
+
+  const lawSections = React.useMemo<LawSectionWithPreview[]>(() => {
+    if (!open) return [];
+    const sections = getAllLawSections();
+    return sections.map((sec) => ({ ...sec, __preview: sec.fullText }));
+  }, [open]);
+
+  const lawAliasIndex = React.useMemo(() => {
+    const aliasToSlugs = new Map<string, Set<string>>();
+    const slugToTitle = new Map<string, string>();
+    const add = (alias: string, slug: string) => {
+      if (!alias) return;
+      const s = aliasToSlugs.get(alias) || new Set<string>();
+      s.add(slug);
+      aliasToSlugs.set(alias, s);
+    };
+    for (const l of lawsData) {
+      const t = normalizeBasic(l.title);
+      slugToTitle.set(l.slug, t);
+      add(t, l.slug);
+      const words = t.split(/\s+/).filter(Boolean);
+      add(words.slice(0,2).join(' '), l.slug);
+      makeAcronym(t).forEach(a => add(a, l.slug));
+      words.forEach(w => add(w, l.slug));
+      for (const [alias, pats] of Object.entries(HARD_ALIASES)) {
+        if (pats.some(p => new RegExp(p, 'i').test(t))) add(alias, l.slug);
+      }
+    }
+    return { aliasToSlugs, slugToTitle };
+  }, []);
+
+  function lawCandidatesFromQuery(qn: string) {
+    const toks = tokenize(qn);
+    const cands = new Map<string, number>();
+    const { aliasToSlugs } = lawAliasIndex;
+    const add = (slug:string, w:number) => cands.set(slug, Math.max(cands.get(slug)||0, w));
+    const ac = toks.map(w=>w[0]).join('');
+    const tryAlias = (a:string, w:number) => { const set = aliasToSlugs.get(a); if (set) set.forEach(slug => add(slug, w)); };
+    toks.forEach(t => tryAlias(t, 2.5));
+    if (ac) tryAlias(ac, 1.5);
+    Object.keys(HARD_ALIASES).forEach(a => {
+      if (toks.includes(a)) tryAlias(a, 3);
+    });
+    return Array.from(cands.entries()).sort((a,b)=> b[1]-a[1]).map(([slug])=>slug);
+  }
+
+  function extractArticleQuery(qn: string) {
+    const n = normalizeBasic(qn).replace(/[,;]+/g,' ');
+    const artNumFromBare = n.match(/(?:^|\s)(\d{1,3}(?:\.\d{1,2})?)(?:\s*(?:ч|част[ьи]|ст|статья))?(?:\s|$)/i);
+    const mChap = n.match(/\b(?:гл(?:ава)?|раздел)\s*(\d{1,3}(?:\.\d{1,2})?)\b/i);
+    const mArt = n.match(/(?:стать[ьяи]|ст\.?)\s*(\d{1,3}(?:\.\d{1,2})?)/i) || artNumFromBare;
+    if (!mArt && !mChap) return null;
+    const kind: 'article' | 'chapter' = mChap ? 'chapter' : 'article';
+    const num = (mChap ? mChap[1] : (mArt as RegExpMatchArray)[1]);
+    const mPart = n.match(/(?:част[ьи]|ч\.?)\s*(\d{1,3}(?:\.\d{1,2})?)/i);
+    const part = mPart ? mPart[1] : null;
+    const lawCands = lawCandidatesFromQuery(n);
+    return { num, part, lawCands, kind };
+  }
+
+  function findArticleAnchor(slug: string, num: string, kind: 'article'|'chapter' = 'article') {
+    return resolveLawAnchor(slug, num, kind, normalizeBasic);
+  }
+
+  const directHit = React.useMemo(() => {
+    const v = allQueryVariants(q)[0] || '';
+    const ex = extractArticleQuery(v);
+    if (!ex) return null;
+    const nums = ex.num;
+    const cands = ex.lawCands.length ? ex.lawCands : Array.from(new Set(lawSections.map(s=>s.lawSlug)));
+    for (const slug of cands) {
+      const anchor = findArticleAnchor(slug, nums, (ex as any).kind || 'article');
+      if (anchor) {
+        const url = baseUrl(`/laws/${slug}?q=${encodeURIComponent(q)}#${anchor}`);
+        const law = lawsData.find(l=>l.slug===slug);
+        const tKind = (ex as any).kind === 'chapter' ? 'Глава' : 'Статья';
+        const title = `${law?.title || slug} — ${tKind} ${nums}`;
+        return { url, title };
+      }
+    }
+    return null;
+  }, [q, lawSections]);
+
+  const [recentQs, setRecentQs] = React.useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('cp_recent_qs') || '[]') || []; } catch { return []; } });
+  function pushRecentQ(s: string) {
+    const v = s.trim();
+    if (!v) return;
+    const arr = [v, ...recentQs.filter(x=>x!==v)].slice(0, 8);
+    setRecentQs(arr);
+    try { localStorage.setItem('cp_recent_qs', JSON.stringify(arr)); } catch {}
+  }
+  const recentLinks: Row[] = React.useMemo(() => {
+    const list: Row[] = [];
+    try {
+      const rs = getRecents?.() || [];
+      for (const r of rs) list.push({ kind: 'recent', id: r.url, title: r.title || r.url, subtitle: 'Недавнее', url: r.url });
+    } catch {}
+    return list.slice(0, 10);
+  }, []);
+
+  const quickPages: Row[] = React.useMemo(() => {
+    const list: Row[] = [];
+    list.push({ kind: 'page', id: 'forum', title: 'Форум', subtitle: 'Навигация', url: baseUrl('/forum') });
+    list.push({ kind: 'page', id: 'favorites', title: 'Избранное', subtitle: 'Страница', url: baseUrl('/favorites') });
+    list.push({ kind: 'page', id: 'settings', title: 'Настройки', subtitle: 'Страница', url: baseUrl('/settings') });
+    if (workshopId) list.push({ kind: 'page', id: 'workshop', title: 'Workshop', subtitle: 'Раздел', url: baseUrl(`/forum/section/${workshopId}`) });
+    return list;
+  }, [workshopId]);
+
+  const dataRows: Row[] = React.useMemo(() => {
+    const clicks: Record<string, number> = (()=>{ try{ return JSON.parse(localStorage.getItem('cp_clicks')||'{}') }catch{ return {} as any }})();
+    const weight = (id: string) => Math.min(2, (clicks[id] || 0) * 0.15);
+    const list: Row[] = [];
+    for (const r of rolesData) list.push({ kind: 'role', id: r.id, title: r.role, subtitle: 'Раздел', url: baseUrl(`/roles/${r.id}`), __boost: weight(`role:${r.id}`) });
+    for (const l of lawsData) list.push({ kind: 'law', id: l.slug, title: l.title, subtitle: 'Закон', url: baseUrl(`/laws/${l.slug}`), __boost: weight(`law:${l.slug}`) });
+    for (const v of vuDocs) list.push({ kind: 'vu', id: v.id, title: v.title, subtitle: 'ВУ Документ', url: baseUrl(`/vu/${v.id}`), __boost: weight(`vu:${v.id}`) });
+    return list;
+  }, []);
+
+  function searchLawSections(variants: string[], terms: string[]): Row[] {
+    const out: { r: Row; score: number }[] = [];
+    const ex = extractArticleQuery(variants[0] || '');
+    for (const sec of lawSections) {
+      const hay = `${sec.lawTitle} ${sec.head} ${sec.fullText}`;
+      const hayNorm = normalizeBasic(hay);
+      let score = 0;
+      for (const v of variants) {
+        score = Math.max(score,
+          bm25ishScore(hayNorm, terms) +
+          (sec.head && normalizeBasic(sec.head).startsWith(terms[0]||'') ? 2.5 : 0) +
+          (normalizeBasic(sec.lawTitle).startsWith(terms[0]||'') ? 2 : 0)
+        );
+      }
+      if (ex && ex.num) {
+        const artHit = normalizeBasic(sec.head).match(new RegExp(`\\bст(?:ать[ьяи]|\\.)?\\s*${normalizeBasic(ex.num)}\\b`)) ? 3.5 : 0;
+        score += artHit;
+        if (ex.lawCands.length && !ex.lawCands.includes(sec.lawSlug)) score *= 0.6;
+      }
+      if (score > 0.2) {
+        const id = sec.anchor ? `${sec.lawSlug}#${sec.anchor}` : sec.lawSlug;
+        const url = sec.anchor
+          ? baseUrl(`/laws/${sec.lawSlug}?q=${encodeURIComponent(variants[0])}#${sec.anchor}`)
+          : baseUrl(`/laws/${sec.lawSlug}?q=${encodeURIComponent(variants[0])}`);
+        const subtitle = sec.head ? `${sec.lawTitle} — ${sec.head}` : sec.lawTitle;
+        const r: Row = { kind: 'law', id, title: subtitle, subtitle: sec.fullText.length > 140 ? sec.fullText.slice(0, 137) + '…' : sec.fullText, url, __boost: 4, __preview: sec.fullText };
+        out.push({ r, score: (r.__boost || 0) + score });
+      }
+    }
+    const seen = new Set<string>();
+    const uniq = out.sort((a,b)=> b.score - a.score).map(x => x.r).filter(r => (seen.has(r.id) ? false : (seen.add(r.id), true)));
+    return uniq.slice(0, 50);
+  }
+
+  const rows: Row[] = React.useMemo(() => {
+    const { filter: filterFromCmd, cleaned } = parseFilter(q);
+    const effectiveFilter: 'all'|'role'|'law'|'vu' = (q.includes('kind:') || /^[@#!]/.test(q)) ? (filterFromCmd as any) : fltChip;
+    if (!cleaned.trim()) {
+      const base = [...quickPages, ...dataRows.filter(r => r.kind !== 'law').slice(0, 6), ...recentLinks];
+      return base.slice(0, 24);
+    }
+    const variants = allQueryVariants(cleaned);
+    const mainTerms = expandTerms(tokenize(variants[0] || cleaned));
+    if (!mainTerms.length) return quickPages;
+    const pool = [...quickPages, ...dataRows].filter(r => effectiveFilter === 'all' ? true : r.kind === effectiveFilter);
+    const scored: { r: Row; score: number }[] = [];
+    for (const r of pool) {
+      const text = `${r.title} ${r.subtitle || ''}`;
+      const titleNorm = normalizeBasic(r.title);
+      let baseScore = bm25ishScore(normalizeBasic(text), mainTerms) + (mainTerms.length && titleNorm.startsWith(mainTerms[0]) ? 2.5 : 0) + (r.kind === 'page' ? 0.5 : 0) + (r.__boost || 0);
+      const ex = extractArticleQuery(variants[0] || '');
+      if (ex && r.kind === 'law') {
+        const slug = (r.id || '').split('#')[0];
+        if (ex.lawCands.length && ex.lawCands.includes(slug)) baseScore += 2.2;
+      }
+      if (baseScore > 0.15) scored.push({ r, score: baseScore });
+    }
+    if (effectiveFilter === 'all' || effectiveFilter === 'law') {
+      const lawRows = searchLawSections(variants, mainTerms);
+      for (const r of lawRows) {
+        const extra = r.title.toLowerCase().includes(mainTerms[0] || '') ? 0.8 : 0;
+        scored.push({ r, score: (r.__boost || 0) + extra + 0.1 });
+      }
+    }
+    const list = scored.sort((a,b)=> b.score - a.score).map(x => x.r).slice(0, 80);
+    if (directHit) {
+      const exists = list.find(x => x.url === directHit.url);
+      if (!exists) list.unshift({ kind:'law', id: directHit.url, title: directHit.title, subtitle: 'Точное совпадение', url: directHit.url, __boost: 10 });
+    }
+    return list;
+  }, [q, fltChip, quickPages, dataRows, lawSections, recentLinks, directHit]);
+
+  function incClick(r: Row) {
+    try {
+      const key = `${r.kind}:${r.id}`;
+      const clicks = JSON.parse(localStorage.getItem('cp_clicks') || '{}');
+      clicks[key] = (clicks[key] || 0) + 1;
+      localStorage.setItem('cp_clicks', JSON.stringify(clicks));
+    } catch {}
+  }
+  function withQuery(url: string, query: string) {
+    if (!query) return url;
+    if (url.includes('?')) return url;
+    if (url.includes('#')) return url.replace('#', `?q=${encodeURIComponent(query)}#`);
+    return `${url}?q=${encodeURIComponent(query)}`;
+  }
+  function buildTargetUrl(r: Row) {
+    let target = r.url;
+    const ex = extractArticleQuery(q);
+    if (r.kind === 'law') {
+      if (ex?.num && !target.includes('#')) {
+        const slug = r.id.split('#')[0] || (target.match(/\/laws\/([^/?#]+)/)?.[1] || '');
+        if (slug) {
+          const anchor = findArticleAnchor(slug, ex.num, (ex as any).kind || 'article');
+          if (anchor) target = baseUrl(`/laws/${slug}?q=${encodeURIComponent(q)}#${anchor}`);
+          else target = baseUrl(`/laws/${slug}?q=${encodeURIComponent(q)}`);
+        }
+      } else {
+        target = withQuery(target, q);
+      }
+    }
+    return target;
+  }
+  function smartGo(r: Row) {
+    const target = buildTargetUrl(r);
+    setOpen(false);
+    try { window.location.href = target; } catch { location.assign(target); }
+  }
+  function onKeyList(e: React.KeyboardEvent) {
+    if (e.key === 'Tab') { e.preventDefault(); setIdx(0); setFltChip(prev => prev === 'all' ? 'law' : prev === 'law' ? 'role' : prev === 'role' ? 'vu' : 'all'); return; }
+    const meta = e.ctrlKey || e.metaKey;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(i + 1, Math.max(0, rows.length - 1))); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); setIdx(i => Math.max(i - 1, 0)); }
+    if (e.key === 'Enter' && !meta) {
+      e.preventDefault();
+      if (directHit?.url) { setOpen(false); pushRecentQ(q); try { window.location.href = directHit.url; } catch { location.assign(directHit.url); } return; }
+      const r = rows[idx]; if (r){ incClick(r); pushRecentQ(q); smartGo(r); }
+    }
+    if (e.key === 'Enter' && meta) {
+      e.preventDefault();
+      const r = rows[idx];
+      let target = directHit?.url || (r ? buildTargetUrl(r) : '');
+      if (target){ pushRecentQ(q); window.open(target, '_blank', 'noopener,noreferrer'); }
+    }
+    if ((e.key.toLowerCase() === 'c') && meta) { e.preventDefault(); const r = rows[idx]; if (r){ navigator.clipboard.writeText(r.url).catch(()=>{}); } }
+  }
+  function openInNew(to: string) { window.open(to, '_blank', 'noopener,noreferrer'); }
+  async function copyLink(to: string) { try { await navigator.clipboard.writeText(to); } catch {} }
+
+  const { filter: filterFromCmd } = parseFilter(q);
+  const effectiveFilter = (q.includes('kind:') || /^[@#!]/.test(q)) ? (filterFromCmd as any) : fltChip;
+  const hi = React.useMemo(() => { const v = allQueryVariants(q); const terms = expandTerms(tokenize(v[0] || q)); return makeHighlighter(terms); }, [q]);
+  const countsByKind = React.useMemo(() => { const c: Record<Kind, number> = { role:0, law:0, vu:0, page:0, recent:0 }; for (const r of rows) c[r.kind] = (c[r.kind] || 0) + 1; return c; }, [rows]);
+  const activePreview = rows[idx]?.__preview || '';
+  const Panel: React.FC<React.PropsWithChildren<{}>> = ({ children }) => (
+    <div ref={panelRef} className="w-full max-w-4xl rounded-2xl border border-zinc-300 bg-white/95 backdrop-blur-sm p-3 text-zinc-900 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900/95 dark:text-zinc-100">
+      {children}
+    </div>
+  );
+
+  function overlayMouseDown(e: React.MouseEvent) { if (e.target === overlayRef.current) setOpen(false); }
+
+  return (
+    <>
+      {!open ? null : (
+        <div ref={overlayRef} onMouseDown={overlayMouseDown} className="fixed inset-0 z-[70] flex items-start justify-center bg-black/60 p-2 sm:p-4" role="dialog" aria-modal="true" aria-label="Поиск">
+          <Panel>
+            <div className="mb-2 flex items-center gap-2">
+              <Search className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
+              <input
+                id="cp_input"
+                autoFocus
+                value={q}
+                onChange={(e) => { setQ(e.target.value); setIdx(0); }}
+                onKeyDown={onKeyList}
+                placeholder="Ищи: «ук ст. 29 ч.2», «коап 12.8», «упк 51», «пдд 8.6», «адвокат», «настройки»…"
+                className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring text-zinc-900 placeholder-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-500"
+              />
+              <button className="rounded-md px-2 py-1 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800" onClick={() => setOpen(false)} aria-label="Закрыть"><X className="h-4 w-4" /></button>
+            </div>
+
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+              <span className="inline-flex items-center gap-1 text-zinc-500 dark:text-zinc-400"><FilterIcon className="h-3.5 w-3.5" /> Фильтр:</span>
+              {([
+                {k:'all', label:'Все'},
+                {k:'law', label:`Законы${countsByKind.law?` · ${countsByKind.law}`:''}`},
+                {k:'role', label:`Роли${countsByKind.role?` · ${countsByKind.role}`:''}`},
+                {k:'vu', label:`ВУ${countsByKind.vu?` · ${countsByKind.vu}`:''}`},
+              ] as any[]).map((c)=> (
+                <button
+                  key={c.k}
+                  onClick={()=>{ setFltChip(c.k); setIdx(0); }}
+                  className={`rounded-full border px-2 py-0.5 ${effectiveFilter===c.k? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900' : 'bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200'}`}
+                >{c.label}</button>
+              ))}
+              <div className="ml-auto hidden sm:flex items-center gap-3 text-zinc-500 dark:text-zinc-400">
+                <span className="inline-flex items-center gap-1"><CornerDownLeft className="h-3.5 w-3.5" /> Enter</span>
+                <span>·</span>
+                <span className="inline-flex items-center gap-1"><ExternalLink className="h-3.5 w-3.5" /> Ctrl/Cmd+Enter</span>
+                <span>·</span>
+                <span className="inline-flex items-center gap-1"><CopyIcon className="h-3.5 w-3.5" /> Ctrl/Cmd+C</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-3">
+              <div className="max-h-[70vh] overflow-y-auto rounded-xl border border-zinc-200 dark:border-zinc-700">
+                {!rows.length && <div className="p-3 text-sm text-zinc-500 dark:text-zinc-400">Ничего не найдено</div>}
+                {rows.map((r, i) => (
+                  <div
+                    key={`${r.kind}:${r.id}`}
+                    className={`flex w-full items-start justify-between gap-3 px-3 py-2 text-left text-[13px] leading-tight text-zinc-900 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800 cursor-pointer ${i === idx ? 'bg-indigo-500/15 dark:bg-indigo-500/20' : ''}`}
+                    onMouseEnter={() => setIdx(i)}
+                    onClick={() => { incClick(r); pushRecentQ(q); smartGo(r); }}
+                    onDoubleClick={() => { incClick(r); openInNew(r.url); }}
+                  >
+                    <span className="inline-flex min-w-0 items-start gap-2">
+                      {r.kind === 'law' && <BookOpen className="mt-0.5 h-4 w-4 shrink-0" />}
+                      {r.kind === 'role' && <Users className="mt-0.5 h-4 w-4 shrink-0" />}
+                      {r.kind === 'vu' && <Shield className="mt-0.5 h-4 w-4 shrink-0" />}
+                      {r.kind === 'page' && (r.id === 'settings' ? <Settings className="mt-0.5 h-4 w-4 shrink-0" /> : <Star className="mt-0.5 h-4 w-4 shrink-0" />)}
+                      {r.kind === 'recent' && <Clock className="mt-0.5 h-4 w-4 shrink-0" />}
+                      <span className="flex min-w-0 flex-col">
+                        <span className="truncate font-medium">{hi(r.title)}</span>
+                        {r.subtitle && <span className="truncate text-xs text-zinc-500 dark:text-zinc-400">{hi(r.subtitle)}</span>}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <button
+                        className="rounded border border-zinc-300/60 p-1 text-[10px] text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                        title="Открыть в новой вкладке"
+                        onClick={(e)=>{ e.stopPropagation(); openInNew(r.url); }}
+                      ><ExternalLink className="h-3.5 w-3.5" /></button>
+                      <button
+                        className="rounded border border-zinc-300/60 p-1 text-[10px] text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                        title="Скопировать ссылку"
+                        onClick={(e)=>{ e.stopPropagation(); copyLink(r.url); }}
+                      ><LinkIcon className="h-3.5 w-3.5" /></button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hidden sm:block max-h-[70vh] overflow-auto rounded-xl border border-zinc-200 p-3 text-sm text-zinc-700 dark:border-zinc-700 dark:text-zinc-200 whitespace-pre-wrap">
+                {activePreview ? activePreview : <div className="text-zinc-500 dark:text-zinc-400">Подсказка: наведи курсор на результат, чтобы увидеть превью текста закона.</div>}
+              </div>
+            </div>
+
+            {(!normalizeBasic(q)) && !!recentQs.length && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {recentQs.map((s) => (
+                  <button key={s}
+                    className="rounded-full border border-zinc-300 px-2 py-0.5 text-xs text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    onClick={()=>{ setQ(s); setIdx(0); }}
+                    title="Повторить запрос"
+                  >{s}</button>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+              Команды: <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-800">@роль</code>, <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-800">#закон</code>, <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-800">!ву</code>, <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-800">kind:law</code>. Поддерживаются опечатки, неправильная раскладка и быстрые ссылки на статьи.
+            </div>
+          </Panel>
+        </div>
+      )}
+    </>
+  );
+}
+
+(function attachDoubleShiftOpener(){
+  let last = 0;
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Shift') {
+      const now = Date.now();
+      if (now - last < 350) {
+        try { (window as any).openCommandPalette?.(); } catch {}
+        last = 0;
+      } else {
+        last = now;
+      }
+    }
+  };
+  if (typeof window !== 'undefined') {
+    window.addEventListener('keydown', onKey, { passive: true });
+  }
+})();
+
+

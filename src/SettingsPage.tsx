@@ -9,16 +9,9 @@ import {
   type Accent,
   setCustomAccent,
   BACKGROUNDS,
-  applyStyleMode,
-  getStoredStyleMode,
-  type StyleMode,
-  type LiquidTone,
-  applyLiquidTone,
-  getStoredLiquidTone,
 } from './theme';
 
 import { asset } from './lib/asset';
-import LiquidGlass from './components/LiquidGlass';
 import { randomBase32, verifyTotp } from './lib/totp';
 
 import {
@@ -54,8 +47,6 @@ const PRESET_BG: Record<BgKey, string> = {
 export default function SettingsPage() {
   const [accent, setAccent] = React.useState<Accent>(() => getStoredAccent() ?? 'indigo');
   const [accentCustom, setAccentCustom] = React.useState<string>(() => localStorage.getItem('accent_custom') || '#6366F1');
-  const [styleMode, setStyleMode] = React.useState<StyleMode>(() => getStoredStyleMode() ?? 'classic');
-
   const [density, setDensity] = React.useState<Density>(() => getDensity());
   const [fontScale, setFontScale] = React.useState<number>(() => getFontScale());
   const [shadow, setShadow] = React.useState<Shadow>(() => getShadow());
@@ -73,21 +64,12 @@ export default function SettingsPage() {
   const [bgFixed, setBgFixed] = React.useState<boolean>(() => localStorage.getItem('bg_fixed') !== '0');
   const [bgSmart, setBgSmart] = React.useState<boolean>(() => localStorage.getItem('bg_smart') !== '0');
 
-  const isLiquid = styleMode === 'liquid';
-  const [liquidTone, setLiquidTone] = React.useState<LiquidTone>(() => getStoredLiquidTone());
   const root = document.documentElement;
 
-  // Classic: apply selected background
   React.useEffect(() => {
-    if (isLiquid) return;
     if (bgSel === 'none') forceBodyBackground(undefined);
     else forceBodyBackground(PRESET_BG[bgSel], bgFixed, bgOverlay, bgSmart);
-  }, [bgSel, bgOverlay, bgFixed, bgSmart, isLiquid]);
-
-  // In Liquid we do not force body background
-  React.useEffect(() => {
-    if (isLiquid) forceBodyBackground(undefined);
-  }, [isLiquid]);
+  }, [bgSel, bgOverlay, bgFixed, bgSmart]);
 
   // Fallback helper classes/tokens
   const setShadowFallback = (s: Shadow) => {
@@ -141,17 +123,9 @@ export default function SettingsPage() {
   const onThemeLight = () => { try { applyTheme('light'); } catch {} };
   const onThemeDark = () => { try { applyTheme('dark'); } catch {} };
 
-  const onStyleMode = (mode: StyleMode) => {
-    setStyleMode(mode);
-    try { applyStyleMode(mode); } catch {}
-  };
   const onAnimToggle = (on: boolean) => {
     setAnimationsOn(on);
     try { applyAnimations(on); } catch {}
-  };
-  const onLiquidTone = (tone: LiquidTone) => {
-    setLiquidTone(tone);
-    try { applyLiquidTone(tone); } catch {}
   };
 
   const onAccentName = (a: Accent) => {
@@ -169,7 +143,6 @@ export default function SettingsPage() {
   const onBgPreset = (id: BgSel) => {
     setBgSel(id);
     try { localStorage.setItem('bg_preset', id); } catch {}
-    if (isLiquid) return;
     if (id === 'none') forceBodyBackground(undefined);
     else forceBodyBackground(PRESET_BG[id], bgFixed, bgOverlay, bgSmart);
   };
@@ -177,17 +150,17 @@ export default function SettingsPage() {
     const v = Math.max(0, Math.min(0.85, value));
     setBgOverlay(v);
     try { localStorage.setItem('bg_overlay', String(v)); } catch {}
-    if (!isLiquid && bgSel !== 'none') forceBodyBackground(PRESET_BG[bgSel], bgFixed, v, bgSmart);
+    if (bgSel !== 'none') forceBodyBackground(PRESET_BG[bgSel], bgFixed, v, bgSmart);
   };
   const onFixedToggle = (v: boolean) => {
     setBgFixed(v);
     try { localStorage.setItem('bg_fixed', v ? '1' : '0'); } catch {}
-    if (!isLiquid && bgSel !== 'none') forceBodyBackground(PRESET_BG[bgSel], v, bgOverlay, bgSmart);
+    if (bgSel !== 'none') forceBodyBackground(PRESET_BG[bgSel], v, bgOverlay, bgSmart);
   };
   const onSmartToggle = (v: boolean) => {
     setBgSmart(v);
     try { localStorage.setItem('bg_smart', v ? '1' : '0'); } catch {}
-    if (!isLiquid && bgSel !== 'none') forceBodyBackground(PRESET_BG[bgSel], bgFixed, bgOverlay, v);
+    if (bgSel !== 'none') forceBodyBackground(PRESET_BG[bgSel], bgFixed, bgOverlay, v);
   };
 
   const setDensityUI = (d: Density) => { setDensity(d); try { applyDensity(d); } catch {} };
@@ -202,8 +175,6 @@ export default function SettingsPage() {
     try { applyAccent('indigo'); } catch {}
     setAccent('indigo');
     setAccentCustom('#6366F1');
-    setStyleMode('classic');
-    try { applyStyleMode('classic'); } catch {}
     setBgSel('none'); setBgOverlay(0.35); setBgFixed(true); setBgSmart(true);
     setDensityUI('standard'); setFontScaleUI(1); setShadowUI('soft'); setRadiusUI('standard'); setGlassUI(8);
   };
@@ -240,18 +211,11 @@ export default function SettingsPage() {
   }
 
   // Shell components
-  const HeroShell: React.FC<React.PropsWithChildren<{ className?: string }>> = ({ children, className }) => {
-    if (isLiquid) {
-      return (
-        <LiquidGlass blur={30} gloss={0.88} opacity={0.20} tint="16 18 34" elevation={1.3} interactive={false} animate className={`settings-hero ${className ?? ''}`}>
-          {children}
-        </LiquidGlass>
-      );
-    }
-    return (<section className={`card settings-hero settings-hero--classic ${className ?? ''}`}>{children}</section>);
-  };
+  const HeroShell: React.FC<React.PropsWithChildren<{ className?: string }>> = ({ children, className }) => (
+    <section className={`card settings-hero settings-hero--classic ${className ?? ''}`}>{children}</section>
+  );
 
-  const Panel: React.FC<React.PropsWithChildren<{ title: string; desc?: string; tone?: 'light' | 'accent'; className?: string }>> = ({ title, desc, tone = 'light', className, children }) => {
+  const Panel: React.FC<React.PropsWithChildren<{ title: string; desc?: string; className?: string }>> = ({ title, desc, className, children }) => {
     const body = (
       <div className="flex flex-col gap-5">
         <div className="flex flex-col gap-2">
@@ -261,20 +225,12 @@ export default function SettingsPage() {
         <div className="flex flex-col gap-4">{children}</div>
       </div>
     );
-    if (isLiquid) {
-      const palette = tone === 'accent' ? { tint: '32 48 98', opacity: 0.28, gloss: 0.86 } : { tint: '16 18 36', opacity: 0.18, gloss: 0.78 };
-      return (
-        <LiquidGlass blur={26} gloss={palette.gloss} tint={palette.tint} opacity={palette.opacity} elevation={1.2} animate className={`settings-panel ${className ?? ''}`}>
-          {body}
-        </LiquidGlass>
-      );
-    }
     return (<section className={`card settings-panel settings-panel--classic ${className ?? ''}`}>{body}</section>);
   };
 
   // Render
   return (
-    <div className={`settings-shell ${isLiquid ? 'settings-shell--liquid' : ''}`}>
+    <div className="settings-shell">
       <div className="settings-shell__inner">
         <header className="settings-breadcrumb">
           <Link to="/" className="settings-breadcrumb__link">Главная</Link>
@@ -287,13 +243,9 @@ export default function SettingsPage() {
             <div className="flex flex-col gap-3">
               <span className="settings-hero__badge">Центр персонализации</span>
               <h1 className="settings-hero__title">Подберите настроение интерфейса</h1>
-              <p className="settings-hero__subtitle">Управляйте темой, жидким стеклом, шрифтами и визуальными эффектами. Все изменения применяются мгновенно.</p>
+              <p className="settings-hero__subtitle">Управляйте темой, фоном, шрифтами и визуальными эффектами. Все изменения применяются мгновенно.</p>
             </div>
             <div className="settings-hero__stats">
-              <div>
-                <span className="settings-hero__stats-label">Жидкое стекло</span>
-                <span className="settings-hero__stats-value">{isLiquid ? 'Активно' : 'Выключено'}</span>
-              </div>
               <div>
                 <span className="settings-hero__stats-label">Плотность</span>
                 <span className="settings-hero__stats-value">{density === 'compact' ? 'Компактная' : 'Стандартная'}</span>
@@ -307,7 +259,7 @@ export default function SettingsPage() {
         </HeroShell>
 
         <main className="settings-grid">
-          <Panel title="Тема и стиль" desc="Переключайтесь между системной, светлой и тёмной темой, а также выбирайте стиль оформления и тон Liquid." tone="accent">
+          <Panel title="Тема" desc="Переключайтесь между системной, светлой и тёмной темой.">
             <div className="flex flex-col gap-3">
               <span className="settings-label">Тема интерфейса</span>
               <div className="settings-seg">
@@ -318,32 +270,12 @@ export default function SettingsPage() {
             </div>
 
             <div className="flex flex-col gap-3">
-              <span className="settings-label">Стиль оформления</span>
+              <span className="settings-label">Анимации интерфейса</span>
               <div className="settings-seg">
-                <button type="button" className={`settings-seg__item ${styleMode === 'classic' ? 'is-active' : ''}`} onClick={() => onStyleMode('classic')}>Classic</button>
-                <button type="button" className={`settings-seg__item ${styleMode === 'liquid' ? 'is-active' : ''}`} onClick={() => onStyleMode('liquid')}>Liquid Glass</button>
-                {/* Beta mode removed */}
+                <button type="button" className={`settings-seg__item ${animationsOn ? 'is-active' : ''}`} onClick={() => onAnimToggle(true)}>Включены</button>
+                <button type="button" className={`settings-seg__item ${!animationsOn ? 'is-active' : ''}`} onClick={() => onAnimToggle(false)}>Отключены</button>
               </div>
-              <p className="settings-help">Liquid Glass — глубина и мягкий свет.</p>
-
-              {isLiquid && (
-                <div className="mt-3 flex flex-col gap-2">
-                  <span className="settings-label">Тон Liquid</span>
-                  <div className="settings-seg">
-                    <button type="button" className={`settings-seg__item ${liquidTone === 'dark' ? 'is-active' : ''}`} onClick={() => onLiquidTone('dark')}>Тёмный</button>
-                    <button type="button" className={`settings-seg__item ${liquidTone === 'light' ? 'is-active' : ''}`} onClick={() => onLiquidTone('light')}>Светлый</button>
-                  </div>
-                </div>
-              )}
-
-              <div className="mt-3 flex flex-col gap-2">
-                <span className="settings-label">Анимации Liquid</span>
-                <div className="settings-seg">
-                  <button type="button" className={`settings-seg__item ${animationsOn ? 'is-active' : ''}`} onClick={() => onAnimToggle(true)}>Включены</button>
-                  <button type="button" className={`settings-seg__item ${!animationsOn ? 'is-active' : ''}`} onClick={() => onAnimToggle(false)}>Отключены</button>
-                </div>
-                <p className="settings-help">Отключает плавучесть и блики стекла.</p>
-              </div>
+              <p className="settings-help">Отключает анимации и переходы для более статичного интерфейса.</p>
             </div>
           </Panel>
 

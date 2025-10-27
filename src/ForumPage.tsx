@@ -481,33 +481,6 @@ export default function ForumPage() {
 
   if (me === undefined) return <div style={{ minHeight: "100vh", background: "#0c0d12" }} />;
 
-  // Block forum for guests
-  if (!me) {
-    return (
-      <main className="min-h-screen" style={{ background: '#0d0d12', color: '#f8fafc' }}>
-        <header
-          className="sticky top-0 z-50 border-b backdrop-blur"
-          style={{ background: "rgba(10,10,14,.6)", borderColor: "var(--border)" }}
-        >
-          <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
-            <Link to="/forum" className="flex items-center gap-3">
-              <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[color:var(--accent)]/20 text-[color:var(--accent)] shadow">
-                <Shield size={18} />
-              </div>
-              <div>
-                <div className="text-[11px] uppercase tracking-[0.32em]" style={{ color: "var(--text-2)" }}>
-                  Forum // FORUM
-                </div>
-                <div className="text-sm font-semibold">Sky Forum</div>
-              </div>
-            </Link>
-          </div>
-        </header>
-        <AuthGateX onDone={() => force()} />
-      </main>
-    );
-  }
-
   const sectionsList = Array.isArray(sectionsState) ? sectionsState : [];
   const latestList = Array.isArray(latestPosts) ? latestPosts : [];
 
@@ -552,7 +525,7 @@ export default function ForumPage() {
                 <div className="text-[11px] uppercase tracking-[0.32em]" style={{ color: "var(--text-2)" }}>
                   Forum // FORUM
                 </div>
-                <div className="text-sm font-semibold">Sky Forum</div>
+                <div className="text-sm font-semibold">�?�?���?��'���?�?�'�?�?</div>
               </div>
             </Link>
             <div className="flex-1" />
@@ -565,7 +538,6 @@ export default function ForumPage() {
         <ForumSubnav />
         <ForumSearch />
 
-        {/* Hero */}
         <div className="relative mb-6 overflow-hidden card">
           <Link to="/forum" className="block focus:outline-none focus:ring-2 focus:ring-cyan-400/60 rounded-md">
             <h1
@@ -578,19 +550,10 @@ export default function ForumPage() {
           </Link>
         </div>
 
-        {/* Announcements removed by request */}
-
         {/* ======= SECTIONS + LATEST POSTS ======= */}
         <div className="mt-6 grid gap-6 lg:grid-cols-[1.45fr_.85fr]">
           {/* SECTIONS (left) */}
           <div className="grid gap-4">
-            {/* Shoutbox */}
-            <div className="card p-0">
-              <div className="p-3">
-                <SimpleChat variant="shoutbox" />
-              </div>
-            </div>
-
             <div
               className="text-[11px] uppercase tracking-[0.32em]"
               style={{ color: "var(--text-2)" }}
@@ -747,7 +710,17 @@ export default function ForumPage() {
         </div>
         {/* ======= /SECTIONS + LATEST POSTS ======= */}
 
-        {/* Bottom chat panel was replaced by Shoutbox above */}
+        <div className="mt-8 card">
+          <div
+            className="border-b px-4 py-2 text-xs uppercase tracking-[0.3em]"
+            style={{ borderColor: "var(--border)", color: "var(--text-2)" }}
+          >
+            Retro chat
+          </div>
+          <div className="p-4">
+            <SimpleChat />
+          </div>
+        </div>
       </div>
       {authOpen && (
         <AuthGateX onDone={() => { setAuthOpen(false); force(); }} />

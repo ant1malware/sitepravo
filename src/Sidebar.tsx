@@ -1,8 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { BookOpen, Users, LayoutList, ClipboardList, FileText, MessageSquare, Shield, ListChecks, Info, Lock } from 'lucide-react';
-import LiquidGlass from './components/LiquidGlass';
-import { useStyleMode } from './useStyleMode';
 import { useForumSessionWatcher } from './forumSession';
 
 type BaseNavItem = { key: string; label: string; icon: React.ReactNode };
@@ -27,7 +25,6 @@ export const NAV: NavItem[] = [
 export default function Sidebar() {
   const [open, setOpen] = React.useState<boolean>(() => (typeof window !== 'undefined' ? window.innerWidth >= 1024 : true));
   const loc = useLocation();
-  const [styleMode] = useStyleMode();
   const forumSession = useForumSessionWatcher();
   const forumLocked = !forumSession;
 
@@ -68,16 +65,10 @@ export default function Sidebar() {
   const isMac = React.useMemo(() => (typeof navigator !== 'undefined' ? /Mac|iPhone|iPad|iPod/i.test(navigator.platform) : false), []);
   const shortcutLabel = isMac ? '⌘ K' : 'Ctrl K';
 
-  const linkBaseClass = styleMode === 'liquid'
-    ? 'glass-nav-link flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40'
-    : 'flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800';
-  const linkActiveClass = styleMode === 'liquid' ? 'glass-nav-link--active' : 'bg-zinc-100 dark:bg-zinc-800';
-  const hintClass = styleMode === 'liquid'
-    ? 'mt-4 rounded-2xl border border-white/10 bg-white/8 p-2 text-xs text-white/70 shadow-[0_24px_60px_-45px_rgba(80,120,255,0.65)] backdrop-blur'
-    : 'mt-4 rounded-xl border border-zinc-200 bg-white/70 p-2 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300';
-  const asideClass = styleMode === 'liquid'
-    ? 'app-sidebar hidden lg:block fixed inset-y-0 left-0 z-[60] w-[260px] px-3 py-5 text-sm text-white overscroll-contain'
-    : 'app-sidebar hidden lg:block fixed inset-y-0 left-0 z-[60] w-[240px] border-r border-zinc-200 bg-white/85 backdrop-blur text-sm shadow-sm overscroll-contain dark:border-zinc-800 dark:bg-zinc-900/80';
+  const linkBaseClass = 'flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800';
+  const linkActiveClass = 'bg-zinc-100 dark:bg-zinc-800';
+  const hintClass = 'mt-4 rounded-xl border border-zinc-200 bg-white/70 p-2 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300';
+  const asideClass = 'app-sidebar hidden lg:block fixed inset-y-0 left-0 z-[60] w-[240px] border-r border-zinc-200 bg-white/85 backdrop-blur text-sm shadow-sm overscroll-contain dark:border-zinc-800 dark:bg-zinc-900/80';
 
   const buildTo = (id: string) => {
     const search = `?tab=${encodeURIComponent(id)}`;
@@ -95,7 +86,7 @@ export default function Sidebar() {
 
       <nav role="navigation" className="grid max-h-[calc(100vh-160px)] gap-1 overflow-y-auto pr-1">
         <ul className="flex flex-col gap-1">
-          {NAV.map((n) => {
+          {NAV.filter((n) => n.key !== 'interactions').map((n) => {
             const active = n.type === 'route' ? loc.pathname === n.to : isActive(n.id);
             const to = n.type === 'route' ? n.to : buildTo(n.id);
             return (
@@ -145,15 +136,8 @@ export default function Sidebar() {
         Меню
       </button>
       <aside id="app-sidebar" aria-label="Боковая панель" className={asideClass}>
-        {styleMode === 'liquid' ? (
-          <LiquidGlass className="flex h-full flex-col gap-4 p-4 text-white/90" blur={28} tint="16 18 36" opacity={0.24} gloss={0.7} elevation={1.2} interactive={false} animate>
-            {sidebarContent}
-          </LiquidGlass>
-        ) : (
-          sidebarContent
-        )}
+        {sidebarContent}
       </aside>
     </>
   );
 }
-

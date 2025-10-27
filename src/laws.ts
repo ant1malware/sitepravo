@@ -1,6 +1,6 @@
 // src/laws.ts — ЕДИНЫЙ ФАЙЛ С ТЕКСТАМИ (инлайн-строки).
 // Никаких импортов *.md — умный поиск снова стабилен.
-
+    
 export interface LawDoc {
   slug: string;      // путь: /laws/:slug
   abbr: string;      // кратко: УК / КоАП / ПДД ...
@@ -12,7 +12,8 @@ export interface LawDoc {
 
 const BASE = import.meta.env.BASE_URL;
 
-export const lawsData: LawDoc[] = [
+// Базовые документы, уже включенные в репозиторий
+export const baseLawsData: LawDoc[] = [
   {
     slug: "constitution",
     abbr: "КОНСТ",
@@ -4909,3 +4910,122 @@ Cлужебным неотложным заданием для сотрудни�
 `
   },
 ];
+
+// Автоподхват документов из внешней папки «законка» (.txt)
+// Файлы импортируются на сборке (Vite) как raw-строки и добавляются к списку законов.
+// Если слаг совпадает с уже существующим в базовом списке, такой файл пропускается.
+const rawExtraDocs: Record<string, string> = import.meta.glob('../законка/*.txt', { query: '?raw', import: 'default', eager: true }) as any;
+
+function fileBaseName(p: string): string {
+  return p.replace(/^.*[\\/]/, '');
+}
+function stripExt(n: string): string {
+  return n.replace(/\.[^.]+$/, '');
+}
+function makeSlug(name: string): string {
+  const base = stripExt(name)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^\p{L}\p{N}-]+/gu, '');
+  return base || 'doc';
+}
+
+// Нормализация имён из папки «законка» к полным официальным названиям
+const FILE_META: Record<string, { slug: string; title: string; abbr: string; updated?: string }> = {
+  'УК': { slug: 'uk', title: 'Уголовный кодекс', abbr: 'УК', updated: '2025-03-18' },
+  'Уголовно-процессуальный кодекс': { slug: 'upk', title: 'Уголовно-процессуальный кодекс', abbr: 'УПК', updated: '2025-03-18' },
+  'КоАП': { slug: 'koap', title: 'Кодекс об административных правонарушениях', abbr: 'КоАП', updated: '2025-03-18' },
+  'Кодекс административного судопроизв': { slug: 'kas', title: 'Кодекс административного судопроизводства', abbr: 'КАС', updated: '2025-03-18' },
+  'ПДД': { slug: 'pdd', title: 'Правила дорожного движения', abbr: 'ПДД', updated: '2025-12-23' },
+  'Трудовой кодекс': { slug: 'tk', title: 'Трудовой кодекс', abbr: 'ТК', updated: '2025-03-23' },
+  'Федеральное постановление': { slug: 'fp', title: 'Федеральное постановление', abbr: 'ФП', updated: '2025-12-23' },
+  'Федеральный б оперативно-розыскной': { slug: 'fz-ob-ord', title: 'Федеральный закон "Об оперативно-розыскной деятельности"', abbr: 'ФЗоОРД', updated: '2025-03-18' },
+  'Федеральный закон О федеральной слу': { slug: 'fz-o-fsb', title: 'Федеральный закон "О федеральной службе безопасности"', abbr: 'ФЗоФСБ', updated: '2025-02-23' },
+  'Федеральный закон О ФСИН': { slug: 'fz-o-fsin', title: 'Федеральный закон "О федеральной службе исполнения наказаний"', abbr: 'ФЗоФСИН', updated: '2025-12-23' },
+  'Федеральный закон О государственной': { slug: 'fz-o-gostayne', title: 'Федеральный закон "О государственной тайне"', abbr: 'ФЗоГТ', updated: '2025-03-18' },
+  'Федеральный закон О полиции': { slug: 'fz-o-politsii', title: 'Федеральный закон "О полиции"', abbr: 'ФЗоП', updated: '2025-02-23' },
+  'Федеральный закон О военной службе': { slug: 'fz-o-voennoi-sluzhbe', title: 'Федеральный закон "О военной службе"', abbr: 'ФЗоВС', updated: '2025-06-21' },
+  'Федеральный закон О статусе судей': { slug: 'fz-o-statuse-sudey', title: 'Федеральный закон "О статусе судей"', abbr: 'ФЗоСС', updated: '2025-03-31' },
+  'Федеральный закон О территориях с ограниченным доступом': { slug: 'fz-o-territoriyah-s-ogranichennym-dostupom', title: 'Федеральный закон "О территориях с ограниченным доступом"', abbr: 'ФЗоТОД', updated: '2025-02-23' },
+  'Федеральный закон О вертикали власти': { slug: 'fz-o-vertikali-vlasti', title: 'Федеральный закон "О вертикали власти"', abbr: 'ФЗоВВ', updated: '2025-12-23' },
+  'Федеральный закон Об оружии': { slug: 'fz-ob-oruzhii', title: 'Федеральный закон "Об оружии"', abbr: 'ФЗоО', updated: '2025-12-23' },
+  'Конституция Нижегородской области': { slug: 'constitution', title: 'Конституция Нижегородской области', abbr: 'КОНСТ', updated: '2025-02-23' },
+};
+
+const importedExtraDocs: LawDoc[] = Object.entries(rawExtraDocs).map(([path, text]) => {
+  const fname = fileBaseName(path); // e.g. "УК.txt"
+  const noext = stripExt(fname);
+  const metaKey = Object.keys(FILE_META).find((k) => noext.startsWith(k));
+  const meta = metaKey ? FILE_META[metaKey] : null;
+  const title = meta?.title || noext;
+  const slug = meta?.slug || makeSlug(noext);
+  const abbr = meta?.abbr || (title.length <= 16 ? title : title.slice(0, 16));
+  const updated = meta?.updated;
+  const content = (`# ${title}\n\n` + String(text)).trim();
+  return { slug, abbr, title, content, updated } as LawDoc;
+});
+
+const baseSlugs = new Set(baseLawsData.map(d => d.slug));
+const extraDocs = importedExtraDocs.filter(d => !baseSlugs.has(d.slug));
+
+// Витрина: базовые + дополнительные
+let combined: LawDoc[] = [...baseLawsData, ...extraDocs];
+
+// Синонимы slug'ов (устаревшие -> канонические)
+const SLUG_ALIAS: Record<string, string> = {
+  vv: 'fz-o-vertikali-vlasti',
+  'fz-police': 'fz-o-politsii',
+  'fzo-tod': 'fz-o-territoriyah-s-ogranichennym-dostupom',
+  'fzo-vs': 'fz-o-voennoi-sluzhbe',
+  'fzo-fsb': 'fz-o-fsb',
+  'state-secret': 'fz-o-gostayne',
+};
+combined = combined.map((d) => (SLUG_ALIAS[d.slug] ? { ...d, slug: SLUG_ALIAS[d.slug] } as LawDoc : d));
+
+// Перекрытия названий/дат для существующих слугов (чтобы показывать полные имена)
+const OVERRIDE_BY_SLUG: Record<string, Partial<LawDoc>> = {
+  uk: { title: 'Уголовный кодекс', abbr: 'УК', updated: '2025-03-18' },
+  upk: { title: 'Уголовно-процессуальный кодекс', abbr: 'УПК', updated: '2025-03-18' },
+  koap: { title: 'Кодекс об административных правонарушениях', abbr: 'КоАП', updated: '2025-03-18' },
+  kas: { title: 'Кодекс административного судопроизводства', abbr: 'КАС', updated: '2025-03-18' },
+  pdd: { title: 'Правила дорожного движения', abbr: 'ПДД', updated: '2025-12-23' },
+  tk: { title: 'Трудовой кодекс', abbr: 'ТК', updated: '2025-03-23' },
+  'fz-o-fsb': { title: 'Федеральный закон "О федеральной службе безопасности"', abbr: 'ФЗоФСБ', updated: '2025-02-23' },
+  'fz-o-fsin': { title: 'Федеральный закон "О федеральной службе исполнения наказаний"', abbr: 'ФЗоФСИН', updated: '2025-12-23' },
+  'fz-o-politsii': { title: 'Федеральный закон "О полиции"', abbr: 'ФЗоП', updated: '2025-02-23' },
+  'fz-o-voennoi-sluzhbe': { title: 'Федеральный закон "О военной службе"', abbr: 'ФЗоВС', updated: '2025-06-21' },
+  'fz-o-gostayne': { title: 'Федеральный закон "О государственной тайне"', abbr: 'ФЗоГТ', updated: '2025-03-18' },
+  'fz-o-statuse-sudey': { title: 'Федеральный закон "О статусе судей"', abbr: 'ФЗоСС', updated: '2025-03-31' },
+  'fz-o-territoriyah-s-ogranichennym-dostupom': { title: 'Федеральный закон "О территориях с ограниченным доступом"', abbr: 'ФЗоТОД', updated: '2025-02-23' },
+  'fz-o-vertikali-vlasti': { title: 'Федеральный закон "О вертикали власти"', abbr: 'ФЗоВВ', updated: '2025-12-23' },
+  'fz-ob-oruzhii': { title: 'Федеральный закон "Об оружии"', abbr: 'ФЗоО', updated: '2025-12-23' },
+};
+
+combined = combined.map((d) => ({ ...d, ...(OVERRIDE_BY_SLUG[d.slug] || {}) }));
+
+// Глобальная дедупликация по slug и по нормализованному названию
+function normTitle(s: string) {
+  return String(s).toLowerCase().replace(/[«»"'\s]+/g, ' ').trim();
+}
+const pickBetter = (a: LawDoc, b: LawDoc): LawDoc => {
+  // Предпочитаем с датой обновления
+  if (a.updated && !b.updated) return a;
+  if (b.updated && !a.updated) return b;
+  // Сравниваем длину контента
+  if ((a.content || '').length >= (b.content || '').length) return a;
+  return b;
+};
+const byKey = new Map<string, LawDoc>();
+for (const d of combined) {
+  const keys = [d.slug, `t:${normTitle(d.title)}`];
+  let cur: LawDoc | undefined;
+  for (const k of keys) {
+    if (byKey.has(k)) { cur = byKey.get(k); break; }
+  }
+  const best = cur ? pickBetter(cur, d) : d;
+  byKey.set(best.slug, best);
+  byKey.set(`t:${normTitle(best.title)}`, best);
+}
+
+export const lawsData: LawDoc[] = Array.from(new Set(Array.from(byKey.values())));

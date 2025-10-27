@@ -27,6 +27,10 @@ export function normalizeQuery(s: string) {
 }
 
 export function termsFrom(s: string) {
-  return String(s).trim().toLowerCase().replace(/\s+/g, ' ').split(' ').filter(Boolean);
+  const src = String(s).toLowerCase().replace(/ё/g, 'е');
+  const parts = src.trim().replace(/\s+/g, ' ').split(' ').filter(Boolean);
+  // Отбрасываем слишком короткие термы (1 символ) кроме чисто числовых
+  const filtered = parts.filter((t) => t.length >= 2 || /\d/.test(t));
+  return filtered;
 }
 

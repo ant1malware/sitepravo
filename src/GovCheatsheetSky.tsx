@@ -594,7 +594,8 @@ const TABS = [
   { id: "vu", label: "ВУ", icon: <ClipboardList className="h-4 w-4" /> },
   { id: "laws", label: "Законы", icon: <BookOpen className="h-4 w-4" /> },
 ];
-VALID_TABS_SET.clear(); TABS.forEach(t => VALID_TABS_SET.add(t.id));
+const MAIN_TABS = TABS.filter(t => t.id !== 'interactions');
+VALID_TABS_SET.clear(); MAIN_TABS.forEach(t => VALID_TABS_SET.add(t.id));
 
 /* ================== Данные для карточек (пример) ================== */
 const radioByRole: Record<string, string[]> = {
@@ -1078,7 +1079,7 @@ export default function GovCheatsheetSky() {
     const url = typeof window !== "undefined" ? new URL(window.location.href) : null;
     const q = (url?.searchParams.get("tab") || "").toLowerCase();
     const h = (url?.hash || "").replace(/^#/, "").toLowerCase();
-    return (q || h || TABS[0].id);
+    return (q || h || MAIN_TABS[0].id);
   });                // главное меню
   const [rolesTab, setRolesTab] = useState<"roles" | "promotion">("roles");  // под-вкладки в "Роли"
   type DeptTab = "Все" | "ДЗ" | "ДВД" | "ДВС" | "ЮД";
@@ -1107,7 +1108,7 @@ export default function GovCheatsheetSky() {
           </div>
 
           <nav className="flex w-full gap-2 overflow-x-auto md:w-auto">
-            {TABS.map((t) => (
+            {MAIN_TABS.map((t) => (
               <button
                 key={t.id}
                 onClick={() => setMainTab(t.id)}

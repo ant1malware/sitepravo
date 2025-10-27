@@ -1,8 +1,17 @@
-import React from 'react';
+﻿import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { lawsData } from './laws';
-import { slugify, escapeHtml, escRe, termsFrom, normalizeQuery } from './utils/strings';
+import { escapeHtml, escRe, termsFrom, normalizeQuery } from './utils/strings';
+import { getAllLawSections, findArticleAnchor as resolveLawAnchor, normalizeLawText } from './utils/lawSections';
+
+const DIRECT_LAW_HINTS: Array<[RegExp, string]> = [
+  [new RegExp('(^|\\\s)(?:uk|\\u0443\\u043a|\\u0443\\u0433\\u043e\\u043b\\u043e\\u0432[\\s\\S]*?)\\b','i'), 'uk'],
+  [new RegExp('(^|\\\s)(?:koap|\\u043a\\u043e\\u0430\\u043f|\\u0430\\u0434\\u043c\\u0438\\u043d[\\s\\S]*?)\\b','i'), 'koap'],
+  [new RegExp('(^|\\\s)(?:upk|\\u0443\\u043f\\u043a|\\u0443\\u0433\\u043e\\u043b\\u043e\\u0432\\u043d\\u043e[\\s\\S]*?\\u043f\\u0440\\u043e\\u0446[\\s\\S]*?)\\b','i'), 'upk'],
+  [new RegExp('(^|\\\s)(?:tk|\\u0442\\u043a|\\u0442\\u0440\\u0443\\u0434\\u043e[\\s\\S]*?)\\b','i'), 'tk'],
+  [new RegExp('(^|\\\s)(?:gk|\\u0433\\u043a|\\u0433\\u0440\\u0430\\u0436\\u0434[\\s\\S]*?)\\b','i'), 'gk'],
+];
 
 function ensureFlex(): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -23,6 +32,13 @@ export default function LawSearch() {
   const [results, setResults] = React.useState<any[]>([]);
   const navigate = useNavigate();
 
+  const lawSections = React.useMemo(() => getAllLawSections(), []);
+  const lawBySlug = React.useMemo(() => {
+    const map = new Map<string, typeof lawsData[number]>();
+    lawsData.forEach((law) => map.set(law.slug, law));
+    return map;
+  }, []);
+
   React.useEffect(() => {
     (async () => {
       await ensureFlex();
@@ -30,28 +46,44 @@ export default function LawSearch() {
       const index = new Document({
         cache: true,
         tokenize: 'forward',
-        document: { id: 'id', index: [{ field: 'abbr' }, { field: 'title' }, { field: 'text' }], store: ['slug', 'title', 'excerpt', 'abbr'] }
+        document: { id: 'id', index: [{ field: 'abbr' }, { field: 'title' }, { field: 'text' }], store: ['slug', 'title', 'excerpt', 'abbr', 'kind'] }
       });
 
       const docs: any[] = [];
-      lawsData.forEach((law) => {
-        const parts = law.content.split(/\n(?=##\s+)/g);
-        if (parts.length === 1) {
-          docs.push({ id: law.slug, slug: law.slug, title: law.title, abbr: (law as any).abbr, text: law.content, excerpt: law.notes || '' });
-        } else {
-          parts.forEach((md) => {
-            const header = md.match(/^##\s+(.+)$/m)?.[1] || law.title;
-            const id = slugify(header);
-            docs.push({ id: `${law.slug}#${id}`, slug: `${law.slug}#${id}`, title: `${law.title} — ${header}`, abbr: (law as any).abbr, text: md, excerpt: header });
-          });
-        }
+      lawSections.forEach((sec, idx) => {
+        const law = lawBySlug.get(sec.lawSlug);
+        const path = sec.anchor ? `${sec.lawSlug}#${sec.anchor}` : sec.lawSlug;
+        docs.push({
+          id: `section:${path}:${idx}`,
+          slug: path,
+          title: sec.head ? `${law?.title || sec.lawTitle} — ${sec.head}` : law?.title || sec.lawTitle,
+          abbr: (law as any)?.abbr,
+          text: `${sec.head}\n${sec.fullText}\n${law?.title || ''}`,
+          excerpt: sec.fullText || sec.head || law?.notes || '',
+          kind: 'section'
+        });
       });
-      docs.forEach((d) => index.add(d));
+
+      lawsData.forEach((law) => {
+        docs.push({
+          id: `law:${law.slug}`,
+          slug: law.slug,
+          title: law.title,
+          abbr: (law as any).abbr,
+          text: `${law.title}\n${law.content}`,
+          excerpt: law.notes || '',
+          kind: 'law'
+        });
+      });
+
+      const docMap = new Map<string, any>();
+      docs.forEach((d) => { index.add(d); docMap.set(d.id, d); });
       (window as any).__LAW_INDEX2__ = index;
       (window as any).__LAW_DOCS2__ = docs;
+      (window as any).__LAW_DOC_MAP2__ = docMap;
       setReady(true);
     })();
-  }, []);
+  }, [lawSections, lawBySlug]);
 
   // moved to utils/strings
 
@@ -60,8 +92,10 @@ export default function LawSearch() {
   function highlight(text: string, q: string) {
     let out = escapeHtml(text);
     const terms = termsFrom(q);
-    for (const t of terms) out = out.replace(new RegExp(`(${escRe(t)})`, 'gi'), '<mark>$1</mark>');
-    return out;
+    if (!terms.length) return out;
+    // Подсвечиваем только слова длиной >=2 или числа; собираем общий регекс
+    const re = new RegExp(`(${terms.map(escRe).join('|')})`, 'gi');
+    return out.replace(re, '<mark>$1</mark>');
   }
 
   function snippet(text: string, q: string, len = 140) {
@@ -80,72 +114,97 @@ export default function LawSearch() {
   }
 
   // Прямой переход по запросам вида: "ук 105", "коап 12.8", "ст 105 ук", "глава 1 ук"
-  function directJumpBetter(s: string): string | null {
-    const str = s.toLowerCase().replace(/ё/g,'е').replace(/\s+/g,' ').trim();
-    if (!str) return null;
-    let code: 'uk' | 'koap' | null = null;
-    if (/(^|\s)(ук|уголовн)/i.test(str)) code = 'uk';
-    if (/(^|\s)(коап|админ|административ)/i.test(str)) code = 'koap';
-    let num: string | null = null;
-    let type: 'article' | 'chapter' = 'article';
-    const mChap = str.match(/глава\s*(\d+(?:\.\d+)?)/i);
-    const mArt = str.match(/(?:ст\.?|статья)?\s*(\d+(?:\.\d+)?)(?=\b)/i);
-    if (mChap) { num = mChap[1]; type = 'chapter'; }
-    else if (mArt) { num = mArt[1]; }
-    if (!num) return null;
-    if (!code) code = str.includes('коап') ? 'koap' : (str.includes('ук') ? 'uk' : null);
-    if (!code) return null;
-    const law = lawsData.find(l => l.slug === code);
-    if (!law) return null;
-    const id = `${type === 'chapter' ? 'глава' : 'статья'}-${num.replace(/\./g,'-')}`;
-    return `/laws/${law.slug}#${id}`;
-  }
+  function directJumpUrl(input: string): string | null {
+    const normalized = normalizeLawText(input).replace(/\s+/g, ' ').trim();
+    if (!normalized) return null;
 
+    let slug: string | null = null;
+    for (const [pattern, code] of DIRECT_LAW_HINTS) {
+      if (pattern.test(input) || pattern.test(normalized)) {
+        slug = code;
+        break;
+      }
+    }
+
+    if (!slug) {
+      const numGuess = normalized.match(/\d+(?:\.\d+)?/);
+      if (numGuess) {
+        const number = numGuess[0];
+        const hits = lawSections.filter((sec) => {
+          const headNorm = normalizeLawText(sec.head);
+          return headNorm.includes(`������ ${number}`) || headNorm.includes(`����� ${number}`);
+        });
+        const unique = Array.from(new Set(hits.map((sec) => sec.lawSlug)));
+        if (unique.length === 1) slug = unique[0];
+      }
+    }
+
+    if (!slug) return null;
+
+    let kind: 'article' | 'chapter' = 'article';
+    if (normalized.includes('�����') || normalized.includes('������')) kind = 'chapter';
+
+    const numMatch = normalized.match(/\d+(?:\.\d+)?/);
+    if (!numMatch) return `/laws/${slug}`;
+    const number = numMatch[0];
+    const anchor = resolveLawAnchor(slug, number, kind, normalizeLawText);
+    return anchor ? `/laws/${slug}#${anchor}` : `/laws/${slug}`;
+  }
   // Автопереход при распознавании запроса
   React.useEffect(() => {
     const t = setTimeout(() => {
-      const dj = directJumpBetter(q);
-      if (dj) navigate(dj);
+      const dj = directJumpUrl(q);
+      if (dj) {
+        const url = dj.includes('#') ? dj.replace('#', `?q=${encodeURIComponent(q)}#`) : `${dj}?q=${encodeURIComponent(q)}`;
+        navigate(url);
+      }
     }, 250);
     return () => clearTimeout(t);
-  }, [q]);
+  }, [q, navigate]);
 
-  function directJump(s: string): string | null {
-    const str = s.toLowerCase().replace(/\s+/g,' ').trim();
-    const m = str.match(/(?:ст\.?\s*)?(\d{1,3}(?:\.\d+)?)(?:\s*ст\.?\s*)?\s*(ук|коап)/i) || str.match(/(ук|коап)\s*(\d{1,3}(?:\.\d+)?)/i);
-    if (!m) return null;
-    const code = (m[1]==='ук' || m[2]==='ук') ? 'uk' : 'koap';
-    const num = m[1]==='ук' || m[1]==='коап' ? m[2] : m[1];
-    const law = lawsData.find(l => l.slug === code);
-    if (!law) return null;
-    const re = new RegExp(`^###\\s*Статья\\s*${num}\\b`, 'mi');
-    const sec = law.content.split(/\n(?=###\s+)/g).find(s2 => re.test(s2));
-    if (!sec) return `/laws/${law.slug}`;
-    const header = sec.match(/^###\s*(.+)$/m)?.[1] || `Статья ${num}`;
-    const id = slugify(header);
-    return `/laws/${law.slug}#${id}`;
-  }
 
   async function doSearch(s: string) {
     const idx = (window as any).__LAW_INDEX2__;
-    const docs = (window as any).__LAW_DOCS2__ as any[];
-    if (!idx || !docs) return;
+    const docMap = (window as any).__LAW_DOC_MAP2__ as Map<string, any>;
+    if (!idx || !docMap) return;
 
-    const dj = directJump(s);
-    if (dj) { setResults([{ url: dj, title: 'Прямой переход', excerpt: s.toUpperCase() }]); return; }
+    const directUrl = directJumpUrl(s);
+    if (directUrl) {
+      const clean = directUrl.replace(/^\/laws\//, '');
+      const [slugPart = '', anchorPart = ''] = clean.split('#');
+      const law = lawBySlug.get(slugPart);
+      let title = law?.title || '������ ����������';
+      if (anchorPart) {
+        const sec = lawSections.find((section) => section.lawSlug === slugPart && section.anchor === anchorPart);
+        if (sec?.head) title = `${law?.title || sec.lawTitle} � ${sec.head}`;
+      }
+      setResults([{ url: directUrl, title, excerpt: s }]);
+      return;
+    }
 
     const found = idx.search(normalizeQuery(s), { enrich: true, limit: 30 }) as any[];
     const ids = new Set<string>();
     const rows: any[] = [];
+
     for (const block of found) {
       for (const r of block.result) {
-        if (ids.has(r.id)) continue; ids.add(r.id);
-        const d = docs.find(x => x.id === r.id); if (!d) continue;
+        if (ids.has(r.id)) continue;
+        ids.add(r.id);
+        const d = docMap.get(r.id);
+        if (!d) continue;
         const ex = d.excerpt || d.title;
         const sn = snippet(d.text || ex, q);
-        rows.push({ url: `/laws/${d.slug}`, title: d.title, excerpt: sn, abbr: d.abbr });
+        rows.push({ url: `/laws/${d.slug}`, title: d.title, excerpt: sn, abbr: d.abbr, kind: d.kind });
       }
     }
+
+    rows.sort((a, b) => {
+      if (a.kind === b.kind) return 0;
+      if (a.kind === 'section') return -1;
+      if (b.kind === 'section') return 1;
+      return 0;
+    });
+
     setResults(rows);
   }
 
@@ -158,13 +217,16 @@ export default function LawSearch() {
     <div className="rounded-2xl border border-zinc-200 bg-white/80 p-3 dark:border-zinc-800 dark:bg-zinc-900/50">
       <div className="mb-2 text-xs text-zinc-600">Примеры: <code>ук 105</code>, <code>коап 12.8</code>, <code>дорожные знаки</code></div>
       <div className="flex items-center gap-2">
-        <Search className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
-        <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Поиск по всем законам (статьи, названия, аббревиатуры)…" className="w-full rounded-xl border border-zinc-200 px-3 py-1.5 text-sm focus:outline-none focus:ring dark:border-zinc-700 dark:bg-zinc-900/50" />
+        <input value={q} onChange={(e)=>setQ(e.target.value)} onKeyDown={(e)=>{ if(e.key=='Enter'){ const dj = directJumpUrl(q); if (dj) { const url = dj.includes('#') ? dj.replace('#', `?q=${encodeURIComponent(q)}#`) : `${dj}?q=${encodeURIComponent(q)}`; navigate(url); } } }} placeholder="Поиск по всем законам (статьи, названия, аббревиатуры)…" className="w-full rounded-xl border border-zinc-200 px-3 py-1.5 text-sm focus:outline-none focus:ring dark:border-zinc-700 dark:bg-zinc-900/50" />
       </div>
       {!!results.length && (
         <div className="mt-3 grid gap-2">
           {results.map((r,i)=> (
-            <Link key={i} to={r.url} className="block rounded-xl border border-zinc-200 p-3 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
+            <Link
+              key={i}
+              to={r.url.includes('#') ? r.url.replace('#', `?q=${encodeURIComponent(q)}#`) : `${r.url}?q=${encodeURIComponent(q)}`}
+              className="block rounded-xl border border-zinc-200 p-3 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            >
               <div className="flex items-center justify-between gap-2">
                 <div className="text-sm font-semibold" dangerouslySetInnerHTML={{ __html: highlight(r.title, q) }} />
                 {r.abbr && <span className="rounded-full border px-2 py-0.5 text-[10px]">{r.abbr}</span>}
@@ -177,3 +239,11 @@ export default function LawSearch() {
     </div>
   );
 }
+
+
+
+
+
+
+
+

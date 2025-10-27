@@ -77,7 +77,12 @@ export function getStoredCustomBackground(): string | null {
 }
 export function getStoredStyleMode(): StyleMode | null {
   const v = safeGet(STYLE_MODE_KEY);
-  return v === 'classic' || v === 'liquid' ? (v as StyleMode) : null;
+  if (v === 'classic') return 'classic';
+  if (v === 'liquid') {
+    safeSet(STYLE_MODE_KEY, 'classic');
+    return 'classic';
+  }
+  return null;
 }
 export function getStoredLiquidTone(): LiquidTone {
   const v = (safeGet(LIQUID_TONE_KEY) || 'dark') as LiquidTone;
@@ -207,58 +212,33 @@ export function applyLiquidTone(tone: LiquidTone) {
   }
 }
 
-export function applyStyleMode(mode: StyleMode) {
+export function applyStyleMode(_mode: StyleMode) {
+  const normalized: StyleMode = 'classic';
   const root = document.documentElement;
-  root.classList.toggle('theme-liquid', mode === 'liquid');
-  (root as any).dataset.styleMode = mode;
+  root.classList.remove('theme-liquid', 'liquid-light', 'liquid-dark');
+  (root as any).dataset.styleMode = normalized;
 
-  const isLiquid = mode === 'liquid';
-  if (isLiquid) {
-    // запомним предыдущую тему и включим тон
-    try {
-      const prev = getStoredTheme() ?? (systemPrefersDark() ? 'dark' : 'light');
-      safeSet(LIQUID_PREV_THEME_KEY, prev);
-      const tone = getStoredLiquidTone();
-      applyLiquidTone(tone);
-    } catch {}
+  safeRemove(LIQUID_PREV_THEME_KEY);
+  safeRemove(LIQUID_TONE_KEY);
 
-    // глушим фоновые картинки
-    try {
-      const body = document.body;
-      body.style.removeProperty('background');
-      body.style.removeProperty('background-size');
-      body.style.removeProperty('background-repeat');
-      body.style.removeProperty('background-attachment');
-      body.style.removeProperty('background-position');
-    } catch {}
-  } else {
-    // вернём прошлую тему и фоны
-    try {
-      const prev = safeGet(LIQUID_PREV_THEME_KEY) as Theme | null;
-      if (prev === 'light' || prev === 'dark') applyTheme(prev);
-      safeRemove(LIQUID_PREV_THEME_KEY);
-    } catch {}
-    try {
-      const bg = getStoredBackground() ?? 'none';
-      applyBackground(bg);
-    } catch {}
-  }
-
-  // обновим токены под текущее состояние
   try {
-    const t = getStoredTheme() ?? (systemPrefersDark() ? 'dark' : 'light');
+    const theme = getStoredTheme() ?? (systemPrefersDark() ? 'dark' : 'light');
     const tone = getStoredLiquidTone();
-    applyDesignTokens(t, isLiquid, tone);
+    applyDesignTokens(theme, false, tone);
   } catch {}
 
-  try { window.dispatchEvent(new CustomEvent<StyleMode>('stylemodechange', { detail: mode })); } catch {}
-  safeSet(STYLE_MODE_KEY, mode);
+  try {
+    const bg = getStoredBackground() ?? 'none';
+    applyBackground(bg);
+  } catch {}
+
+  try { window.dispatchEvent(new CustomEvent<StyleMode>('stylemodechange', { detail: normalized })); } catch {}
+  safeSet(STYLE_MODE_KEY, normalized);
 }
 
 export function toggleStyleMode(): StyleMode {
-  const next: StyleMode = document.documentElement.classList.contains('theme-liquid') ? 'classic' : 'liquid';
-  applyStyleMode(next);
-  return next;
+  applyStyleMode('classic');
+  return 'classic';
 }
 
 export function systemPrefersDark(): boolean {
