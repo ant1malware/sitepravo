@@ -15,6 +15,12 @@
   --card: #ffffff;      /* legacy alias */
   --border: #e4e4e7;    /* thin, quiet border */
   --card-border: #e4e4e7; /* legacy alias */
+  --glass-bg: rgba(255, 255, 255, 0.78);
+  --glass-strong: rgba(255, 255, 255, 0.9);
+  --glass-border-strong: rgba(255, 255, 255, 0.45);
+  --glass-border-soft: rgba(255, 255, 255, 0.2);
+  --glass-glow: rgba(59, 130, 246, 0.22);
+  --glass-shadow: 0 24px 70px -48px rgba(15, 23, 42, 0.55);
   /* Text */
   --text-1: #0a0a0a;    /* primary text */
   --text-2: #71717a;    /* secondary text */
@@ -33,6 +39,7 @@
   --lg-x: 50%;
   --lg-y: 50%;
   --lg-elev: 1;
+  --lg-accent: 59 130 246;
   --radius-lg: 0.5rem;
   --radius-2xl: 1rem;
   --radius-3xl: 1.25rem;
@@ -63,6 +70,12 @@
   --card: #111114;
   --border: #27272a;
   --card-border: #27272a;
+  --glass-bg: rgba(17, 18, 26, 0.82);
+  --glass-strong: rgba(18, 20, 30, 0.92);
+  --glass-border-strong: rgba(255, 255, 255, 0.08);
+  --glass-border-soft: rgba(255, 255, 255, 0.05);
+  --glass-glow: rgba(96, 165, 250, 0.18);
+  --glass-shadow: 0 24px 70px -40px rgba(0, 0, 0, 0.65);
   --text-1: #fafafa;
   --text-2: #a1a1aa;
   --muted: #a1a1aa;
@@ -80,7 +93,11 @@
   }
   body {
     @apply font-sans;
-    background: var(--bg-1) !important;
+    background: linear-gradient(120deg, rgba(99, 102, 241, 0.08), rgba(59, 130, 246, 0.05), transparent 50%),
+      radial-gradient(900px 600px at 12% 8%, rgba(99, 102, 241, 0.11), transparent 60%),
+      radial-gradient(860px 520px at 90% 0%, rgba(56, 189, 248, 0.12), transparent 70%),
+      var(--bg-1) !important;
+    background-attachment: fixed;
     transition: background-color 200ms ease, color 200ms ease;
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
     color: var(--text-1);
@@ -108,7 +125,13 @@
 }
 
 /* Force dark canvas to avoid white flashes or overrides */
-.dark html, .dark body { background: var(--bg-1) !important; }
+.dark html, .dark body {
+  background: linear-gradient(160deg, rgba(88, 28, 135, 0.18), rgba(37, 99, 235, 0.12), transparent 55%),
+    radial-gradient(820px 520px at 10% 6%, rgba(59, 130, 246, 0.22), transparent 60%),
+    radial-gradient(780px 520px at 86% 0%, rgba(14, 165, 233, 0.18), transparent 70%),
+    var(--bg-1) !important;
+  background-attachment: fixed;
+}
 /* Make sticky headers inherit readable text color */
 header.sticky.top-0,
 .sticky.top-0 { color: var(--text-1); }
@@ -118,10 +141,38 @@ header.sticky.top-0,
   .card {
     @apply rounded-2xl border text-zinc-900 dark:text-zinc-100 shadow-soft;
     padding: calc(var(--density, 1) * 1rem);
-    background: var(--surface);
-    border-color: var(--border);
+    background: linear-gradient(140deg, color-mix(in srgb, var(--glass-bg) 80%, transparent), color-mix(in srgb, var(--glass-strong) 70%, transparent)),
+      radial-gradient(120% 140% at var(--lg-x) var(--lg-y), rgba(255, 255, 255, 0.28), transparent 60%),
+      color-mix(in srgb, var(--surface) 40%, transparent);
+    border-color: color-mix(in srgb, var(--glass-border-strong) 70%, var(--border));
     border-radius: var(--radius-2xl);
-    box-shadow: var(--card-shadow);
+    box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-border-soft);
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: -30% -10% auto;
+    height: 65%;
+    background: radial-gradient(60% 90% at 20% 0%, rgba(255, 255, 255, 0.35), transparent 70%);
+    opacity: 0.8;
+    pointer-events: none;
+    mix-blend-mode: screen;
+  }
+  .card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(120deg, rgba(var(--lg-accent), 0.22), transparent 45%, rgba(255, 255, 255, 0.08));
+    opacity: 0.55;
+    pointer-events: none;
+  }
+  @supports (backdrop-filter: blur(4px)) {
+    .card {
+      backdrop-filter: blur(calc(var(--glass-blur) * 1.4)) saturate(170%);
+      -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.4)) saturate(170%);
+    }
   }
   /* allow shadows defined in tailwind.config.js */
   .glass { backdrop-filter: saturate(180%) blur(var(--glass-blur)); }
@@ -156,6 +207,16 @@ header.sticky.top-0,
   border: 1px solid var(--border);
   border-radius: 16px;
   box-shadow: var(--card-shadow);
+}
+.forum-theme .card::before,
+.forum-theme .card::after {
+  display: none;
+}
+@supports (backdrop-filter: blur(4px)) {
+  .forum-theme .card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }
 
 .forum-theme .striped {
@@ -735,6 +796,59 @@ html.theme-liquid.liquid-dark .bg-white\/60 {
 
 .liquid-glass__button[data-interactive='false'] {
   cursor: default;
+}
+
+.global-topbar-shell,
+.app-sidebar,
+.mobile-menu-panel {
+  background: linear-gradient(120deg, color-mix(in srgb, var(--glass-bg) 92%, transparent), color-mix(in srgb, var(--glass-strong) 72%, transparent));
+  border-color: color-mix(in srgb, var(--glass-border-strong) 70%, var(--border));
+  box-shadow: var(--glass-shadow);
+  overflow: hidden;
+}
+@supports (backdrop-filter: blur(4px)) {
+  .global-topbar-shell,
+  .app-sidebar,
+  .mobile-menu-panel {
+    backdrop-filter: blur(calc(var(--glass-blur) * 1.25)) saturate(170%);
+    -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.25)) saturate(170%);
+  }
+}
+.global-topbar-shell::after {
+  content: '';
+  position: absolute;
+  inset: auto 12% -40%;
+  height: 120%;
+  border-radius: 40px;
+  background: radial-gradient(120% 80% at 80% 0%, rgba(var(--lg-accent), 0.18), transparent 70%);
+  filter: blur(26px);
+  pointer-events: none;
+}
+
+.app-sidebar {
+  background-clip: padding-box;
+}
+
+.mobile-menu-panel header {
+  background: color-mix(in srgb, var(--glass-bg) 65%, transparent);
+  border-color: color-mix(in srgb, var(--glass-border-soft) 70%, var(--border));
+}
+
+.btn-secondary,
+.btn {
+  background: color-mix(in srgb, var(--glass-bg) 75%, transparent);
+  border-color: color-mix(in srgb, var(--glass-border-soft) 70%, var(--border));
+  box-shadow: inset 0 1px 0 var(--glass-border-soft);
+  transition: transform 120ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+.btn-secondary:hover,
+.btn:hover {
+  background: color-mix(in srgb, var(--glass-strong) 70%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 10px 30px -18px var(--glass-glow);
+}
+.btn:active,
+.btn-secondary:active {
+  transform: translateY(0.5px);
 }
 
 
