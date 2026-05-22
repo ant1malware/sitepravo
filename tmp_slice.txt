@@ -1,0 +1,7 @@
+      <div className="fixed right-2 top-14 z-[60] sm:top-2"><NotificationsBell /></div>
+      <RouteTracker />
+      <React.Suspense fallback={<div className="p-4 text-sm text-zinc-300">Р—Р°РіСЂСѓР·РєР°вЂ¦</div>}>
+        <Routes>
+          <Route path="/" element={<GovCheatsheetSky />} />
+          <Route path="/home" element={<HomePage />} />
+          <Route path="/forum/*" element={<ForumPage />} />

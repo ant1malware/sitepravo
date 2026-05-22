@@ -1,0 +1,60 @@
+﻿001: import React from "react";
+002: import { Link } from "react-router-dom";
+003: import { Search, Users, ChevronRight } from "lucide-react";
+004: import ForumSubnav from "./ForumSubnav";
+005: import Badge, { computePoints } from "./components/Badge";
+006: import { listAccounts as listLocalAccounts, getSessionAccount as getLocalSession, type Account } from "./store/forumStore";
+007: import { listPublicMembers, getSessionAccount as getRemoteSession, type PublicMember } from "./store/authRemote";
+008: 
+009: const ROLE_STYLES: Record<string, { label: string; color: string }> = {
+010:   developer: { label: "Developer", color: "#22d3ee" },
+011:   admin: { label: "Admin", color: "#ef4444" },
+012:   moderator: { label: "Moderator", color: "#8b5cf6" },
+013:   vip: { label: "VIP", color: "#eab308" },
+014:   user: { label: "User", color: "#94a3b8" },
+015:   newbie: { label: "Newbie", color: "#22d3ee" },
+016: };
+017: 
+018: function RoleBadge({ role }: { role: string }) {
+019:   const style = ROLE_STYLES[role] || { label: role, color: "#94a3b8" };
+020:   return (
+021:     <span
+022:       className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.26em]"
+023:       style={{ color: style.color }}
+024:     >
+025:       {style.label}
+026:     </span>
+027:   );
+028: }
+029: 
+030: function MemberCard({ member, highlight }: { member: Account; highlight: boolean }\) {
+031:   const pts = computePoints({ posts: member.posts, likes: member.likes, topics: member.topics });
+032:   const accentFrom = member.profile.accentFrom || "#22d3ee";
+033:   const accentTo = member.profile.accentTo || "#8b5cf6";
+034:   return (
+035:     <Link
+036:       to={"/forum/profile/" + member.username}
+037:       className={`card group flex flex-col gap-3 p-4 transition duration-200 hover:border-cyan-400/50 ${
+038:         highlight ? "border-cyan-500/60" : ""
+039:       }`}
+040:     >
+041:       <div className="flex items-start gap-3">
+042:         <div
+043:           className="h-14 w-14 rounded-2xl"
+044:           style={{
+045:             background: member.profile.avatarData
+046:               ? `url(${member.profile.avatarData}) center/cover`
+047:               : `linear-gradient(135deg, ${accentFrom}, ${accentTo})`,
+048:           }}
+049:         />
+050:         <div className="flex-1 min-w-0">
+051:           <div className="flex flex-wrap items-center gap-2">
+052:             <div className="truncate text-lg font-semibold text-white">
+053:               {member.username}
+054:             </div>
+055:             <RoleBadge role={member.role} />
+056:             <Badge points={pts} />
+057:             {highlight && (
+058:               <span className="rounded-full bg-cyan-500/10 px-2 py-0.5 text-[11px] uppercase tracking-[0.3em] text-cyan-300">
+059:                 You
+060:               </span>

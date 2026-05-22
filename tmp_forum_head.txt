@@ -1,0 +1,360 @@
+// src/ForumPage.tsx
+import React from "react";
+import { Link } from "react-router-dom";
+import SimpleChat from "./components/SimpleChat";
+
+import {
+  registerAccount,
+  authenticateAccount,
+  clearSession,
+  getSessionAccount,
+  type Role,
+  type RemoteUser,
+} from "./store/authRemote";
+
+import { listSections, listLatestPosts, listTopics } from "./store/forumRemote";
+
+import { Shield, ChevronRight, Lock } from "lucide-react";
+import RecaptchaGate from "./components/RecaptchaGate";
+import { requestEmailCode, verifyEmailCode } from "./store/emailVerifyLocal";
+import ForumSubnav from "./ForumSubnav";
+import ForumSearch from "./components/ForumSearch";
+
+/* ====== UI helpers ====== */
+function Badge({ role }: { role: Role }) {
+  const map: Record<Role, { color: string; text: string }> = {
+    developer: { color: "#22d3ee", text: "Developer" },
+    admin: { color: "#ef4444", text: "Admin" },
+    moderator: { color: "#8b5cf6", text: "Moderator" },
+    vip: { color: "#eab308", text: "VIP" },
+    user: { color: "#94a3b8", text: "User" },
+    newbie: { color: "#22d3ee", text: "Newbie" },
+  };
+  return (
+    <span
+      style={{
+        border: "1px solid rgba(255,255,255,.1)",
+        background: "rgba(255,255,255,.05)",
+        color: map[role].color,
+        padding: "2px 8px",
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 700,
+      }}
+    >
+      {map[role].text}
+    </span>
+  );
+}
+
+function projectStatus(title: string): "wip" | "review" | "done" | "none" {
+  const lower = String(title || "").toLowerCase();
+  if (lower.startsWith("[wip]")) return "wip";
+  if (lower.startsWith("[review]")) return "review";
+  if (lower.startsWith("[done]")) return "done";
+  return "none";
+}
+
+/* ====== Auth (extended) ====== */
+function AuthGateX({ onDone }: { onDone: () => void }) {
+  const [mode, setMode] = React.useState<"login" | "signup">("login");
+  const [nick, setNick] = React.useState("");
+  const [email, setEmail] = React.useState("");
+  const [pass, setPass] = React.useState("");
+  const [invite, setInvite] = React.useState("");
+  const [remember, setRemember] = React.useState(true);
+  const [err, setErr] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const [captchaToken, setCaptchaToken] = React.useState<string | null>(null);
+  const [otp, setOtp] = React.useState("");
+  const [verifyMode, setVerifyMode] = React.useState<false | "email">(false);
+  const [verifyCode, setVerifyCode] = React.useState("");
+
+  const ascii = /^[A-Za-z0-9_]{3,16}$/;
+  const needInvite = true;
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr(null);
+    setBusy(true);
+    try {
+      if (mode === "login") {
+        await authenticateAccount({
+          usernameOrEmail: nick.trim() || email.trim(),
+          password: pass,
+          remember,
+          otp: otp.trim() || undefined,
+          captchaToken,
+        });
+        onDone();
+      } else {
+        if (!ascii.test(nick.trim())) {
+          throw new Error("Username: 3–16 chars (A–Z a–z 0–9 _)");
+        }
+        await registerAccount({
+          username: nick.trim(),
+          email: email.trim(),
+          password: pass || undefined,
+          inviteCode: needInvite ? invite.trim() : "",
+          remember,
+          captchaToken,
+        } as any);
+        try {
+          requestEmailCode(email.trim());
+        } catch {
+          /* ignore */
+        }
+        setVerifyMode("email");
+      }
+    } catch (e: any) {
+      setErr(e?.message || "Что-то пошло не так");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[90] grid place-items-center bg-black/70 p-4">
+      <form onSubmit={submit} className="w-[min(560px,92vw)] card p-5">
+        <div className="flex items-center gap-2">
+          <Lock size={18} />
+          <b>{mode === "login" ? "Вход" : "Регистрация"}</b>
+        </div>
+
+        {!verifyMode && (
+          <div className="grid gap-3 mt-3">
+            <input
+              className="input"
+              placeholder={mode === "login" ? "Логин или e-mail" : "Логин (латиница/цифры/_ )"}
+              value={nick}
+              onChange={(e) => setNick(e.target.value)}
+              disabled={busy}
+              required
+            />
+            {mode === "signup" && (
+              <input
+                className="input"
+                placeholder="E-mail"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={busy}
+                required
+              />
+            )}
+            {mode === "signup" && needInvite && (
+              <input
+                className="input"
+                placeholder="Invite code"
+                value={invite}
+                onChange={(e) => setInvite(e.target.value)}
+                disabled={busy}
+                required
+              />
+            )}
+            <input
+              className="input"
+              type="password"
+              placeholder="Пароль"
+              value={pass}
+              onChange={(e) => setPass(e.target.value)}
+              disabled={busy}
+              required
+            />
+            {mode === "login" && (
+              <input
+                className="input"
+                placeholder="2FA код (если включено)"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                disabled={busy}
+              />
+            )}
+            <RecaptchaGate onToken={setCaptchaToken} />
+            {err && <div style={{ color: "#ef4444", fontSize: 13 }}>{err}</div>}
+
+            <div className="flex items-center gap-2 text-xs opacity-80">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  disabled={busy}
+                />
+                Запомнить меня
+              </label>
+            </div>
+
+            <div className="flex gap-2">
+              <button className="btn btn-primary" type="submit" disabled={busy}>
+                {mode === "login" ? "Войти" : "Зарегистрироваться"}
+              </button>
+              <button
+                className="btn"
+                type="button"
+                onClick={() => setMode(mode === "login" ? "signup" : "login")}
+                disabled={busy}
+              >
+                {mode === "login" ? "Нет аккаунта? Регистрация" : "Уже есть? Войти"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {verifyMode === "email" && (
+          <div className="grid gap-3 mt-3">
+            <div className="text-sm text-zinc-300">
+              Мы отправили код подтверждения на {email}. Введите код ниже.
+            </div>
+            <input
+              className="input"
+              placeholder="Код подтверждения"
+              value={verifyCode}
+              onChange={(e) => setVerifyCode(e.target.value)}
+            />
+            {!!err && <div style={{ color: "#ef4444", fontSize: 13 }}>{err}</div>}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  if (verifyEmailCode(email, verifyCode)) {
+                    setVerifyMode(false);
+                    onDone();
+                  } else {
+                    setErr("Неверный код");
+                  }
+                }}
+              >
+                Подтвердить
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  requestEmailCode(email);
+                }}
+              >
+                Отправить код ещё раз
+              </button>
+            </div>
+          </div>
+        )}
+      </form>
+    </div>
+  );
+}
+
+/* ====== Header ====== */
+function Header({ me, onLogout }: { me: RemoteUser; onLogout: () => void }) {
+  return (
+    <header
+      className="sticky top-0 z-50 border-b backdrop-blur"
+      style={{ background: "rgba(10,10,14,.6)", borderColor: "var(--border)" }}
+    >
+      <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
+        <Link to="/forum" className="flex items-center gap-3">
+          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[color:var(--accent)]/20 text-[color:var(--accent)] shadow">
+            <Shield size={18} />
+          </div>
+          <div>
+            <div
+              className="text-[11px] uppercase tracking-[0.32em]"
+              style={{ color: "var(--text-2)" }}
+            >
+              Forum // FORUM
+            </div>
+            <div className="text-sm font-semibold">Правительство</div>
+          </div>
+        </Link>
+
+        {(me && (me.role === "admin" || me.role === "developer" || me.role === "moderator")) && (
+          <Link to="/forum/admin" className="ml-2 btn">
+            Admin
+          </Link>
+        )}
+
+        <Link
+          to={`/forum/profile/${me.username}`}
+          className="ml-2 flex items-center gap-2 rounded-xl border px-3 py-2 card"
+        >
+          <Badge role={me.role} />
+          <div className="text-sm font-semibold">{me.username}</div>
+          <div className="border-l pl-2 text-xs opacity-70">#{me.userNumber}</div>
+        </Link>
+
+        <div className="flex-1" />
+        <button type="button" className="btn" onClick={onLogout}>
+          Выйти
+        </button>
+      </div>
+    </header>
+  );
+}
+
+/* ====== Page ====== */
+export default function ForumPage() {
+  const [, force] = React.useReducer((x) => x + 1, 0);
+  const [me, setMe] = React.useState<RemoteUser | null | undefined>(undefined);
+
+  const [sectionsState, setSectionsState] = React.useState<any[]>([]);
+  const [latestPosts, setLatestPosts] = React.useState<any[]>([]);
+
+  const [workshopSection, setWorkshopSection] = React.useState<any | null>(null);
+  const [workshopProjects, setWorkshopProjects] = React.useState<any[]>([]);
+  const [workshopSummary, setWorkshopSummary] = React.useState({
+    total: 0,
+    wip: 0,
+    review: 0,
+    done: 0,
+  });
+
+  const rtf = React.useMemo(() => {
+    try {
+      return new Intl.RelativeTimeFormat("ru", { numeric: "auto" });
+    } catch {
+      try {
+        return new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+      } catch {
+        return null;
+      }
+    }
+  }, []);
+
+  const formatRelative = React.useCallback(
+    (value: string | number | Date | null | undefined) => {
+      if (!value) return "";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "";
+      if (!rtf) return date.toLocaleString();
+      const diff = date.getTime() - Date.now();
+      const minute = 60 * 1000;
+      const hour = 60 * minute;
+      const day = 24 * hour;
+      const month = 30 * day;
+      const year = 365 * day;
+      if (Math.abs(diff) < minute) return rtf.format(Math.round(diff / 1000), "second");
+      if (Math.abs(diff) < hour) return rtf.format(Math.round(diff / minute), "minute");
+      if (Math.abs(diff) < day) return rtf.format(Math.round(diff / hour), "hour");
+      if (Math.abs(diff) < month) return rtf.format(Math.round(diff / day), "day");
+      if (Math.abs(diff) < year) return rtf.format(Math.round(diff / month), "month");
+      return rtf.format(Math.round(diff / year), "year");
+    },
+    [rtf]
+  );
+
+  // session
+  React.useEffect(() => {
+    let alive = true;
+    const read = async () => {
+      try {
+        const u = await getSessionAccount();
+        if (alive) setMe(u);
+      } catch {
+        if (alive) setMe(null);
+      }
+    };
+    read();
+    const h = () => read();
+    window.addEventListener("forum:session", h as any);
+    window.addEventListener("storage", h as any);
+    return () => {

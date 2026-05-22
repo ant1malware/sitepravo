@@ -1,0 +1,67 @@
+import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { Building2, Search, Star, Settings, MessageSquare, Menu } from 'lucide-react';
+import { getWhatsNew } from './versioning';
+
+export default function GlobalTopbar() {
+  const location = useLocation();
+  const hasNews = React.useMemo(() => {
+    try {
+      const it = getWhatsNew()[0];
+      if (!it) return false;
+      const d = new Date(it.date + 'T00:00:00Z');
+      return (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24) <= 14;
+    } catch { return false; }
+  }, []);
+
+  function openSearch() {
+    const api = (window as any).openCommandPalette;
+    if (typeof api === 'function') { try { api(); return; } catch {} }
+    const meta = navigator.platform.includes('Mac');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: !meta, metaKey: meta } as any));
+  }
+
+  const innerClasses = 'global-topbar__inner mx-auto flex max-w-6xl items-center justify-between gap-1 px-4 py-3 sm:gap-3';
+  const shellClass = 'global-topbar-shell sticky top-0 z-40 border-b border-zinc-200 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:border-zinc-800 dark:bg-[color:var(--surface)]/90 dark:supports-[backdrop-filter]:bg-[color:var(--surface)]/70';
+
+  const content = (
+    <>
+      <div className="flex min-w-0 items-center gap-3">
+        <button className="btn btn-secondary sm:hidden" onClick={() => (window as any).openMobileMenu?.()} aria-label="Меню">
+          <Menu className="h-4 w-4" />
+        </button>
+        <Building2 className="h-6 w-6 shrink-0" />
+        <div className="truncate text-base font-bold leading-tight sm:text-lg">Справочник SKY</div>
+      </div>
+      <div className="flex flex-wrap items-center justify-end gap-1 sm:gap-2">
+        <button className="btn btn-secondary" onClick={openSearch} aria-label="Поиск">
+          <Search className="h-4 w-4" />
+          <span className="hidden sm:inline">Поиск</span>
+        </button>
+        <Link to="/whats-new" className="btn" aria-label="Что нового">
+          <span className="hidden sm:inline">Что нового</span>
+          {hasNews && (<span className="ml-2 inline-block h-2 w-2 rounded-full bg-amber-500" />)}
+        </Link>
+        <Link to="/favorites" className="btn" aria-label="Избранное">
+          <Star className="h-4 w-4" />
+          <span className="hidden sm:inline">Избранное</span>
+        </Link>
+        <Link to="/settings" className="btn" aria-label="Настройки">
+          <Settings className="h-4 w-4" />
+          <span className="hidden sm:inline">Настройки</span>
+        </Link>
+        {/* Contacts removed per closure policy */}
+      </div>
+    </>
+  );
+
+  if (location.pathname.startsWith('/forum')) {
+    return null;
+  }
+
+  return (
+    <div className={shellClass}>
+      <div className={innerClasses}>{content}</div>
+    </div>
+  );
+}

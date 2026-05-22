@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- ⚠️ Базовый <base>. Нужен для GH Pages — см. vite.config.ts с base:'/pravo/'. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="favicon.ico" />
+
+    <!-- Принудительный no-cache для статического index.html -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+
+    <title>Право и форум (SKY)</title>
+
+    <!-- (опционально) preconnect шрифтов и прочего -->
+    <!-- <link rel="preconnect" href="https://rsms.me" crossorigin> -->
+    <script type="module" crossorigin src="/pravo/assets/index-BW22xFmf.js"></script>
+    <link rel="modulepreload" crossorigin href="/pravo/assets/react-vendor-DTkXckhQ.js">
+    <link rel="modulepreload" crossorigin href="/pravo/assets/icons-uJbpPyzE.js">
+    <link rel="stylesheet" crossorigin href="/pravo/assets/index-GwaB8qOb.css">
+  </head>
+
+  <body class="bg-zinc-50 text-zinc-900">
+    <a href="#main" class="skip-link" style="position:absolute;left:-9999px;top:0;background:#111;color:#fff;padding:8px;border-radius:6px;z-index:1000">Skip to content</a>
+    <div id="root"></div>
+
+    <!-- Отключение старых service worker-ов и кэша (на всякий случай) -->
+    <script>
+      (function killSW() {
+        try {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+          }
+          if ('caches' in window) {
+            caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+          }
+        } catch {}
+      })();
+    </script>
+
+    <!-- dev-сборка; Vite сам подставит /pravo/assets/index-*.js и инлайн CSS -->
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        try { var m = document.querySelector('main'); if (m && !m.id) m.id = 'main'; } catch {}
+      });
+    </script>
+  </body>
+</html>
+
+
+

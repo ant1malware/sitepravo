@@ -1,0 +1,33 @@
+name = "notifications-worker"
+main = "src/worker.ts"
+compatibility_date = "2024-06-20"
+
+kv_namespaces = [
+  { binding = "NOTIF_KV", id = "1887faeeecb5417f9f6ea95c25c17c15", preview_id = "e21a8dafd36448a39f0413fc2f1bf6fd" },
+  # +++ ДОБАВЛЕНО: KV для auth-сессий/пользователей
+  { binding = "AUTH_KV", id = "21a04e9f728849f9a8b61129d35d62c5", preview_id = "d7b9b61794ab4a9480fbbee1239a948c" }
+]
+
+[durable_objects]
+bindings = [
+  { name = "ROOM", class_name = "ChatRoom" },
+  # +++ ДОБАВЛЕНО: DO-счётчик пользователей
+  { name = "USER_COUNTER", class_name = "UserCounter" }
+]
+
+[[migrations]]
+tag = "chat-v1"
+new_sqlite_classes = ["ChatRoom"]
+
+# +++ ДОБАВЛЕНО: миграция для нового DO-класса
+[[migrations]]
+tag = "auth-v1"
+new_sqlite_classes = ["UserCounter"]
+
+[vars]
+# +++ ДОБАВЛЕНО:
+API_BASE = "/skyapi"
+CORS_ORIGINS = "http://localhost:5173,https://ant1malware.github.io"
+
+[miniflare]
+durable_objects_persist = true
