@@ -21,10 +21,12 @@ import (
 // ── config ──────────────────────────────────────────────────────────────────
 
 type config struct {
-	VercelToken     string
-	VercelProjectID string
-	AgentToken      string
-	EdgeConfigID    string // set after first-run creation; subsequent runs skip redeploy
+	SiteURL         string // e.g. https://angelcore.cc  (hardcoded default if missing)
+	AgentToken      string // used to POST /api/admin/backend-url on the live site
+	VercelToken     string // optional, legacy fallback
+	VercelProjectID string // optional, legacy fallback
+	VercelTeamID    string // optional, legacy fallback
+	EdgeConfigID    string // optional, legacy fallback
 }
 
 func loadEnv(path string) map[string]string {
@@ -50,12 +52,52 @@ func loadEnv(path string) map[string]string {
 
 func loadConfig(rootDir string) config {
 	env := loadEnv(filepath.Join(rootDir, ".env"))
+	siteURL := env["SITE_URL"]
+	if siteURL == "" {
+		siteURL = "https://angelcore.cc"
+	}
 	return config{
+		SiteURL:         strings.TrimRight(siteURL, "/"),
+		AgentToken:      env["AGENT_TOKEN"],
 		VercelToken:     env["VERCEL_TOKEN"],
 		VercelProjectID: env["VERCEL_PROJECT_ID"],
-		AgentToken:      env["AGENT_TOKEN"],
+		VercelTeamID:    env["VERCEL_TEAM_ID"],
 		EdgeConfigID:    env["EDGE_CONFIG_ID"],
 	}
+}
+
+// pushUrlToSite POSTs the current cloudflared wsURL to the live site.
+// The site stores it in the DB; /api/ddos/config reads it at runtime — no redeploy needed.
+func pushUrlToSite(siteURL, agentToken, wsURL string) error {
+	body, _ := json.Marshal(map[string]string{"url": wsURL})
+	req, err := http.NewRequest("POST", siteURL+"/api/admin/backend-url", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+agentToken)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		b, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("site API %d: %s", resp.StatusCode, b)
+	}
+	return nil
+}
+
+// addTeamID appends ?teamId=xxx or &teamId=xxx to a URL when teamID is set.
+func addTeamID(rawURL, teamID string) string {
+	if teamID == "" {
+		return rawURL
+	}
+	sep := "?"
+	if strings.Contains(rawURL, "?") {
+		sep = "&"
+	}
+	return rawURL + sep + "teamId=" + teamID
 }
 
 // saveEnvValue upserts KEY=VALUE in the .env file at path.
@@ -83,6 +125,9 @@ func saveEnvValue(path, key, value string) error {
 
 // ── vercel API ───────────────────────────────────────────────────────────────
 
+// vTeamID is set from .env at startup; when non-empty it's added to every Vercel API call.
+var vTeamID string
+
 type vercelEnvVar struct {
 	ID     string `json:"id"`
 	Key    string `json:"key"`
@@ -93,7 +138,7 @@ type vercelEnvVar struct {
 
 func vercelListEnv(token, projectID string) ([]vercelEnvVar, error) {
 	req, _ := http.NewRequest("GET",
-		fmt.Sprintf("https://api.vercel.com/v9/projects/%s/env", projectID), nil)
+		addTeamID(fmt.Sprintf("https://api.vercel.com/v9/projects/%s/env", projectID), vTeamID), nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -133,16 +178,16 @@ func vercelUpdateMMBEAM(token, projectID, tunnelURL string) error {
 		"target": []string{"production", "preview"},
 	})
 
-	var method, url string
+	var method, rawURL string
 	if envID != "" {
 		method = "PATCH"
-		url = fmt.Sprintf("https://api.vercel.com/v9/projects/%s/env/%s", projectID, envID)
+		rawURL = fmt.Sprintf("https://api.vercel.com/v9/projects/%s/env/%s", projectID, envID)
 	} else {
 		method = "POST"
-		url = fmt.Sprintf("https://api.vercel.com/v9/projects/%s/env", projectID)
+		rawURL = fmt.Sprintf("https://api.vercel.com/v9/projects/%s/env", projectID)
 	}
 
-	req, _ := http.NewRequest(method, url, bytes.NewReader(body))
+	req, _ := http.NewRequest(method, addTeamID(rawURL, vTeamID), bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
@@ -167,7 +212,7 @@ type ecCreateResult struct {
 // vercelCreateEdgeConfig creates a new Edge Config store named "mmbeam".
 func vercelCreateEdgeConfig(token string) (ecCreateResult, error) {
 	body, _ := json.Marshal(map[string]interface{}{"slug": "mmbeam"})
-	req, _ := http.NewRequest("POST", "https://api.vercel.com/v1/edge-config", bytes.NewReader(body))
+	req, _ := http.NewRequest("POST", addTeamID("https://api.vercel.com/v1/edge-config", vTeamID), bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
@@ -193,7 +238,7 @@ func vercelEdgeConfigUpsert(token, ecID, key, value string) error {
 	}
 	body, _ := json.Marshal([]item{{Operation: "upsert", Key: key, Value: value}})
 	req, _ := http.NewRequest("PATCH",
-		fmt.Sprintf("https://api.vercel.com/v1/edge-config/%s/items", ecID),
+		addTeamID(fmt.Sprintf("https://api.vercel.com/v1/edge-config/%s/items", ecID), vTeamID),
 		bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
@@ -226,15 +271,15 @@ func vercelAddProjectEnv(token, projectID, key, value string) error {
 		"type":   "plain",
 		"target": []string{"production", "preview"},
 	})
-	var method, url string
+	var method, rawURL string
 	if existingID != "" {
 		method = "PATCH"
-		url = fmt.Sprintf("https://api.vercel.com/v9/projects/%s/env/%s", projectID, existingID)
+		rawURL = fmt.Sprintf("https://api.vercel.com/v9/projects/%s/env/%s", projectID, existingID)
 	} else {
 		method = "POST"
-		url = fmt.Sprintf("https://api.vercel.com/v9/projects/%s/env", projectID)
+		rawURL = fmt.Sprintf("https://api.vercel.com/v9/projects/%s/env", projectID)
 	}
-	req, _ := http.NewRequest(method, url, bytes.NewReader(body))
+	req, _ := http.NewRequest(method, addTeamID(rawURL, vTeamID), bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
@@ -255,7 +300,7 @@ var deployStatus atomic.Value // stores string: "", "deploying", "online", "fail
 
 func vercelGetLatestDeployID(token, projectID string) (string, error) {
 	req, _ := http.NewRequest("GET",
-		fmt.Sprintf("https://api.vercel.com/v6/deployments?projectId=%s&target=production&limit=1", projectID), nil)
+		addTeamID(fmt.Sprintf("https://api.vercel.com/v6/deployments?projectId=%s&target=production&limit=1", projectID), vTeamID), nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -282,7 +327,7 @@ func vercelTriggerRedeploy(token, projectID string) error {
 	}
 	body, _ := json.Marshal(map[string]interface{}{"target": "production"})
 	req, _ := http.NewRequest("POST",
-		fmt.Sprintf("https://api.vercel.com/v13/deployments/%s/redeploy", uid),
+		addTeamID(fmt.Sprintf("https://api.vercel.com/v13/deployments/%s/redeploy", uid), vTeamID),
 		bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
@@ -304,7 +349,7 @@ func vercelPollDeployReady(token, projectID string) {
 	for time.Now().Before(deadline) {
 		time.Sleep(8 * time.Second)
 		req, _ := http.NewRequest("GET",
-			fmt.Sprintf("https://api.vercel.com/v6/deployments?projectId=%s&target=production&limit=1", projectID), nil)
+			addTeamID(fmt.Sprintf("https://api.vercel.com/v6/deployments?projectId=%s&target=production&limit=1", projectID), vTeamID), nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -436,6 +481,7 @@ func openBrowser(url string) {
 func main() {
 	root := rootDir()
 	cfg := loadConfig(root)
+	vTeamID = cfg.VercelTeamID // set global for all Vercel API helpers
 
 	setTitle("MikuMikuBeam Launcher")
 
@@ -491,70 +537,33 @@ func main() {
 	if !strings.HasSuffix(wsURL, "/agent") {
 		wsURL += "/agent"
 	}
-	envPath := filepath.Join(root, ".env")
-
-	if cfg.VercelToken == "" || cfg.VercelProjectID == "" {
-		fmt.Println("  [3/3] ПРОПУЩЕНО (нет VERCEL_TOKEN/VERCEL_PROJECT_ID в .env)")
-		fmt.Println()
-		fmt.Println("  Вставь вручную в Vercel → Settings → Environment Variables:")
-		fmt.Printf("  MMBEAM_WS = %s\n", wsURL)
+	// Primary: POST new tunnel URL directly to the live site DB (instant, no redeploy)
+	fmt.Printf("  [3/3] Обновляем URL на %s...", cfg.SiteURL)
+	if cfg.AgentToken == "" {
+		fmt.Println(" ПРОПУЩЕНО (нет AGENT_TOKEN в .env)")
+		fmt.Printf("  Добавь AGENT_TOKEN в .env (тот же что и в Vercel)\n")
+		fmt.Printf("  Или вручную: MMBEAM_WS = %s\n", wsURL)
 		deployStatus.Store("skipped")
-	} else if cfg.EdgeConfigID != "" {
-		// Fast path: Edge Config already set up, just upsert the new URL — instant, no redeploy
-		fmt.Print("  [3/3] Edge Config — обновляем URL тоннеля...")
-		if err := vercelEdgeConfigUpsert(cfg.VercelToken, cfg.EdgeConfigID, "mmbeam_ws", wsURL); err != nil {
-			fmt.Printf(" ОШИБКА: %v\n", err)
-			deployStatus.Store("failed")
+	} else if err := pushUrlToSite(cfg.SiteURL, cfg.AgentToken, wsURL); err != nil {
+		fmt.Printf(" ОШИБКА: %v\n", err)
+		// Fallback: legacy Vercel API path
+		if cfg.VercelToken != "" && cfg.VercelProjectID != "" {
+			fmt.Printf("  Fallback Vercel API...\n")
+			if err2 := vercelUpdateMMBEAM(cfg.VercelToken, cfg.VercelProjectID, tunnelURL); err2 == nil {
+				fmt.Printf("  MMBEAM_WS обновлён (вступит после следующего деплоя)\n")
+				deployStatus.Store("online")
+			} else {
+				fmt.Printf("  Vercel тоже не работает: %v\n", err2)
+				fmt.Printf("  Вставь вручную: MMBEAM_WS = %s\n", wsURL)
+				deployStatus.Store("failed")
+			}
 		} else {
-			fmt.Println(" OK  (мгновенно, без редеплоя)")
-			deployStatus.Store("online")
+			fmt.Printf("  Вставь вручную: MMBEAM_WS = %s\n", wsURL)
+			deployStatus.Store("failed")
 		}
 	} else {
-		// First run: create Edge Config, bake connection string into Vercel env, ONE redeploy
-		fmt.Println("  [3/3] Первый запуск — настраиваем Edge Config...")
-		fmt.Print("        Создаём Edge Config хранилище...")
-		ec, err := vercelCreateEdgeConfig(cfg.VercelToken)
-		if err != nil {
-			fmt.Printf(" ОШИБКА: %v\n", err)
-			fmt.Println("  Fallback: пишем MMBEAM_WS напрямую и делаем редеплой...")
-			if err2 := vercelUpdateMMBEAM(cfg.VercelToken, cfg.VercelProjectID, tunnelURL); err2 == nil {
-				if err3 := vercelTriggerRedeploy(cfg.VercelToken, cfg.VercelProjectID); err3 == nil {
-					fmt.Println("  Редеплой запущен (~60с)")
-					go vercelPollDeployReady(cfg.VercelToken, cfg.VercelProjectID)
-				}
-			}
-		} else {
-			fmt.Printf(" OK  (id: %s)\n", ec.ID)
-
-			fmt.Print("        Записываем URL тоннеля...")
-			if err2 := vercelEdgeConfigUpsert(cfg.VercelToken, ec.ID, "mmbeam_ws", wsURL); err2 != nil {
-				fmt.Printf(" ОШИБКА: %v\n", err2)
-			} else {
-				fmt.Println(" OK")
-			}
-
-			fmt.Print("        Добавляем EDGE_CONFIG в проект Vercel...")
-			if err3 := vercelAddProjectEnv(cfg.VercelToken, cfg.VercelProjectID, "EDGE_CONFIG", ec.ConnectionString); err3 != nil {
-				fmt.Printf(" ОШИБКА: %v\n", err3)
-			} else {
-				fmt.Println(" OK")
-			}
-
-			// Save EC ID locally so next run skips all this
-			_ = saveEnvValue(envPath, "EDGE_CONFIG_ID", ec.ID)
-			cfg.EdgeConfigID = ec.ID
-
-			fmt.Print("        Запускаем ФИНАЛЬНЫЙ редеплой (последний раз)...")
-			if err4 := vercelTriggerRedeploy(cfg.VercelToken, cfg.VercelProjectID); err4 != nil {
-				fmt.Printf(" ОШИБКА: %v\n", err4)
-				fmt.Println("  Сделай редеплой вручную: Vercel → Deployments → Redeploy last")
-				deployStatus.Store("failed")
-			} else {
-				fmt.Println(" ~60с)")
-				fmt.Println("  После этого редеплоя больше не нужны — Edge Config обновляется мгновенно.")
-				go vercelPollDeployReady(cfg.VercelToken, cfg.VercelProjectID)
-			}
-		}
+		fmt.Println(" OK  (мгновенно, без редеплоя)")
+		deployStatus.Store("online")
 	}
 
 	fmt.Println()
