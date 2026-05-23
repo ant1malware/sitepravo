@@ -420,11 +420,18 @@ func findCloudflared(root string) string {
 	return ""
 }
 
-func startMikuMikuBeam(root string) *exec.Cmd {
+func startMikuMikuBeam(root string, dotEnv map[string]string) *exec.Cmd {
 	cmd := exec.Command("node", ".")
 	cmd.Dir = root
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
+	// Inherit current process env, then overlay .env values + force production mode
+	env := os.Environ()
+	for k, v := range dotEnv {
+		env = append(env, k+"="+v)
+	}
+	env = append(env, "NODE_ENV=production")
+	cmd.Env = env
 	cmd.Start()
 	return cmd
 }
@@ -480,6 +487,7 @@ func openBrowser(url string) {
 
 func main() {
 	root := rootDir()
+	rawEnv := loadEnv(filepath.Join(root, ".env"))
 	cfg := loadConfig(root)
 	vTeamID = cfg.VercelTeamID // set global for all Vercel API helpers
 
@@ -492,7 +500,7 @@ func main() {
 
 	// 1. Start MikuMikuBeam backend
 	fmt.Print("  [1/3] Запуск MikuMikuBeam...")
-	beamCmd := startMikuMikuBeam(root)
+	beamCmd := startMikuMikuBeam(root, rawEnv)
 	time.Sleep(2 * time.Second)
 	if beamCmd.ProcessState != nil && beamCmd.ProcessState.Exited() {
 		fmt.Println(" ОШИБКА — node завершился. Проверь npm install и сборку.")
